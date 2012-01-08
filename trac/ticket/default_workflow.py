@@ -190,10 +190,11 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
     def _is_action_allowed(self, ticket_perm, required_perms):
         if not required_perms:
             return True
+        # modified to assume required_perms as AND-values list not OR-values
         for permission in required_perms:
-            if permission in ticket_perm:
-                return True
-        return False
+            if permission not in ticket_perm:
+                return False
+        return True
 
     def get_all_status(self):
         """Return a list of all states described by the configuration.
