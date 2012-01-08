@@ -529,7 +529,10 @@ class TicketModule(Component):
                                  tracini=tag.tt('trac.ini')))
 
             # Apply changes made by the workflow
-            self._apply_ticket_changes(ticket, field_changes)
+            if field_changes is not None:
+                self._apply_ticket_changes(ticket, field_changes)
+            else:
+                ticket = Ticket(self.env, ticket.id)
             # Unconditionally run the validation so that the user gets
             # information any and all problems.  But it's only valid if it
             # validates and there were no problems with the workflow side of
@@ -1283,6 +1286,8 @@ class TicketModule(Component):
             cname = controller.__class__.__name__
             action_changes = controller.get_ticket_changes(req, ticket,
                                                            selected_action)
+            if action_changes is None:
+                return None, []
             for key in action_changes.keys():
                 old = ticket[key]
                 new = action_changes[key]
