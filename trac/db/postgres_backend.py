@@ -114,12 +114,45 @@ class PostgreSQLConnector(Component):
             ctype = _type_map.get(ctype, ctype)
             if column.auto_increment:
                 ctype = 'SERIAL'
+            else:
+                if column.default is not None:
+                    ctype += ' DEFAULT ' + column.default
+                if column.null is not None:
+                    ctype += ('' if column.null else ' NOT') + ' NULL'
+            if column.unique:
+                ctype += ' UNIQUE'
             if len(table.key) == 1 and column.name in table.key:
                 ctype += ' PRIMARY KEY'
             coldefs.append('    "%s" %s' % (column.name, ctype))
         if len(table.key) > 1:
             coldefs.append('    CONSTRAINT "%s_pk" PRIMARY KEY ("%s")'
                            % (table.name, '","'.join(table.key)))
+
+        from trac.db import Constraint
+        for fk in table.foreignkeys:
+            args = ['_'.join(fk.columns), fk.ref_table]
+            if fk.ref_columns:
+                args.append('_'.join(fk.ref_columns))
+                name_fmt = u'{0}__{1}__{2}__fk'
+            else:
+                name_fmt = u'{0}__{1}__fk'
+            name = name_fmt.format(*args)
+            expr = u'FOREIGN KEY ("{0}") REFERENCES "{1}"'.format(
+                    '", "'.join(fk.columns), fk.ref_table)
+            if fk.ref_columns:
+                expr += u' ("{0}")'.format('", "'.join(fk.ref_columns))
+            if fk.on_delete:
+                expr += u' ON DELETE {0}'.format(fk.on_delete.upper())
+            fk.name = name
+            fk.expr = expr
+
+        for c in table.constraints:
+            if c.name:
+                expr = u'    CONSTRAINT "{0}" {1}'.format(c.name, c.expr)
+            else:
+                expr = u'    {0}'.format(c.expr)
+            coldefs.append(expr)
+
         sql.append(',\n'.join(coldefs) + '\n)')
         yield '\n'.join(sql)
         for index in table.indices:

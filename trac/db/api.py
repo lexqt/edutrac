@@ -280,3 +280,17 @@ def _parse_db_str(db_str):
     args = zip(('user', 'password', 'host', 'port', 'path', 'params'),
                (user, password, host, port, path, params))
     return scheme, dict([(key, value) for key, value in args if value])
+
+
+# Additional util functions
+
+def call_db_func(db, func_name, args=()):
+    cursor = db.cursor()
+
+    arg_cnt = len(args)
+    args_placeholder = ' ,'.join(('%s',)*arg_cnt)
+    query = 'SELECT {0}({1})'.format(func_name, args_placeholder)
+    cursor.execute(query, args)
+
+    return cursor
+
