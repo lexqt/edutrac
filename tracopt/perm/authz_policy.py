@@ -241,6 +241,9 @@ class AuthzPolicy(Component):
                         self.log.debug('%s matched section %s for user %s',
                                        resource_key, resource_glob, username)
                         if isinstance(permissions, basestring):
+                            if permissions.startswith('@'):
+                                perm_sys = PermissionSystem(self.env)
+                                return perm_sys.get_user_permissions(permissions[1:])
                             return [permissions]
                         else:
                             return permissions
