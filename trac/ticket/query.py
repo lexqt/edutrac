@@ -45,6 +45,8 @@ from trac.web.chrome import add_ctxtnav, add_link, add_script, \
 from trac.wiki.api import IWikiSyntaxProvider
 from trac.wiki.macros import WikiMacroBase # TODO: should be moved in .api
 
+from project_management.api import ProjectManagement
+
 class QuerySyntaxError(TracError):
     """Exception raised when a ticket query cannot be parsed from a string."""
 
@@ -62,9 +64,10 @@ class Query(object):
 
     def __init__(self, env, report=None, constraints=None, cols=None,
                  order=None, desc=0, group=None, groupdesc=0, verbose=0,
-                 rows=None, page=None, max=None, format=None):
+                 rows=None, page=None, max=None, format=None, pid=None):
         self.env = env
         self.id = report # if not None, it's the corresponding saved query
+        self.pid = pid
         constraints = constraints or []
         if isinstance(constraints, dict):
             constraints = [constraints]
@@ -114,7 +117,7 @@ class Query(object):
             rows = []
         if verbose and 'description' not in rows: # 0.10 compatibility
             rows.append('description')
-        self.fields = TicketSystem(self.env).get_ticket_fields()
+        self.fields = TicketSystem(self.env).get_ticket_fields(self.pid)
         self.time_fields = set(f['name'] for f in self.fields
                                if f['type'] == 'time')
         field_names = set(f['name'] for f in self.fields)
@@ -690,7 +693,9 @@ class Query(object):
         return modes
 
     def template_data(self, context, tickets, orig_list=None, orig_time=None,
-                      req=None):
+                      req=None, pid=None):
+        pm = ProjectManagement(self.env)
+        pid = pid if pid is not None else req and pm.get_session_project(req)
         clauses = []
         for clause in self.constraints:
             constraints = {}
@@ -712,7 +717,7 @@ class Query(object):
             clauses.append(constraints)
 
         cols = self.get_columns()
-        labels = TicketSystem(self.env).get_ticket_field_labels()
+        labels = TicketSystem(self.env).get_ticket_field_labels(pid)
         wikify = set(f['name'] for f in self.fields 
                      if f['type'] == 'text' and f.get('format') == 'wiki')
 
@@ -869,7 +874,9 @@ class QueryModule(Component):
     def process_request(self, req):
         req.perm.assert_permission('TICKET_VIEW')
 
-        constraints = self._get_constraints(req)
+        pm = ProjectManagement(self.env)
+        pid = pm.get_session_project(req)
+        constraints = self._get_constraints(req, pid=pid)
         args = req.args
         if not constraints and not 'order' in req.args:
             # If no constraints are given in the URL, use the default ones.
@@ -886,7 +893,7 @@ class QueryModule(Component):
             if qstring.startswith('?'):
                 arg_list = parse_arg_list(qstring[1:])
                 args = arg_list_to_args(arg_list)
-                constraints = self._get_constraints(arg_list=arg_list)
+                constraints = self._get_constraints(arg_list=arg_list, pid=pid)
             else:
                 query = Query.from_string(self.env, qstring)
                 args = {'order': query.order, 'group': query.group,
@@ -928,7 +935,8 @@ class QueryModule(Component):
                       'groupdesc' in args, 'verbose' in args,
                       rows,
                       args.get('page'), 
-                      max)
+                      max,
+                      pid=pid)
 
         if 'update' in req.args:
             # Reset session vars
@@ -956,8 +964,8 @@ class QueryModule(Component):
     remove_re = re.compile(r'rm_filter_\d+_(.+)_(\d+)$')
     add_re = re.compile(r'add_(\d+)$')
 
-    def _get_constraints(self, req=None, arg_list=[]):
-        fields = TicketSystem(self.env).get_ticket_fields()
+    def _get_constraints(self, req=None, arg_list=[], pid=None):
+        fields = TicketSystem(self.env).get_ticket_fields(pid)
         synonyms = TicketSystem(self.env).get_field_synonyms()
         fields = dict((f['name'], f) for f in fields)
         fields['id'] = {'type': 'id'}
@@ -1280,6 +1288,8 @@ class TicketQueryMacro(WikiMacroBase):
     
     def expand_macro(self, formatter, name, content):
         req = formatter.req
+        pm = ProjectManagement(self.env)
+        pid = pm.get_session_project(req)
         query_string, kwargs, format = self.parse_args(content)
         if query_string:
             query_string += '&'
@@ -1296,7 +1306,7 @@ class TicketQueryMacro(WikiMacroBase):
 
         if format == 'table':
             data = query.template_data(formatter.context, tickets,
-                                       req=formatter.context.req)
+                                       req=formatter.context.req, pid=pid)
 
             add_stylesheet(req, 'common/css/report.css')
             

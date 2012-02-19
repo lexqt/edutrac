@@ -39,6 +39,8 @@ from trac.web.chrome import add_link, add_stylesheet, prevnext_nav, Chrome, \
                             
 from trac.wiki.api import IWikiSyntaxProvider
 
+from project_management.api import ProjectManagement
+
 
 class TimelineModule(Component):
 
@@ -90,6 +92,9 @@ class TimelineModule(Component):
 
         format = req.args.get('format')
         maxrows = int(req.args.get('max', format == 'rss' and 50 or 0))
+
+        pm = ProjectManagement(self.env)
+        pid = pm.get_session_project(req)
 
         # Parse the from date and adjust the timestamp to the last second of
         # the day
@@ -176,7 +181,7 @@ class TimelineModule(Component):
         for provider in self.event_providers:
             try:
                 for event in provider.get_timeline_events(req, start, stop,
-                                                          filters) or []:
+                                                          filters, pid) or []:
                     # Check for 0.10 events
                     author = (event[len(event) < 6 and 2 or 4] or '').lower()
                     if (not include or author in include) \

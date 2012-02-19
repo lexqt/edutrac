@@ -36,12 +36,15 @@ class ITimelineEventProvider(Interface):
         otherwise it will be inactive.
         """
 
-    def get_timeline_events(req, start, stop, filters):
+    def get_timeline_events(req, start, stop, filters, pid=None):
         """Return a list of events in the time range given by the `start` and
         `stop` parameters.
 
         The `filters` parameters is a list of the enabled filters, each item
         being the name of the tuples returned by `get_timeline_filters`.
+
+        The `pid` parameter is a project id. Events are collecting for
+        specified project only. Or globally if pid is None.
 
         Since 0.11, the events are `(kind, date, author, data)` tuples,
         where `kind` is a string used for categorizing the event, `date`

@@ -393,6 +393,9 @@ class AttachmentModule(Component):
         For public sites where anonymous users can create attachments it is
         recommended to leave this option disabled (which is the default).""")
 
+    def __init__(self):
+        self.rs = ResourceSystem(self.env)
+
     # IEnvironmentSetupParticipant methods
 
     def environment_created(self):
@@ -505,34 +508,57 @@ class AttachmentModule(Component):
                 'attachments': attachments,
                 'parent': context.resource}
     
-    def get_history(self, start, stop, realm):
+    def get_history(self, start, stop, realm, pid):
         """Return an iterable of tuples describing changes to attachments on
         a particular object realm.
 
         The tuples are in the form (change, realm, id, filename, time,
         description, author). `change` can currently only be `created`.
         """
+        is_global = pid is None
+        if is_global and not self.rs.has_global_resources(realm):
+            return
+        if not is_global and not self.rs.has_project_resources(realm):
+            return
         # Traverse attachment directory
-        db = self.env.get_db_cnx()
+        db = self.env.get_read_db()
         cursor = db.cursor()
-        cursor.execute("SELECT type, id, filename, time, description, author "
-                       "  FROM attachment "
-                       "  WHERE time > %s AND time < %s "
-                       "        AND type = %s",
-                       (to_utimestamp(start), to_utimestamp(stop), realm))
-        for realm, id, filename, ts, description, author in cursor:
-            time = from_utimestamp(ts)
-            yield ('created', realm, id, filename, time, description, author)
+        query = '''
+            SELECT {sel_pid} a.type, a.id, a.filename, a.time, a.description, a.author
+            FROM attachment a
+            LEFT JOIN "{rsc_tab}" r ON r."{rsc_id}"=a.id
+            WHERE a.time > %s AND a.time < %s AND a.type = %s {and_pid}
+        '''
+        rsc_tab = self.rs.get_realm_table(realm)
+        rsc_id  = self.rs.get_realm_id(realm)
+        sql_args = [to_utimestamp(start), to_utimestamp(stop), realm]
+        if is_global:
+            sel_pid = 'r.project_id,'
+            and_pid = ''
+        else:
+            sel_pid = ''
+            and_pid = 'AND r.project_id=%s'
+            sql_args.append(pid)
+        query = query.format(sel_pid=sel_pid, rsc_tab=rsc_tab, rsc_id=rsc_id, and_pid=and_pid)
+        cursor.execute(query, sql_args)
+        if is_global:
+            for project_id, realm, id, filename, ts, description, author in cursor:
+                time = from_utimestamp(ts)
+                yield ('created', project_id, realm, id, filename, time, description, author)
+        else:
+            for realm, id, filename, ts, description, author in cursor:
+                time = from_utimestamp(ts)
+                yield ('created', realm, id, filename, time, description, author)
 
-    def get_timeline_events(self, req, resource_realm, start, stop):
+    def get_timeline_events(self, req, resource_realm, start, stop, pid):
         """Return an event generator suitable for ITimelineEventProvider.
 
         Events are changes to attachments on resources of the given
         `resource_realm.realm`.
         """
         for change, realm, id, filename, time, descr, author in \
-                self.get_history(start, stop, resource_realm.realm):
-            attachment = resource_realm(id=id).child('attachment', filename)
+                self.get_history(start, stop, resource_realm.realm, pid):
+            attachment = resource_realm(id=id, pid=pid).child('attachment', filename)
             if 'ATTACHMENT_VIEW' in req.perm(attachment):
                 yield ('attachment', time, author, (attachment, descr), self)
 
@@ -621,6 +647,26 @@ class AttachmentModule(Component):
             return os.path.exists(attachment.path)
         except ResourceNotFound:
             return False
+
+    def has_project_resources(self, realm):
+        if realm == 'attachment':
+            return None
+
+    def has_global_resources(self, realm):
+        if realm == 'attachment':
+            return None
+
+    def is_slave_realm(self, realm):
+        if realm == 'attachment':
+            return True
+
+    def get_realm_table(self, realm):
+        if realm == 'attachment':
+            return 'attachment'
+
+    def get_realm_id(self, realm):
+        if realm == 'attachment':
+            return 'id'
 
     # Internal methods
 

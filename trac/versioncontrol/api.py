@@ -423,6 +423,30 @@ class RepositoryManager(Component):
         elif resource.realm == 'repository':
             return True
 
+    def has_project_resources(self, realm):
+        if realm == 'repository':
+            return True
+        # None for changeset and source
+
+    def has_global_resources(self, realm):
+        if realm == 'repository':
+            return False
+        # None for changeset and source
+
+    def is_slave_realm(self, realm):
+        if realm == 'repository':
+            return False
+        if realm == 'changeset' or realm == 'source':
+            return True
+
+    def get_realm_table(self, realm):
+        if realm == 'repository':
+            return 'repository'
+
+    def get_realm_id(self, realm):
+        if realm == 'repository':
+            return 'id'
+
     # IRepositoryProvider methods
 
     def get_repositories(self):

@@ -103,6 +103,13 @@ class _RequestArgs(dict):
             val = [val]
         return val
 
+    def getint(self, name):
+        """Return int(value) or None
+        """
+        if name not in self:
+            return None
+        return int(self[name])
+
 
 def parse_arg_list(query_string):
     """Parse a query string into a list of `(name, value)` tuples."""

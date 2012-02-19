@@ -34,7 +34,7 @@
         <div py:for="idx, milestone in enumerate(milestones)" class="milestone">
 
           <div class="info" py:with="mstats = milestone_stats[idx]">
-            <h2><a href="${href.milestone(milestone.name)}">
+            <h2><a href="${href.milestone(milestone.name,'project',milestone.pid)}">
               Milestone: <em>${milestone.name}</em>
             </a></h2>
             <py:choose>

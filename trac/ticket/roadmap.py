@@ -44,9 +44,10 @@ from trac.web.chrome import add_link, add_notice, add_script, add_stylesheet, \
 from trac.wiki.api import IWikiSyntaxProvider
 from trac.wiki.formatter import format_to
 
+from project_management.api import ProjectManagement
 
 class ITicketGroupStatsProvider(Interface):
-    def get_ticket_group_stats(ticket_ids):
+    def get_ticket_group_stats(ticket_ids, pid):
         """ Gather statistics on a group of tickets.
 
         This method returns a valid TicketGroupStats object.
@@ -190,7 +191,7 @@ class DefaultTicketGroupStatsProvider(Component):
         else:
             return self.default_milestone_groups
 
-    def get_ticket_group_stats(self, ticket_ids):
+    def get_ticket_group_stats(self, ticket_ids, pid):
         total_cnt = len(ticket_ids)
         all_statuses = set(TicketSystem(self.env).get_all_status())
         status_cnt = {}
@@ -257,19 +258,22 @@ class DefaultTicketGroupStatsProvider(Component):
         return stat
 
 
-def get_ticket_stats(provider, tickets):
-    return provider.get_ticket_group_stats([t['id'] for t in tickets])
+def get_ticket_stats(provider, tickets, pid):
+    return provider.get_ticket_group_stats([t['id'] for t in tickets], pid)
 
 def get_tickets_for_milestone(env, db, milestone, field='component'):
     cursor = db.cursor()
-    fields = TicketSystem(env).get_ticket_fields()
+    pid  = milestone.pid
+    name = milestone.name
+    fields = TicketSystem(env).get_ticket_fields(pid)
     if field in [f['name'] for f in fields if not f.get('custom')]:
-        cursor.execute("SELECT id,status,%s FROM ticket WHERE milestone=%%s "
-                       "ORDER BY %s" % (field, field), (milestone,))
+        cursor.execute("SELECT id,status,%s FROM ticket WHERE project_id=%%s AND milestone=%%s "
+                       "ORDER BY %s" % (field, field), (pid, name))
     else:
         cursor.execute("SELECT id,status,value FROM ticket LEFT OUTER "
                        "JOIN ticket_custom ON (id=ticket AND name=%s) "
-                       "WHERE milestone=%s ORDER BY value", (field, milestone))
+                       "WHERE project_id=%s AND milestone=%s ORDER BY value",
+                       (field, pid, name))
     tickets = []
     for tkt_id, status, fieldval in cursor:
         tickets.append({'id': tkt_id, 'status': status, field: fieldval})
@@ -281,13 +285,15 @@ def apply_ticket_permissions(env, req, tickets):
     return [t for t in tickets
             if 'TICKET_VIEW' in req.perm('ticket', t['id'])]
 
-def milestone_stats_data(env, req, stat, name, grouped_by='component',
+def milestone_stats_data(env, req, stat, milestone, grouped_by='component',
                          group=None):
     has_query = env[QueryModule] is not None
+    name = milestone.name
+    pid  = milestone.pid
     def query_href(extra_args):
         if not has_query:
             return None
-        args = {'milestone': name, grouped_by: group, 'group': 'status'}
+        args = {'project_id': pid, 'milestone': name, grouped_by: group, 'group': 'status'}
         args.update(extra_args)
         return req.href.query(args)
     return {'stats': stat,
@@ -332,12 +338,15 @@ class RoadmapModule(Component):
     def process_request(self, req):
         req.perm.require('MILESTONE_VIEW')
 
+        pm = ProjectManagement(self.env)
+        pid = pm.get_session_project(req)
+
         show = req.args.getlist('show')
         if 'all' in show:
             show = ['completed']
 
         db = self.env.get_db_cnx()
-        milestones = Milestone.select(self.env, 'completed' in show, db)
+        milestones = Milestone.select(self.env, pid, 'completed' in show, db)
         if 'noduedate' in show:
             milestones = [m for m in milestones
                           if m.due is not None or m.completed]
@@ -348,16 +357,16 @@ class RoadmapModule(Component):
         queries = []
 
         for milestone in milestones:
-            tickets = get_tickets_for_milestone(self.env, db, milestone.name,
+            tickets = get_tickets_for_milestone(self.env, db, milestone,
                                                 'owner')
             tickets = apply_ticket_permissions(self.env, req, tickets)
-            stat = get_ticket_stats(self.stats_provider, tickets)
+            stat = get_ticket_stats(self.stats_provider, tickets, pid)
             stats.append(milestone_stats_data(self.env, req, stat,
-                                              milestone.name))
+                                              milestone))
             #milestone['tickets'] = tickets # for the iCalendar view
 
         if req.args.get('format') == 'ics':
-            self.render_ics(req, db, milestones)
+            self.render_ics(req, pid, db, milestones)
             return
 
         # FIXME should use the 'webcal:' scheme, probably
@@ -379,7 +388,7 @@ class RoadmapModule(Component):
 
     # Internal methods
 
-    def render_ics(self, req, db, milestones):
+    def render_ics(self, req, pid, db, milestones):
         req.send_response(200)
         req.send_header('Content-Type', 'text/calendar;charset=utf-8')
         buf = StringIO()
@@ -401,7 +410,7 @@ class RoadmapModule(Component):
             elif status == 'assigned' or status == 'reopened':
                 return 'IN-PROCESS'
             elif status == 'closed':
-                if ticket['resolution'] == 'fixed':
+                if ticket['resolution'] == 'fixed' or ticket['resolution'] == 'done':
                     return 'COMPLETED'
                 else: return 'CANCELLED'
             else: return ''
@@ -449,11 +458,11 @@ class RoadmapModule(Component):
                 write_date('DTSTART', milestone.due)
                 write_prop('SUMMARY', _('Milestone %(name)s',
                                         name=milestone.name))
-                write_prop('URL', req.abs_href.milestone(milestone.name))
+                write_prop('URL', req.abs_href.milestone(milestone.name, 'project', milestone.pid))
                 if milestone.description:
                     write_prop('DESCRIPTION', milestone.description)
                 write_prop('END', 'VEVENT')
-            tickets = get_tickets_for_milestone(self.env, db, milestone.name,
+            tickets = get_tickets_for_milestone(self.env, db, milestone,
                                                 field='owner')
             tickets = apply_ticket_permissions(self.env, req, tickets)
             for tkt_id in [ticket['id'] for ticket in tickets
@@ -528,30 +537,49 @@ class MilestoneModule(Component):
         if 'MILESTONE_VIEW' in req.perm:
             yield ('milestone', _('Milestones reached'))
 
-    def get_timeline_events(self, req, start, stop, filters):
+    def get_timeline_events(self, req, start, stop, filters, pid):
         if 'milestone' in filters:
+            is_global = pid is None
             milestone_realm = Resource('milestone')
-            db = self.env.get_db_cnx()
+            db = self.env.get_read_db()
             cursor = db.cursor()
             # TODO: creation and (later) modifications should also be reported
-            cursor.execute("SELECT completed,name,description FROM milestone "
-                           "WHERE completed>=%s AND completed<=%s",
-                           (to_utimestamp(start), to_utimestamp(stop)))
-            for completed, name, description in cursor:
-                milestone = milestone_realm(id=name)
-                if 'MILESTONE_VIEW' in req.perm(milestone):
-                    yield('milestone', from_utimestamp(completed),
-                          '', (milestone, description)) # FIXME: author?
+            query = '''
+                SELECT {sel_pid} completed,name,description FROM milestone
+                WHERE completed>=%s AND completed<=%s {and_pid}
+            '''
+            sql_args = [to_utimestamp(start), to_utimestamp(stop)]
+            if is_global:
+                sel_pid = 'project_id,'
+                and_pid = ''
+            else:
+                sel_pid = ''
+                and_pid = 'AND project_id=%s'
+                sql_args.append(pid)
+            query = query.format(sel_pid=sel_pid, and_pid=and_pid)
+            cursor.execute(query, sql_args)
+            if is_global:
+                for project_id, completed, name, description in cursor:
+                    milestone = milestone_realm(id=name, pid=project_id)
+                    if 'MILESTONE_VIEW' in req.perm(milestone):
+                        yield('milestone', project_id, from_utimestamp(completed),
+                              '', (milestone, description)) # FIXME: author?
+            else:
+                for completed, name, description in cursor:
+                    milestone = milestone_realm(id=name, pid=pid)
+                    if 'MILESTONE_VIEW' in req.perm(milestone):
+                        yield('milestone', from_utimestamp(completed),
+                              '', (milestone, description)) # FIXME: author?
 
             # Attachments
             for event in AttachmentModule(self.env).get_timeline_events(
-                req, milestone_realm, start, stop):
+                req, milestone_realm, start, stop, pid):
                 yield event
                 
     def render_timeline_event(self, context, field, event):
         milestone, description = event[3]
         if field == 'url':
-            return context.href.milestone(milestone.id)
+            return context.href.milestone(milestone.id, 'project', milestone.pid)
         elif field == 'title':
             return tag_('Milestone %(name)s completed',
                         name=tag.em(milestone.id))
@@ -562,6 +590,12 @@ class MilestoneModule(Component):
     # IRequestHandler methods
 
     def match_request(self, req):
+#        match = re.match(r'/milestone(?:/(.+)/project/(\d+))?$', req.path_info)
+#        if match:
+#            if match.group(1):
+#                req.args['id']  = match.group(1)
+#                req.args['pid'] = match.group(2)
+#            return True
         match = re.match(r'/milestone(?:/(.+))?$', req.path_info)
         if match:
             if match.group(1):
@@ -570,25 +604,38 @@ class MilestoneModule(Component):
 
     def process_request(self, req):
         milestone_id = req.args.get('id')
+        milestone_pid = req.args.getint('pid')
+        action = req.args.get('action', 'view')
+
+        pm = ProjectManagement(self.env)
+        pid = pm.get_session_project(req)
+
+        if action == 'new' and milestone_pid is None:
+            milestone_pid = pid
+
+        if milestone_pid is None:
+            raise TracError('Project ID is not present in milestone URL')
+
+        pm.check_session_project(req, milestone_pid)
+
         req.perm('milestone', milestone_id).require('MILESTONE_VIEW')
         
         add_link(req, 'up', req.href.roadmap(), _('Roadmap'))
 
         db = self.env.get_db_cnx() # TODO: db can be removed
-        action = req.args.get('action', 'view')
         try:
-            milestone = Milestone(self.env, milestone_id, db)
+            milestone = Milestone(self.env, milestone_pid, milestone_id, db)
         except ResourceNotFound:
             if 'MILESTONE_CREATE' not in req.perm('milestone', milestone_id):
                 raise
-            milestone = Milestone(self.env, None, db)
+            milestone = Milestone(self.env, milestone_pid, None, db)
             milestone.name = milestone_id
             action = 'edit' # rather than 'new' so that it works for POST/save
 
         if req.method == 'POST':
             if req.args.has_key('cancel'):
                 if milestone.exists:
-                    req.redirect(req.href.milestone(milestone.name))
+                    req.redirect(req.href.milestone(milestone.name, 'project', milestone.pid))
                 else:
                     req.redirect(req.href.roadmap())
             elif action == 'edit':
@@ -603,7 +650,7 @@ class MilestoneModule(Component):
         if not milestone.name:
             req.redirect(req.href.roadmap())
 
-        return self._render_view(req, db, milestone)
+        return self._render_view(req, milestone_pid, db, milestone)
 
     # Internal methods
 
@@ -638,6 +685,8 @@ class MilestoneModule(Component):
         completed = req.args.get('completeddate', '')
         retarget_to = req.args.get('target')
 
+        milestone_pid = milestone.pid
+
         # Instead of raising one single error, check all the constraints and
         # let the user fix them by going back to edit mode showing the warnings
         warnings = []
@@ -652,7 +701,7 @@ class MilestoneModule(Component):
         #        (#4130) and should behave like a WikiPage does in
         #        this respect.
         try:
-            new_milestone = Milestone(self.env, new_name, db)
+            new_milestone = Milestone(self.env, milestone_pid, new_name, db)
             if new_milestone.name == old_name:
                 pass        # Creation or no name change
             elif new_milestone.name:
@@ -685,20 +734,20 @@ class MilestoneModule(Component):
                 def retarget(db):
                     cursor = db.cursor()
                     cursor.execute("UPDATE ticket SET milestone=%s WHERE "
-                                   "milestone=%s and status != 'closed'",
-                                   (retarget_to, old_name))
+                                   "project_id=%s AND milestone=%s AND status != 'closed'",
+                                   (milestone_pid, retarget_to, old_name))
                 self.env.log.info('Tickets associated with milestone %s '
                                   'retargeted to %s' % (old_name, retarget_to))
         else:
             milestone.insert()
 
         add_notice(req, _('Your changes have been saved.'))
-        req.redirect(req.href.milestone(milestone.name))
+        req.redirect(req.href.milestone(milestone.name, 'project', milestone.pid))
 
     def _render_confirm(self, req, db, milestone):
         req.perm(milestone.resource).require('MILESTONE_DELETE')
 
-        milestones = [m for m in Milestone.select(self.env, db=db)
+        milestones = [m for m in Milestone.select(self.env, pid=milestone.pid, db=db)
                       if m.name != milestone.name
                       and 'MILESTONE_VIEW' in req.perm(m.resource)]
         data = {
@@ -724,7 +773,7 @@ class MilestoneModule(Component):
 
         if milestone.exists:
             req.perm(milestone.resource).require('MILESTONE_MODIFY')
-            milestones = [m for m in Milestone.select(self.env, db=db)
+            milestones = [m for m in Milestone.select(self.env, pid=milestone.pid, db=db)
                           if m.name != milestone.name
                           and 'MILESTONE_VIEW' in req.perm(m.resource)]
             data['milestone_groups'] = group_milestones(milestones,
@@ -735,11 +784,11 @@ class MilestoneModule(Component):
         Chrome(self.env).add_wiki_toolbars(req)
         return 'milestone_edit.html', data, None
 
-    def _render_view(self, req, db, milestone):
+    def _render_view(self, req, pid, db, milestone):
         milestone_groups = []
         available_groups = []
         component_group_available = False
-        ticket_fields = TicketSystem(self.env).get_ticket_fields()
+        ticket_fields = TicketSystem(self.env).get_ticket_fields(pid)
 
         # collect fields that can be used for grouping
         for field in ticket_fields:
@@ -758,9 +807,9 @@ class MilestoneModule(Component):
             by = available_groups[0]['name']
         by = req.args.get('by', by)
 
-        tickets = get_tickets_for_milestone(self.env, db, milestone.name, by)
+        tickets = get_tickets_for_milestone(self.env, db, milestone, by)
         tickets = apply_ticket_permissions(self.env, req, tickets)
-        stat = get_ticket_stats(self.stats_provider, tickets)
+        stat = get_ticket_stats(self.stats_provider, tickets, pid)
 
         context = Context.from_request(req, milestone.resource)
         data = {
@@ -771,7 +820,7 @@ class MilestoneModule(Component):
             'grouped_by': by,
             'groups': milestone_groups
             }
-        data.update(milestone_stats_data(self.env, req, stat, milestone.name))
+        data.update(milestone_stats_data(self.env, req, stat, milestone))
 
         if by:
             groups = []
@@ -798,7 +847,7 @@ class MilestoneModule(Component):
                 if not group_tickets:
                     continue
 
-                gstat = get_ticket_stats(self.stats_provider, group_tickets)
+                gstat = get_ticket_stats(self.stats_provider, group_tickets, pid)
                 if gstat.count > max_count:
                     max_count = gstat.count
 
@@ -806,7 +855,7 @@ class MilestoneModule(Component):
 
                 gs_dict = {'name': group}
                 gs_dict.update(milestone_stats_data(self.env, req, gstat,
-                                                    milestone.name, by, group))
+                                                    milestone, by, group))
                 milestone_groups.append(gs_dict)
 
             for idx, gstat in enumerate(group_stats):
@@ -830,18 +879,19 @@ class MilestoneModule(Component):
 
     def _format_link(self, formatter, ns, name, label):
         name, query, fragment = formatter.split_link(name)
-        return self._render_link(formatter.context, name, label,
+        pid  = formatter.req.args['pid']
+        return self._render_link(formatter.context, pid, name, label,
                                  query + fragment)
 
-    def _render_link(self, context, name, label, extra=''):
+    def _render_link(self, context, pid, name, label, extra=''):
         try:
-            milestone = Milestone(self.env, name)
+            milestone = Milestone(self.env, pid, name)
         except TracError:
             milestone = None
         # Note: the above should really not be needed, `Milestone.exists`
         # should simply be false if the milestone doesn't exist in the db
         # (related to #4130)
-        href = context.href.milestone(name)
+        href = context.href.milestone(name, 'project', pid)
         if milestone and milestone.exists:
             if 'MILESTONE_VIEW' in context.perm(milestone.resource):
                 closed = milestone.is_completed and 'closed ' or ''
@@ -859,11 +909,12 @@ class MilestoneModule(Component):
 
     def get_resource_description(self, resource, format=None, context=None,
                                  **kwargs):
+#        desc = '%s:project:%s' % (resource.id, resource.pid)
         desc = resource.id
         if format != 'compact':
-            desc =  _('Milestone %(name)s', name=resource.id)
+            desc =  _('Milestone %(name)s (project #%(pid)s', name=resource.id, pid=resource.pid)
         if context:
-            return self._render_link(context, resource.id, desc)
+            return self._render_link(context, resource.pid, resource.id, desc)
         else:
             return desc
 
@@ -886,6 +937,26 @@ class MilestoneModule(Component):
         cursor.execute("SELECT name FROM milestone WHERE name=%s",
                        (resource.id,))
         return bool(cursor.fetchall())
+
+    def has_project_resources(self, realm):
+        if realm == 'milestone':
+            return True
+
+    def has_global_resources(self, realm):
+        if realm == 'milestone':
+            return False
+
+    def is_slave_realm(self, realm):
+        if realm == 'milestone':
+            return False
+
+    def get_realm_table(self, realm):
+        if realm == 'milestone':
+            return 'milestone'
+
+    def get_realm_id(self, realm):
+        if realm == 'milestone':
+            return 'name'
 
     # ISearchSource methods
 

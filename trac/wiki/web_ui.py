@@ -688,7 +688,7 @@ class WikiModule(Component):
         if 'WIKI_VIEW' in req.perm:
             yield ('wiki', _('Wiki changes'))
 
-    def get_timeline_events(self, req, start, stop, filters):
+    def get_timeline_events(self, req, start, stop, filters, pid):
         db = self.env.get_db_cnx()
         if 'wiki' in filters:
             wiki_realm = Resource('wiki')
@@ -705,7 +705,7 @@ class WikiModule(Component):
 
             # Attachments
             for event in AttachmentModule(self.env).get_timeline_events(
-                req, wiki_realm, start, stop):
+                req, wiki_realm, start, stop, pid):
                 yield event
 
     def render_timeline_event(self, context, field, event):

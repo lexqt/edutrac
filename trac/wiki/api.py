@@ -463,3 +463,23 @@ class WikiSystem(Component):
         cursor.execute("SELECT name FROM wiki WHERE name=%s AND version=%s",
                        (resource.id, resource.version))
         return bool(cursor.fetchall())
+
+    def has_project_resources(self, realm):
+        if realm == 'wiki':
+            return True
+
+    def has_global_resources(self, realm):
+        if realm == 'wiki':
+            return True
+
+    def is_slave_realm(self, realm):
+        if realm == 'wiki':
+            return False
+
+    def get_realm_table(self, realm):
+        if realm == 'wiki':
+            return 'wiki'
+
+    def get_realm_id(self, realm):
+        if realm == 'wiki':
+            return 'name'

@@ -29,6 +29,8 @@ from trac.util.text import empty
 from trac.util.datefmt import from_utimestamp, to_utimestamp, utc, utcmax
 from trac.util.translation import _
 
+from trac.project.model import Project
+
 __all__ = ['Ticket', 'Type', 'Status', 'Resolution', 'Priority', 'Severity',
            'Component', 'Milestone', 'Version', 'group_milestones']
 
@@ -45,7 +47,7 @@ def _fixup_cc_list(cc_value):
 class Ticket(object):
 
     # Fields that must not be modified directly by the user
-    protected_fields = ('resolution', 'status', 'time', 'changetime')
+    protected_fields = ('resolution', 'status', 'time', 'changetime', 'project_id')
 
     @staticmethod
     def id_is_valid(num):
@@ -55,15 +57,20 @@ class Ticket(object):
     time_created = property(lambda self: self.values.get('time'))
     time_changed = property(lambda self: self.values.get('changetime'))
 
-    def __init__(self, env, tkt_id=None, db=None, version=None):
+    def __init__(self, env, tkt_id=None, db=None, version=None, pid=None):
         self.env = env
         if tkt_id is not None:
             tkt_id = int(tkt_id)
-        self.resource = Resource('ticket', tkt_id, version)
-        self.fields = TicketSystem(self.env).get_ticket_fields()
+
+        self.values = {}
+        self._init_pid(tkt_id, pid)
+
+        self.resource = Resource('ticket', tkt_id, version, pid=self.pid)
+        self.resource.need_pid = False
+
+        self.fields = TicketSystem(self.env).get_ticket_fields(self.pid)
         self.time_fields = [f['name'] for f in self.fields
                             if f['type'] == 'time']
-        self.values = {}
         if tkt_id is not None:
             self._fetch_ticket(tkt_id, db)
         else:
@@ -71,8 +78,47 @@ class Ticket(object):
             self.id = None
         self._old = {}
 
+    def _init_pid(self, tkt_id=None, pid=None):
+        assert pid is not None or tkt_id is not None, 'Insufficient data to init ticket pid'
+        if pid is not None:
+            pid = int(pid)
+            Project.check_exists(self.env, pid)
+        elif tkt_id is not None:
+            if self.id_is_valid(tkt_id):
+                db = self._get_db(None)
+
+                cursor = db.cursor()
+                cursor.execute('SELECT project_id FROM ticket WHERE id=%s',
+                               (tkt_id,))
+            if not cursor.rowcount:
+                raise ResourceNotFound(_('Ticket %(id)s does not exist.', 
+                                         id=tkt_id), _('Invalid ticket number'))
+            pid = cursor.fetchone()[0]
+        self.values['project_id'] = unicode(pid)
+        self._init_project_name()
+
     def _get_db(self, db):
         return db or self.env.get_read_db()
+
+    @property
+    def pid(self):
+        if 'project_id' in self.values:
+            return int(self.values['project_id'])
+
+    @pid.setter
+    def _set_pid(self, pid):
+        if pid == self.pid:
+            return
+        self.values['project_id'] = unicode(pid)
+        self._init_project_name()
+
+    def _init_project_name(self):
+        assert self.pid is not None
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+        cursor.execute('SELECT name FROM projects WHERE id=%s', (self.pid,))
+        name = cursor.fetchone()[0]
+        self.values['project_name'] = name
 
     exists = property(lambda self: self.id is not None)
 
@@ -105,7 +151,7 @@ class Ticket(object):
 
             # Fetch the standard ticket fields
             std_fields = [f['name'] for f in self.fields
-                          if not f.get('custom')]
+                          if not f.get('custom') and not f.get('virtual')]
             cursor = db.cursor()
             cursor.execute("SELECT %s FROM ticket WHERE id=%%s"
                            % ','.join(std_fields), (tkt_id,))
@@ -122,7 +168,7 @@ class Ticket(object):
             elif value is None:
                 self.values[field] = empty
             else:
-                self.values[field] = value
+                self.values[field] = unicode(value)
 
         # Fetch custom fields if available
         custom_fields = [f['name'] for f in self.fields if f.get('custom')]
@@ -215,6 +261,8 @@ class Ticket(object):
         std_fields = []
         custom_fields = []
         for f in self.fields:
+            if f.get('virtual'):
+                continue
             fname = f['name']
             if fname in self.values:
                 if f.get('custom'):
@@ -654,25 +702,28 @@ class AbstractEnum(object):
     type = None
     ticket_col = None
 
-    def __init__(self, env, name=None, db=None):
+    def __init__(self, env, name=None, db=None, pid=None):
         if not self.ticket_col:
             self.ticket_col = self.type
         self.env = env
-        if name:
+        if pid is not None and name:
+            pid = int(pid)
             if not db:
                 db = self.env.get_read_db()
             cursor = db.cursor()
-            cursor.execute("SELECT value FROM enum WHERE type=%s AND name=%s",
-                           (self.type, name))
+            cursor.execute("SELECT value FROM enum WHERE project_id=%s AND type=%s AND name=%s",
+                           (pid, self.type, name))
             row = cursor.fetchone()
             if not row:
-                raise ResourceNotFound(_('%(type)s %(name)s does not exist.',
-                                         type=self.type, name=name))
+                raise ResourceNotFound(_('%(type)s %(name)s does not exist in project #%(pid)s.',
+                                         type=self.type, name=name, pid=pid))
             self.value = self._old_value = row[0]
             self.name = self._old_name = name
+            self.pid = pid
         else:
             self.value = self._old_value = None
             self.name = self._old_name = None
+            self.pid = None
 
     exists = property(lambda self: self._old_value is not None)
 
@@ -686,21 +737,22 @@ class AbstractEnum(object):
         @self.env.with_transaction(db)
         def do_delete(db):
             cursor = db.cursor()
-            self.env.log.info('Deleting %s %s' % (self.type, self.name))
-            cursor.execute("DELETE FROM enum WHERE type=%s AND value=%s",
-                           (self.type, self._old_value))
+            self.env.log.info('Deleting %s %s in project #%s' % (self.type, self.name, self.pid))
+            cursor.execute("DELETE FROM enum WHERE project_id=%s AND type=%s AND value=%s",
+                           (self.pid, self.type, self._old_value))
             # Re-order any enums that have higher value than deleted
             # (close gap)
-            for enum in list(self.select(self.env, db)):
+            for enum in list(self.select(self.env, db, pid=self.pid)):
                 try:
                     if int(enum.value) > int(self._old_value):
                         enum.value = unicode(int(enum.value) - 1)
                         enum.update()
                 except ValueError:
                     pass # Ignore cast error for this non-essential operation
-            TicketSystem(self.env).reset_ticket_fields()
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
         self.value = self._old_value = None
         self.name = self._old_name = None
+        self.pid = None
 
     def insert(self, db=None):
         """Add a new enum value.
@@ -715,16 +767,16 @@ class AbstractEnum(object):
         @self.env.with_transaction(db)
         def do_insert(db):
             cursor = db.cursor()
-            self.env.log.debug("Creating new %s '%s'" % (self.type, self.name))
+            self.env.log.debug("Creating new %s '%s' in project #%s" % (self.type, self.name, self.pid))
             if not self.value:
                 cursor.execute("""
-                    SELECT COALESCE(MAX(%s),0) FROM enum WHERE type=%%s
-                """ % db.cast('value', 'int'), (self.type,))
+                    SELECT COALESCE(MAX(%s),0) FROM enum WHERE project_id=%%s AND type=%%s
+                """ % db.cast('value', 'int'), (self.pid, self.type))
                 self.value = int(float(cursor.fetchone()[0])) + 1
-            cursor.execute("INSERT INTO enum (type,name,value) "
-                           "VALUES (%s,%s,%s)",
-                           (self.type, self.name, self.value))
-            TicketSystem(self.env).reset_ticket_fields()
+            cursor.execute("INSERT INTO enum (project_id,type,name,value) "
+                           "VALUES (%s,%s,%s,%s)",
+                           (self.pid, self.type, self.name, self.value))
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
 
         self._old_name = self.name
         self._old_value = self.value
@@ -742,32 +794,33 @@ class AbstractEnum(object):
         @self.env.with_transaction(db)
         def do_update(db):
             cursor = db.cursor()
-            self.env.log.info('Updating %s "%s"' % (self.type, self.name))
+            self.env.log.info('Updating %s "%s" in project #%s' % (self.type, self.name, self.pid))
             cursor.execute("""
                 UPDATE enum SET name=%s,value=%s 
-                WHERE type=%s AND name=%s
-                """, (self.name, self.value, self.type, self._old_name))
+                WHERE project_id=%s AND type=%s AND name=%s
+                """, (self.name, self.value, self.pid, self.type, self._old_name))
             if self.name != self._old_name:
                 # Update tickets
-                cursor.execute("UPDATE ticket SET %s=%%s WHERE %s=%%s" %
+                cursor.execute("UPDATE ticket SET %s=%%s WHERE project_id=%%s AND %s=%%s" %
                                (self.ticket_col, self.ticket_col),
-                               (self.name, self._old_name))
-            TicketSystem(self.env).reset_ticket_fields()
+                               (self.name, self.pid, self._old_name))
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
 
         self._old_name = self.name
         self._old_value = self.value
 
     @classmethod
-    def select(cls, env, db=None):
+    def select(cls, env, db=None, pid=None):
         if not db:
             db = env.get_read_db()
         cursor = db.cursor()
         cursor.execute("""
-            SELECT name,value FROM enum WHERE type=%s 
+            SELECT name,value FROM enum WHERE project_id=%s AND type=%s 
             ORDER BY
-            """ + db.cast('value', 'int'), (cls.type,))
+            """ + db.cast('value', 'int'), (pid, cls.type))
         for name, value in cursor:
             obj = cls(env)
+            obj.pid = pid
             obj.name = obj._old_name = name
             obj.value = obj._old_value = value
             yield obj
@@ -779,11 +832,11 @@ class Type(AbstractEnum):
 
 
 class Status(object):
-    def __init__(self, env):
+    def __init__(self, env, pid=None):
         self.env = env
 
     @classmethod
-    def select(cls, env, db=None):
+    def select(cls, env, db=None, pid=None):
         for state in TicketSystem(env).get_all_status():
             status = cls(env)
             status.name = state
@@ -803,23 +856,26 @@ class Severity(AbstractEnum):
 
 
 class Component(object):
-    def __init__(self, env, name=None, db=None):
+    def __init__(self, env, name=None, db=None, pid=None):
         self.env = env
-        if name:
+        if pid is not None and name:
+            pid = int(pid)
             if not db:
                 db = self.env.get_read_db()
             cursor = db.cursor()
             cursor.execute("""
-                SELECT owner,description FROM component WHERE name=%s
-                """, (name,))
+                SELECT owner,description FROM component WHERE project_id=%s AND name=%s
+                """, (pid, name))
             row = cursor.fetchone()
             if not row:
-                raise ResourceNotFound(_('Component %(name)s does not exist.',
-                                         name=name))
+                raise ResourceNotFound(_('Component %(name)s does not exist in project #%(pid)s.',
+                                         name=name, pid=pid))
+            self.pid = pid
             self.name = self._old_name = name
             self.owner = row[0] or None
             self.description = row[1] or ''
         else:
+            self.pid = None
             self.name = self._old_name = None
             self.owner = None
             self.description = None
@@ -836,10 +892,12 @@ class Component(object):
         @self.env.with_transaction(db)
         def do_delete(db):
             cursor = db.cursor()
-            self.env.log.info('Deleting component %s' % self.name)
-            cursor.execute("DELETE FROM component WHERE name=%s", (self.name,))
+            self.env.log.info('Deleting component %s in project #%s' % (self.name, self.pid))
+            cursor.execute("DELETE FROM component WHERE project_id=%s AND name=%s",
+                           (self.pid, self.name))
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
             self.name = self._old_name = None
-            TicketSystem(self.env).reset_ticket_fields()
+            self.pid = None
 
     def insert(self, db=None):
         """Insert a new component.
@@ -854,13 +912,13 @@ class Component(object):
         @self.env.with_transaction(db)
         def do_insert(db):
             cursor = db.cursor()
-            self.env.log.debug("Creating new component '%s'" % self.name)
+            self.env.log.debug("Creating new component '%s' in project #%s" % (self.name, self.pid))
             cursor.execute("""
-                INSERT INTO component (name,owner,description)
-                VALUES (%s,%s,%s)
-                """, (self.name, self.owner, self.description))
+                INSERT INTO component (project_id,name,owner,description)
+                VALUES (%s,%s,%s,%s)
+                """, (self.pid, self.name, self.owner, self.description))
             self._old_name = self.name
-            TicketSystem(self.env).reset_ticket_fields()
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
 
     def update(self, db=None):
         """Update the component.
@@ -875,29 +933,32 @@ class Component(object):
         @self.env.with_transaction(db)
         def do_update(db):
             cursor = db.cursor()
-            self.env.log.info('Updating component "%s"' % self.name)
+            self.env.log.info('Updating component "%s" in project #%s' % (self.name, self.pid))
             cursor.execute("""
                 UPDATE component SET name=%s,owner=%s, description=%s
-                WHERE name=%s
-                """, (self.name, self.owner, self.description, self._old_name))
+                WHERE project_id=%s AND name=%s
+                """, (self.name, self.owner, self.description, self.pid, self._old_name))
             if self.name != self._old_name:
                 # Update tickets
                 cursor.execute("""
-                    UPDATE ticket SET component=%s WHERE component=%s
-                    """, (self.name, self._old_name))
+                    UPDATE ticket SET component=%s WHERE project_id=%s AND component=%s
+                    """, (self.name, self.pid, self._old_name))
                 self._old_name = self.name
-            TicketSystem(self.env).reset_ticket_fields()
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
 
     @classmethod
-    def select(cls, env, db=None):
+    def select(cls, env, db=None, pid=None):
         if not db:
             db = env.get_read_db()
         cursor = db.cursor()
         cursor.execute("""
-            SELECT name,owner,description FROM component ORDER BY name
-            """)
+            SELECT name,owner,description FROM component
+            WHERE project_id=%s
+            ORDER BY name
+            """, (pid,))
         for name, owner, description in cursor:
             component = cls(env)
+            component.pid = pid
             component.name = component._old_name = name
             component.owner = owner or None
             component.description = description or ''
@@ -905,11 +966,12 @@ class Component(object):
 
 
 class Milestone(object):
-    def __init__(self, env, name=None, db=None):
+    def __init__(self, env, pid=None, name=None, db=None):
         self.env = env
-        if name:
-            self._fetch(name, db)
+        if pid is not None and name:
+            self._fetch(pid, name, db)
         else:
+            self.pid = int(pid) if pid is not None else pid
             self.name = None
             self.due = self.completed = None
             self.description = ''
@@ -917,29 +979,32 @@ class Milestone(object):
 
     @property
     def resource(self):
-        return Resource('milestone', self.name) ### .version !!!
+        res = Resource('milestone', pid=self.pid, id=self.name) ### .version !!!
+        res.need_pid = True
+        return res
 
-    def _fetch(self, name, db=None):
+    def _fetch(self, pid, name, db=None):
         if not db:
             db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute("""
-            SELECT name,due,completed,description 
-            FROM milestone WHERE name=%s
-            """, (name,))
+            SELECT project_id,name,due,completed,description 
+            FROM milestone WHERE project_id=%s AND name=%s
+            """, (pid, name))
         row = cursor.fetchone()
         if not row:
-            raise ResourceNotFound(_('Milestone %(name)s does not exist.',
-                                   name=name), _('Invalid milestone name'))
+            raise ResourceNotFound(_('Milestone %(name)s does not exist in project p%(pid)s.',
+                                   name=name, pid=pid), _('Invalid milestone name'))
         self._from_database(row)
 
-    exists = property(lambda self: self._old['name'] is not None)
+    exists = property(lambda self: self._old['pid'] is not None and self._old['name'] is not None)
     is_completed = property(lambda self: self.completed is not None)
     is_late = property(lambda self: self.due and
                                     self.due < datetime.now(utc))
 
     def _from_database(self, row):
-        name, due, completed, description = row
+        pid, name, due, completed, description = row
+        self.pid = pid
         self.name = name
         self.due = due and from_utimestamp(due) or None
         self.completed = completed and from_utimestamp(completed) or None
@@ -947,7 +1012,7 @@ class Milestone(object):
         self._to_old()
 
     def _to_old(self):
-        self._old = {'name': self.name, 'due': self.due,
+        self._old = {'pid': self.pid, 'name': self.name, 'due': self.due,
                      'completed': self.completed,
                      'description': self.description}
 
@@ -956,16 +1021,18 @@ class Milestone(object):
 
         The `db` argument is deprecated in favor of `with_transaction()`.
         """
+        assert self.pid is not None
+
         @self.env.with_transaction(db)
         def do_delete(db):
             cursor = db.cursor()
-            self.env.log.info('Deleting milestone %s' % self.name)
-            cursor.execute("DELETE FROM milestone WHERE name=%s", (self.name,))
+            self.env.log.info('Deleting milestone %s in project #%s' % (self.name, self.pid))
+            cursor.execute("DELETE FROM milestone WHERE project_id=%s AND name=%s", (self.pid, self.name))
 
             # Retarget/reset tickets associated with this milestone
             now = datetime.now(utc)
-            cursor.execute("SELECT id FROM ticket WHERE milestone=%s",
-                           (self.name,))
+            cursor.execute("SELECT id FROM ticket WHERE project_id=%s AND milestone=%s",
+                           (self.pid, self.name))
             tkt_ids = [int(row[0]) for row in cursor]
             for tkt_id in tkt_ids:
                 ticket = Ticket(self.env, tkt_id, db)
@@ -973,7 +1040,7 @@ class Milestone(object):
                 ticket.save_changes(author, 'Milestone %s deleted' % self.name,
                                     now)
             self._old['name'] = None
-            TicketSystem(self.env).reset_ticket_fields()
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
 
         for listener in TicketSystem(self.env).milestone_change_listeners:
             listener.milestone_deleted(self)
@@ -986,18 +1053,19 @@ class Milestone(object):
         self.name = simplify_whitespace(self.name)
         if not self.name:
             raise TracError(_('Invalid milestone name.'))
+        Project.check_exists(self.env, self.pid)
 
         @self.env.with_transaction(db)
         def do_insert(db):
             cursor = db.cursor()
-            self.env.log.debug("Creating new milestone '%s'" % self.name)
+            self.env.log.debug("Creating new milestone '%s' in project #%s" % (self.name, self.pid))
             cursor.execute("""
-                INSERT INTO milestone (name,due,completed,description) 
-                VALUES (%s,%s,%s,%s)
-                """, (self.name, to_utimestamp(self.due),
+                INSERT INTO milestone (project_id,name,due,completed,description) 
+                VALUES (%s,%s,%s,%s,%s)
+                """, (self.pid, self.name, to_utimestamp(self.due),
                       to_utimestamp(self.completed), self.description))
             self._to_old()
-            TicketSystem(self.env).reset_ticket_fields()
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
 
         for listener in TicketSystem(self.env).milestone_change_listeners:
             listener.milestone_created(self)
@@ -1010,6 +1078,7 @@ class Milestone(object):
         self.name = simplify_whitespace(self.name)
         if not self.name:
             raise TracError(_('Invalid milestone name.'))
+        Project.check_exists(self.env, self.pid)
 
         @self.env.with_transaction(db)
         def do_update(db):
@@ -1018,19 +1087,19 @@ class Milestone(object):
             self.env.log.info('Updating milestone "%s"' % self.name)
             cursor.execute("""
                 UPDATE milestone
-                SET name=%s,due=%s,completed=%s,description=%s WHERE name=%s
+                SET name=%s,due=%s,completed=%s,description=%s WHERE project_id=%s AND name=%s
                 """, (self.name, to_utimestamp(self.due),
                       to_utimestamp(self.completed),
-                      self.description, old_name))
+                      self.description, self.pid, old_name))
 
             if self.name != old_name:
                 # Update milestone field in tickets
                 self.env.log.info('Updating milestone field of all tickets '
                                   'associated with milestone "%s"' % self.name)
                 cursor.execute("""
-                    UPDATE ticket SET milestone=%s WHERE milestone=%s
-                    """, (self.name, old_name))
-                TicketSystem(self.env).reset_ticket_fields()
+                    UPDATE ticket SET milestone=%s WHERE project_id=%s AND milestone=%s
+                    """, (self.name, self.pid, old_name))
+                TicketSystem(self.env).reset_ticket_fields(self.pid)
 
                 # Reparent attachments
                 Attachment.reparent_all(self.env, 'milestone', old_name,
@@ -1043,14 +1112,14 @@ class Milestone(object):
             listener.milestone_changed(self, old_values)
 
     @classmethod
-    def select(cls, env, include_completed=True, db=None):
+    def select(cls, env, pid, include_completed=True, db=None):
         if not db:
             db = env.get_read_db()
-        sql = "SELECT name,due,completed,description FROM milestone "
+        sql = "SELECT project_id,name,due,completed,description FROM milestone WHERE project_id=%s"
         if not include_completed:
-            sql += "WHERE COALESCE(completed,0)=0 "
+            sql += " AND COALESCE(completed,0)=0 "
         cursor = db.cursor()
-        cursor.execute(sql)
+        cursor.execute(sql, (pid,))
         milestones = []
         for row in cursor:
             milestone = Milestone(env)
@@ -1081,23 +1150,26 @@ def group_milestones(milestones, include_completed):
 
 
 class Version(object):
-    def __init__(self, env, name=None, db=None):
+    def __init__(self, env, name=None, db=None, pid=None):
         self.env = env
-        if name:
+        if pid is not None and name:
+            pid = int(pid)
             if not db:
                 db = self.env.get_read_db()
             cursor = db.cursor()
             cursor.execute("""
-                SELECT time,description FROM version WHERE name=%s
-                """, (name,))
+                SELECT time,description FROM version WHERE project_id=%s AND name=%s
+                """, (pid, name))
             row = cursor.fetchone()
             if not row:
-                raise ResourceNotFound(_('Version %(name)s does not exist.',
-                                         name=name))
+                raise ResourceNotFound(_('Version %(name)s does not exist in project #%(pid)s.',
+                                         name=name, pid=pid))
+            self.pid = pid
             self.name = self._old_name = name
             self.time = row[0] and from_utimestamp(row[0]) or None
             self.description = row[1] or ''
         else:
+            self.pid = None
             self.name = self._old_name = None
             self.time = None
             self.description = None
@@ -1114,10 +1186,12 @@ class Version(object):
         @self.env.with_transaction(db)
         def do_delete(db):
             cursor = db.cursor()
-            self.env.log.info('Deleting version %s' % self.name)
-            cursor.execute("DELETE FROM version WHERE name=%s", (self.name,))
+            self.env.log.info('Deleting version %s in project #%s' % (self.name, self.pid))
+            cursor.execute("DELETE FROM version WHERE project_id=%s AND name=%s",
+                           (self.pid, self.name))
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
             self.name = self._old_name = None
-            TicketSystem(self.env).reset_ticket_fields()
+            self.pid = None
 
     def insert(self, db=None):
         """Insert a new version.
@@ -1132,12 +1206,12 @@ class Version(object):
         @self.env.with_transaction(db)
         def do_insert(db):
             cursor = db.cursor()
-            self.env.log.debug("Creating new version '%s'" % self.name)
+            self.env.log.debug("Creating new version '%s' in project #%s" % (self.name, self.pid))
             cursor.execute("""
-                INSERT INTO version (name,time,description) VALUES (%s,%s,%s)
-                """, (self.name, to_utimestamp(self.time), self.description))
+                INSERT INTO version (project_id,name,time,description) VALUES (%s,%s,%s,%s)
+                """, (self.pid, self.name, to_utimestamp(self.time), self.description))
             self._old_name = self.name
-            TicketSystem(self.env).reset_ticket_fields()
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
 
     def update(self, db=None):
         """Update the version.
@@ -1152,27 +1226,32 @@ class Version(object):
         @self.env.with_transaction(db)
         def do_update(db):
             cursor = db.cursor()
-            self.env.log.info('Updating version "%s"' % self.name)
+            self.env.log.info('Updating version "%s" in project #%s' % (self.name, self.pid))
             cursor.execute("""
-                UPDATE version SET name=%s,time=%s,description=%s WHERE name=%s
+                UPDATE version SET name=%s,time=%s,description=%s
+                WHERE project_id=%s AND name=%s
                 """, (self.name, to_utimestamp(self.time),
-                      self.description, self._old_name))
+                      self.description, self.pid, self._old_name))
             if self.name != self._old_name:
                 # Update tickets
-                cursor.execute("UPDATE ticket SET version=%s WHERE version=%s",
-                               (self.name, self._old_name))
+                cursor.execute("UPDATE ticket SET version=%s WHERE project_id=%s AND version=%s",
+                               (self.name, self.pid, self._old_name))
                 self._old_name = self.name
-            TicketSystem(self.env).reset_ticket_fields()
+            TicketSystem(self.env).reset_ticket_fields(self.pid)
 
     @classmethod
-    def select(cls, env, db=None):
+    def select(cls, env, db=None, pid=None):
         if not db:
             db = env.get_read_db()
         cursor = db.cursor()
-        cursor.execute("SELECT name,time,description FROM version")
+        cursor.execute("""
+        SELECT name,time,description FROM version
+        WHERE project_id=%s
+        """, (pid,))
         versions = []
         for name, time, description in cursor:
             version = cls(env)
+            version.pid = pid
             version.name = version._old_name = name
             version.time = time and from_utimestamp(time) or None
             version.description = description or ''

@@ -86,7 +86,7 @@ class TicketNotifyEmail(NotifyEmail):
         t = deactivate()
         translated_fields = ticket.fields
         try:
-            ticket.fields = TicketSystem(self.env).get_ticket_fields()
+            ticket.fields = TicketSystem(self.env).get_ticket_fields(ticket.pid)
             self._notify(ticket, newticket, modtime)
         finally:
             ticket.fields = translated_fields

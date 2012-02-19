@@ -883,7 +883,7 @@ class ChangesetModule(Component):
         else:
             return []
 
-    def get_timeline_events(self, req, start, stop, filters):
+    def get_timeline_events(self, req, start, stop, filters, pid):
         all_repos = 'changeset' in filters
         repo_filters = set(f for f in filters if f.startswith('repo-'))
         if all_repos or repo_filters:

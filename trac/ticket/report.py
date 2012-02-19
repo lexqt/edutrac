@@ -40,6 +40,7 @@ from trac.web.chrome import add_ctxtnav, add_link, add_notice, add_script, \
                             INavigationContributor, Chrome
 from trac.wiki import IWikiSyntaxProvider, WikiParser
 
+from project_management.api import ProjectManagement
 
 def cell_value(v):
     """Normalize a cell value for display.
@@ -418,7 +419,9 @@ class ReportModule(Component):
         #  * _col_ means fullrow, i.e. a group with one header
         #  * col_ means finish the current group and start a new one
 
-        field_labels = TicketSystem(self.env).get_ticket_field_labels()
+        pm = ProjectManagement(self.env)
+        pid = pm.get_session_project(req)
+        field_labels = TicketSystem(self.env).get_ticket_field_labels(pid)
 
         header_groups = [[]]
         for idx, col in enumerate(cols):

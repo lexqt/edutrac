@@ -80,6 +80,25 @@ class IResourceManager(Interface):
         (''since 0.11.8'')
         """
 
+    def has_project_resources(realm):
+        """Return whether there are project dependent resources in the realm.
+        None for slave realm.
+        """
+
+    def has_global_resources(realm):
+        """Return whether there are global resources in the realm.
+        None for slave realm.
+        """
+
+    def is_slave_realm(realm):
+        """Return whether the realm is slave only."""
+
+    def get_realm_table(realm):
+        """Return name of DB table using for resource store."""
+
+    def get_realm_id(realm):
+        """Return a tuple of columns used as primary key."""
+
 
 class Resource(object):
     """Resource identifier.
@@ -88,7 +107,7 @@ class Resource(object):
     environment is manipulated.
 
     A resource is identified by:
-    (- a `project` identifier) 0.12?
+    (- a `pid` - project identifier (None for global resource)
      - a `realm` (a string like `'wiki'` or `'ticket'`)
      - an `id`, which uniquely identifies a resource within its realm.
        If the `id` information is not set, then the resource represents
@@ -102,13 +121,17 @@ class Resource(object):
     the real work to the Resource's manager.
     """
 
-    __slots__ = ('realm', 'id', 'version', 'parent')
+    __slots__ = ('realm', 'pid', 'id', 'version', 'parent',
+                 '_need_pid', '_realm_need_pid')
 
     def __repr__(self):
         path = []
         r = self
         while r:
-            name = r.realm
+            name = unicode()
+            if r.pid is not None and r.need_pid:
+                name = 'project:%s:' % r.pid
+            name += r.realm
             if r.id:
                 name += ':' + unicode(r.id) # id can be numerical
             if r.version is not None:
@@ -119,6 +142,7 @@ class Resource(object):
 
     def __eq__(self, other):
         return self.realm == other.realm and \
+               self.pid == other.pid and \
                self.id == other.id and \
                self.version == other.version and \
                self.parent == other.parent
@@ -128,14 +152,31 @@ class Resource(object):
         path = ()
         current = self
         while current:
-            path += (self.realm, self.id, self.version)
+            if current.need_pid:
+                path += (self.realm, self.pid, self.id, self.version)
+            else:
+                path += (self.realm, self.id, self.version)
             current = current.parent
         return hash(path)
+
+    def _get_need_pid(self):
+        if self._need_pid is not None:
+            return self._need_pid
+        if self._realm_need_pid is not None:
+            rs = ResourceSystem(self.env)
+            # assumption
+            self._realm_need_pid = bool(rs.has_project_resources(self.realm))
+        return self._realm_need_pid
+
+    def _set_need_pid(self, val):
+        self._need_pid = val
+
+    need_pid = property(_get_need_pid, _set_need_pid)
 
     # -- methods for creating other Resource identifiers
 
     def __new__(cls, resource_or_realm=None, id=False, version=False,
-                parent=False):
+                parent=False, pid=False):
         """Create a new Resource object from a specification.
 
         :param resource_or_realm: this can be either:
@@ -169,41 +210,53 @@ class Resource(object):
         "<Resource ''>"
         """
         realm = resource_or_realm
+        need_pid = None
         if isinstance(resource_or_realm, Resource):
-            if id is False and version is False and parent is False:
+            if pid is False and id is False and version is False and parent is False:
                 return resource_or_realm
             else: # copy and override
                 realm = resource_or_realm.realm
+            if pid is False:
+                pid = resource_or_realm.pid
             if id is False:
                 id = resource_or_realm.id
             if version is False:
-                if id == resource_or_realm.id:
+                if pid == resource_or_realm.pid and id == resource_or_realm.id:
                     version = resource_or_realm.version # could be 0...
                 else:
                     version = None
             if parent is False:
                 parent = resource_or_realm.parent
+                if not parent:
+                    need_pid = resource_or_realm.need_pid
         else:
+            if pid is False:
+                pid = None
             if id is False:
                 id = None
             if version is False:
                 version = None
             if parent is False:
                 parent = None
+            if parent:
+                need_pid = False
         resource = super(Resource, cls).__new__(cls)
         resource.realm = realm
+        resource.pid = pid
         resource.id = id
         resource.version = version
         resource.parent = parent
+        resource._need_pid = need_pid
+        resource._realm_need_pid = None
         return resource
 
-    def __call__(self, realm=False, id=False, version=False, parent=False):
+    def __call__(self, realm=False, id=False, version=False, parent=False, pid=False):
         """Create a new Resource using the current resource as a template.
 
         Optional keyword arguments can be given to override `id` and
         `version`.
         """
-        return Resource(realm is False and self or realm, id, version, parent)
+        return Resource(realm is False and self or realm, id, version, parent, pid=pid)
 
     # -- methods for retrieving children Resource identifiers
     
@@ -215,7 +268,7 @@ class Resource(object):
         >>> repr(Resource(None).child('attachment', 'file.txt'))
         "<Resource u', attachment:file.txt'>"
         """
-        return Resource(realm, id, version, self)
+        return Resource(realm, id, version, self, pid=self.pid)
 
 
 class ResourceSystem(Component):
@@ -254,6 +307,26 @@ class ResourceSystem(Component):
             for realm in manager.get_resource_realms() or []:
                 realms.append(realm)
         return realms
+
+    def has_project_resources(self, realm):
+        RM = self.get_resource_manager(realm)
+        return RM.has_project_resources(realm)
+
+    def has_global_resources(self, realm):
+        RM = self.get_resource_manager(realm)
+        return RM.has_global_resources(realm)
+
+    def is_slave_realm(self, realm):
+        RM = self.get_resource_manager(realm)
+        return RM.is_slave_realm(realm)
+
+    def get_realm_table(self, realm):
+        RM = self.get_resource_manager(realm)
+        return RM.get_realm_table(realm)
+
+    def get_realm_id(self, realm):
+        RM = self.get_resource_manager(realm)
+        return RM.get_realm_id(realm)
 
 
 # -- Utilities for manipulating resources in a generic way
@@ -295,9 +368,17 @@ def get_resource_url(env, resource, href, **kwargs):
     manager = ResourceSystem(env).get_resource_manager(resource.realm)
     if manager and hasattr(manager, 'get_resource_url'):
         return manager.get_resource_url(resource, href, **kwargs)
+    args0 = []
+    res = resource
+    while res:
+        args0 = [res.realm, res.id] + args0
+        pid   = res.pid
+        res   = res.parent
+    if pid is not None:
+        args0 = [u'project', resource.pid] + args0
     args = {'version': resource.version}
     args.update(kwargs)
-    return href(resource.realm, resource.id, **args)
+    return href(*args0, **args)
 
 def get_resource_description(env, resource, format='default', **kwargs):
     """Retrieve a standardized description for the given resource.
@@ -331,7 +412,8 @@ def get_resource_description(env, resource, format='default', **kwargs):
     manager = ResourceSystem(env).get_resource_manager(resource.realm)
     if manager and hasattr(manager, 'get_resource_description'):
         return manager.get_resource_description(resource, format, **kwargs)
-    name = u'%s:%s' % (resource.realm, resource.id)
+    project = u':project:%s'%resource.pid if resource.pid is not None else ''
+    name = u'%s:%s%s' % (resource.realm, resource.id, project)
     if format == 'summary':
         name = _('%(name)s at version %(version)s',
                  name=name, version=resource.version)
@@ -349,7 +431,7 @@ def get_resource_summary(env, resource):
 def get_relative_resource(resource, path=''):
     """Build a Resource relative to a reference resource.
     
-    :param path: path leading to another resource within the same realm.
+    :param path: path leading to another resource within the same realm and project.
     """
     if path in (None, '', '.'):
         return resource

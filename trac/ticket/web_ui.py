@@ -50,6 +50,9 @@ from trac.web.chrome import add_link, add_notice, add_script, add_stylesheet, \
 from trac.wiki.formatter import format_to, format_to_html, format_to_oneliner
 
 
+from trac.project.model import ProjectNotSet, ResourceProjectMismatch
+from project_management.api import ProjectManagement
+
 class InvalidTicket(TracError):
     """Exception raised when a ticket fails validation."""
     title = N_("Invalid Ticket")
@@ -163,11 +166,13 @@ class TicketModule(Component):
             return True
 
     def process_request(self, req):
+        self.pm = ProjectManagement(self.env)
+        pid = self.pm.get_session_project(req, err_msg='Can not operate with tickets without setting current session project')
         if 'id' in req.args:
             if req.path_info == '/newticket':
                 raise TracError(_("id can't be set for a new ticket request."))
-            return self._process_ticket_request(req)
-        return self._process_newticket_request(req)
+            return self._process_ticket_request(req, pid)
+        return self._process_newticket_request(req, pid)
 
     # ITemplateProvider methods
 
@@ -232,7 +237,7 @@ class TicketModule(Component):
             if self.timeline_details:
                 yield ('ticket_details', _("Ticket updates"), False)
 
-    def get_timeline_events(self, req, start, stop, filters):
+    def get_timeline_events(self, req, start, stop, filters, pid):
         ts_start = to_utimestamp(start)
         ts_stop = to_utimestamp(stop)
 
@@ -243,7 +248,7 @@ class TicketModule(Component):
 
         ticket_realm = Resource('ticket')
 
-        field_labels = TicketSystem(self.env).get_ticket_field_labels()
+        field_labels = TicketSystem(self.env).get_ticket_field_labels(pid)
 
         def produce_event((id, ts, author, type, summary, description),
                           status, fields, comment, cid):
@@ -277,7 +282,7 @@ class TicketModule(Component):
                      description, comment, cid))
 
         # Ticket changes
-        db = self.env.get_db_cnx()
+        db = self.env.get_read_db()
         if 'ticket' in filters or 'ticket_details' in filters:
             cursor = db.cursor()
 
@@ -287,8 +292,9 @@ class TicketModule(Component):
                 FROM ticket_change tc 
                     INNER JOIN ticket t ON t.id = tc.ticket 
                         AND tc.time>=%s AND tc.time<=%s 
+                WHERE t.project_id=%s
                 ORDER BY tc.time
-                """ % (ts_start, ts_stop))
+                """ % (ts_start, ts_stop, pid))
             data = None
             for id,t,author,type,summary,field,oldvalue,newvalue in cursor:
                 if not (oldvalue or newvalue):
@@ -319,8 +325,8 @@ class TicketModule(Component):
             if 'ticket' in filters:
                 cursor.execute("""
                     SELECT id,time,reporter,type,summary,description
-                    FROM ticket WHERE time>=%s AND time<=%s
-                    """, (ts_start, ts_stop))
+                    FROM ticket WHERE project_id=%s AND time>=%s AND time<=%s
+                    """, (pid, ts_start, ts_stop))
                 for row in cursor:
                     ev = produce_event(row, 'new', {}, None, None)
                     if ev:
@@ -372,9 +378,9 @@ class TicketModule(Component):
             if action in actions:
                 yield controller
 
-    def _process_newticket_request(self, req):
+    def _process_newticket_request(self, req, pid):
         req.perm.require('TICKET_CREATE')
-        ticket = Ticket(self.env)
+        ticket = Ticket(self.env, pid=pid)
 
         plain_fields = True # support for /newticket?version=0.11 GETs
         field_reporter = 'reporter'
@@ -442,7 +448,7 @@ class TicketModule(Component):
         Chrome(self.env).add_wiki_toolbars(req)
         return 'ticket.html', data, None
 
-    def _process_ticket_request(self, req):
+    def _process_ticket_request(self, req, pid):
         id = int(req.args.get('id'))
         version = req.args.get('version', None)
         if version is not None:
@@ -453,6 +459,8 @@ class TicketModule(Component):
 
         req.perm('ticket', id, version).require('TICKET_VIEW')
         ticket = Ticket(self.env, id, version=version)
+        if not self.pm.check_session_project(req, ticket.pid):
+            raise ResourceProjectMismatch('Can not view tickets of another project')
         action = req.args.get('action', ('history' in req.args and 'history' or
                                          'view'))
 
@@ -795,7 +803,7 @@ class TicketModule(Component):
         new_ticket = dict(old_ticket)
         replay_changes(new_ticket, old_ticket, old_version+1, new_version)
 
-        field_labels = TicketSystem(self.env).get_ticket_field_labels()
+        field_labels = TicketSystem(self.env).get_ticket_field_labels(ticket.pid)
 
         changes = []
 
@@ -1270,7 +1278,7 @@ class TicketModule(Component):
         The field changes are represented as:
         `{field: {'old': oldvalue, 'new': newvalue, 'by': what}, ...}`
         """
-        field_labels = TicketSystem(self.env).get_ticket_field_labels()
+        field_labels = TicketSystem(self.env).get_ticket_field_labels(ticket.pid)
         field_changes = {}
         def store_change(field, old, new, author):
             field_changes[field] = {'old': old, 'new': new, 'by': author,
@@ -1358,7 +1366,7 @@ class TicketModule(Component):
 
             # per field settings
             if name in ('summary', 'reporter', 'description', 'status',
-                        'resolution', 'time', 'changetime'):
+                        'resolution', 'time', 'changetime', 'project_id'):
                 field['skip'] = True
             elif name == 'owner':
                 TicketSystem(self.env).eventually_restrict_owner(field, ticket)
@@ -1370,7 +1378,7 @@ class TicketModule(Component):
                         field['skip'] = False
                         owner_field = field
             elif name == 'milestone':
-                milestones = [Milestone(self.env, opt)
+                milestones = [Milestone(self.env, ticket.pid, opt)
                               for opt in field['options']]
                 milestones = [m for m in milestones
                               if 'MILESTONE_VIEW' in req.perm(m.resource)]
@@ -1380,7 +1388,7 @@ class TicketModule(Component):
                 field['optgroups'] = [
                     {'label': label, 'options': [m.name for m in milestones]}
                     for (label, milestones) in groups]
-                milestone = Resource('milestone', ticket[name])
+                milestone = Resource('milestone', pid=ticket.pid, id=ticket[name])
                 field['rendered'] = render_resource_link(self.env, context,
                                                          milestone, 'compact')
             elif name == 'keywords':
@@ -1657,7 +1665,7 @@ class TicketModule(Component):
         """Iterate on changelog entries, consolidating related changes
         in a `dict` object.
         """
-        field_labels = TicketSystem(self.env).get_ticket_field_labels()
+        field_labels = TicketSystem(self.env).get_ticket_field_labels(ticket.pid)
         changelog = ticket.get_changelog(when=when, db=db)
         autonum = 0 # used for "root" numbers
         last_uid = current = None

@@ -53,11 +53,14 @@ from trac.web.clearsilver import HDFWrapper
 from trac.web.href import Href
 from trac.web.session import Session
 
+from project_management.api import ProjectSystem
+
 default_tracker = 'http://trac.edgewall.org'
 """This URL is used for semi-automatic bug reports (see
    `send_internal_error`).  Please modify it to point to your own
    Trac instance if you distribute a patched version of Trac.
 """
+
 
 class FakeSession(dict):
     sid = None
@@ -195,6 +198,8 @@ class RequestDispatcher(Component):
                 # Select the component that should handle the request
                 chosen_handler = None
                 try:
+                    ps = ProjectSystem(self.env)
+                    ps.extract_project_id(req)
                     for handler in self.handlers:
                         if handler.match_request(req):
                             chosen_handler = handler

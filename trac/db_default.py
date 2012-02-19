@@ -14,7 +14,7 @@
 #
 # Author: Daniel Lundin <daniel@edgewall.com>
 
-from trac.db import Table, Column, Index
+from trac.db import Table, Column, Index, ForeignKey
 
 # Database version identifier. Used for automatic upgrades.
 db_version = 26
@@ -82,13 +82,17 @@ schema = [
         Column('text'),
         Column('comment'),
         Column('readonly', type='int'),
+        Column('project_id', type='int', null=True),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
         Index(['time'])],
 
     # Version control cache
     Table('repository', key=('id', 'name'))[
         Column('id', type='int'),
         Column('name'),
-        Column('value')],
+        Column('value'),
+        Column('project_id', type='int', null=True),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
     Table('revision', key=('repos', 'rev'))[
         Column('repos', type='int'),
         Column('rev', key_size=20),
@@ -106,9 +110,17 @@ schema = [
         Column('base_rev'),
         Index(['repos', 'rev'])],
 
+    # Project system
+    Table('projects', key=('id',))[
+        Column('id', auto_increment=True),
+        Column('name', type='varchar (255)', null=False, unique=True),
+        Column('description', type='text', default=''),
+    ],
+
     # Ticket system
     Table('ticket', key='id')[
         Column('id', auto_increment=True),
+        Column('project_id', type='int', null=False),
         Column('type'),
         Column('time', type='int64'),
         Column('changetime', type='int64'),
@@ -125,6 +137,7 @@ schema = [
         Column('summary'),
         Column('description'),
         Column('keywords'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
         Index(['time']),
         Index(['status'])],    
     Table('ticket_change', key=('ticket', 'time', 'field'))[
@@ -140,23 +153,31 @@ schema = [
         Column('ticket', type='int'),
         Column('name'),
         Column('value')],
-    Table('enum', key=('type', 'name'))[
+    Table('enum', key=('project_id', 'type', 'name'))[
+        Column('project_id', type='int', null=False),
         Column('type'),
         Column('name'),
-        Column('value')],
-    Table('component', key='name')[
+        Column('value'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
+    Table('component', key=('project_id', 'name'))[
+        Column('project_id', type='int', null=False),
         Column('name'),
         Column('owner'),
-        Column('description')],
-    Table('milestone', key='name')[
+        Column('description'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
+    Table('milestone', key=('project_id', 'name'))[
+        Column('project_id', type='int', null=False),
         Column('name'),
         Column('due', type='int64'),
         Column('completed', type='int64'),
-        Column('description')],
-    Table('version', key='name')[
+        Column('description'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
+    Table('version', key=('project_id', 'name'))[
+        Column('project_id', type='int', null=False),
         Column('name'),
         Column('time', type='int64'),
-        Column('description')],
+        Column('description'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
 
     # Report system
     Table('report', key='id')[
@@ -164,7 +185,9 @@ schema = [
         Column('author'),
         Column('title'),
         Column('query'),
-        Column('description')],
+        Column('description'),
+        Column('project_id', type='int', null=True),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
 ]
 
 
