@@ -39,7 +39,7 @@ from trac.web.chrome import add_link, add_stylesheet, prevnext_nav, Chrome, \
                             
 from trac.wiki.api import IWikiSyntaxProvider
 
-from project_management.api import ProjectManagement
+from trac.project.api import ProjectManagement
 
 
 class TimelineModule(Component):

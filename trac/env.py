@@ -23,6 +23,7 @@ from trac import db_default
 from trac.admin import AdminCommandError, IAdminCommandProvider
 from trac.cache import CacheManager
 from trac.config import *
+from trac.config import ConfigurationSwitcher
 from trac.core import Component, ComponentManager, implements, Interface, \
                       ExtensionPoint, TracError
 from trac.db.api import DatabaseManager, get_read_db, with_transaction
@@ -424,6 +425,8 @@ class Environment(Component, ComponentManager):
         """Load the configuration file."""
         self.config = Configuration(os.path.join(self.path, 'conf',
                                                  'trac.ini'))
+        self.conf_switcher_cache = {'syllabus': {}, 'project': {}} # for ConfigurationSwitcher
+        self.configs = ConfigurationSwitcher(self)
         self.setup_log()
         from trac.loader import load_components
         plugins_dir = self.shared_plugins_dir
@@ -474,13 +477,15 @@ class Environment(Component, ComponentManager):
         if not cnx:
             cnx = self.get_db_cnx()
         cursor = cnx.cursor()
-        cursor.execute("SELECT DISTINCT s.sid, n.value, e.value "
-                       "FROM session AS s "
-                       " LEFT JOIN session_attribute AS n ON (n.sid=s.sid "
-                       "  and n.authenticated=1 AND n.name = 'name') "
-                       " LEFT JOIN session_attribute AS e ON (e.sid=s.sid "
-                       "  AND e.authenticated=1 AND e.name = 'email') "
-                       "WHERE s.authenticated=1 ORDER BY s.sid")
+        cursor.execute('''
+            SELECT DISTINCT n.sid AS sid, n.value AS name, e.value AS email
+            FROM session_attribute AS n 
+            LEFT JOIN session_attribute AS e ON (e.sid=n.sid
+                AND e.authenticated=1 AND e.name = 'email')
+            WHERE n.authenticated=1 
+                AND n.name = 'name'
+            ORDER BY n.sid
+        ''')
         for username, name, email in cursor:
             yield username, name, email
 

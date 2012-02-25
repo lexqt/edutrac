@@ -44,7 +44,7 @@ from trac.web.chrome import add_link, add_notice, add_script, add_stylesheet, \
 from trac.wiki.api import IWikiSyntaxProvider
 from trac.wiki.formatter import format_to
 
-from project_management.api import ProjectManagement
+from trac.project.api import ProjectManagement
 
 class ITicketGroupStatsProvider(Interface):
     def get_ticket_group_stats(ticket_ids, pid):
@@ -193,7 +193,7 @@ class DefaultTicketGroupStatsProvider(Component):
 
     def get_ticket_group_stats(self, ticket_ids, pid):
         total_cnt = len(ticket_ids)
-        all_statuses = set(TicketSystem(self.env).get_all_status())
+        all_statuses = set(TicketSystem(self.env).get_all_status(pid=pid))
         status_cnt = {}
         for s in all_statuses:
             status_cnt[s] = 0

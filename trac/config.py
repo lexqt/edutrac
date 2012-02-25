@@ -48,6 +48,18 @@ class Configuration(object):
     the last modification time of the configuration file, and reparses it
     when the file has changed.
     """
+
+    _instances = {}
+
+    def __new__(cls, filename, *args, **kwargs):
+        is_new = filename not in cls._instances
+        if is_new:
+            cls._instances[filename] = super(Configuration, cls).__new__(cls, filename, *args, **kwargs)
+        conf = cls._instances[filename]
+        if not is_new:
+            conf.parse_if_needed() # TODO: is it necessary to check?
+        return conf
+
     def __init__(self, filename):
         self.filename = filename
         self.parser = ConfigParser()
@@ -509,6 +521,66 @@ class Section(object):
             self.config.parser.remove_option(_to_utf8(self.name), _to_utf8(key))
 
 
+class ConfigurationSwitcher(object):
+
+    def __init__(self, env):
+        self.env = env
+        self.common_config = env.config
+
+    def common(self):
+        return self.common_config
+
+    def syllabus(self, id):
+        return self.switch(syllabus=id)
+
+    def project(self, id):
+        return self.switch(project=id)
+
+    # TODO: Add something like filename provider for syllabus and project
+    # config files. Having env object, we could get this info even from DB
+    # (but not in __init__ - DB is not inited at that moment).
+    # Also such provider should dynamically link project, syllabuses and
+    # common config without hardcoding [inherit] section.
+    def switch(self, syllabus=None, project=None):
+        if project is not None:
+            key = 'project'
+            id = project
+        elif syllabus is not None:
+            key = 'syllabus'
+            id = syllabus
+        else:
+            raise AttributeError
+        if id not in self.env.conf_switcher_cache[key]:
+            c = self.common()
+            filename = os.path.join(os.path.dirname(c.filename), key, 'id{0}.ini'.format(id))
+            self.env.conf_switcher_cache[key][id] = Configuration(filename)
+        return self.env.conf_switcher_cache[key][id]
+
+class AccessorSwitcher(object):
+
+    def __init__(self, env, accessor_func, section, option, default):
+        self.env = env
+        self.accessor_func = accessor_func
+        self.section = section
+        self.option = option
+        self.default = default
+
+    def common(self):
+        section = self.env.config[self.section]
+        return self._get(section)
+
+    def syllabus(self, id):
+        section = self.env.configs.syllabus(id)[self.section]
+        return self._get(section)
+
+    def project(self, id):
+        section = self.env.configs.project(id)[self.section]
+        return self._get(section)
+
+    def _get(self, section):
+        return self.accessor_func(section, self.option, self.default)
+
+
 class Option(object):
     """Descriptor for configuration options on `Configurable` subclasses."""
 
@@ -537,7 +609,7 @@ class Option(object):
                     if each[1] not in components
                        or compmgr.is_enabled(components[each[1]]))
     
-    def __init__(self, section, name, default=None, doc=''):
+    def __init__(self, section, name, default=None, doc='', switcher=False):
         """Create the configuration option.
         
         @param section: the name of the configuration section this option
@@ -551,6 +623,7 @@ class Option(object):
         self.default = default
         self.registry[(self.section, self.name)] = self
         self.__doc__ = doc
+        self.switcher = switcher
 
     def __get__(self, instance, owner):
         if instance is None:
@@ -558,7 +631,11 @@ class Option(object):
         config = getattr(instance, 'config', None)
         if config and isinstance(config, Configuration):
             section = config[self.section]
-            value = self.accessor(section, self.name, self.default)
+            if not self.switcher:
+                value = self.accessor(section, self.name, self.default)
+            else:
+                env = getattr(instance, 'env', None)
+                value = AccessorSwitcher(env, self.accessor, self.section, self.name, self.default)
             return value
         return None
 
@@ -591,8 +668,8 @@ class ListOption(Option):
     """
 
     def __init__(self, section, name, default=None, sep=',', keep_empty=False,
-                 doc=''):
-        Option.__init__(self, section, name, default, doc)
+                 doc='', switcher=False):
+        Option.__init__(self, section, name, default, doc, switcher)
         self.sep = sep
         self.keep_empty = keep_empty
 
@@ -607,8 +684,8 @@ class ChoiceOption(Option):
     The default value is the first choice in the list.
     """
     
-    def __init__(self, section, name, choices, doc=''):
-        Option.__init__(self, section, name, _to_utf8(choices[0]), doc)
+    def __init__(self, section, name, choices, doc='', switcher=False):
+        Option.__init__(self, section, name, _to_utf8(choices[0]), doc, switcher)
         self.choices = set(_to_utf8(choice).strip() for choice in choices)
 
     def accessor(self, section, name, default):

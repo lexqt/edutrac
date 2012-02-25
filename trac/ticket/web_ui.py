@@ -51,7 +51,7 @@ from trac.wiki.formatter import format_to, format_to_html, format_to_oneliner
 
 
 from trac.project.model import ProjectNotSet, ResourceProjectMismatch
-from project_management.api import ProjectManagement
+from trac.project.api import ProjectManagement
 
 class InvalidTicket(TracError):
     """Exception raised when a ticket fails validation."""
@@ -540,12 +540,13 @@ class TicketModule(Component):
             if field_changes is not None:
                 self._apply_ticket_changes(ticket, field_changes)
             else:
+                # Special case - cancel all changes
                 ticket = Ticket(self.env, ticket.id)
             # Unconditionally run the validation so that the user gets
             # information any and all problems.  But it's only valid if it
             # validates and there were no problems with the workflow side of
             # things.
-            valid = self._validate_ticket(req, ticket, not valid) and valid
+            valid = self._validate_ticket(req, ticket, action, not valid) and valid
             if 'preview' not in req.args:
                 if valid:
                     # redirected if successful
@@ -1096,7 +1097,8 @@ class TicketModule(Component):
 
     # Ticket validation and changes
     
-    def _validate_ticket(self, req, ticket, force_collision_check=False):
+    def _validate_ticket(self, req, ticket, action=None, force_collision_check=False):
+        # `action` is None for new tickets
         valid = True
         resource = ticket.resource
 
@@ -1190,7 +1192,7 @@ class TicketModule(Component):
 
         # Custom validation rules
         for manipulator in self.ticket_manipulators:
-            for field, message in manipulator.validate_ticket(req, ticket):
+            for field, message in manipulator.validate_ticket(req, ticket, action):
                 valid = False
                 if field:
                     add_warning(req, _("The ticket field '%(field)s' is "
@@ -1294,6 +1296,7 @@ class TicketModule(Component):
             cname = controller.__class__.__name__
             action_changes = controller.get_ticket_changes(req, ticket,
                                                            selected_action)
+            # None is marker that all changes must be canceled
             if action_changes is None:
                 return None, []
             for key in action_changes.keys():
@@ -1369,10 +1372,12 @@ class TicketModule(Component):
                         'resolution', 'time', 'changetime', 'project_id'):
                 field['skip'] = True
             elif name == 'owner':
-                TicketSystem(self.env).eventually_restrict_owner(field, ticket)
-                type_ = field['type']
-                field['skip'] = True
-                if not ticket.exists:
+                ts = TicketSystem(self.env)
+                if ticket.exists or ts.skip_owner_on_new:
+                    field['skip'] = True
+                else:
+                    ts.eventually_restrict_owner(field, ticket)
+                    type_ = field['type']
                     field['label'] = _("Owner")
                     if 'TICKET_MODIFY' in req.perm(ticket.resource):
                         field['skip'] = False

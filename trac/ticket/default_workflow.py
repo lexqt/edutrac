@@ -23,12 +23,15 @@ from genshi.builder import tag
 from trac.core import *
 from trac.perm import PermissionSystem
 from trac.env import IEnvironmentSetupParticipant
-from trac.config import Configuration
-from trac.ticket.api import ITicketActionController, TicketSystem
+from trac.config import Configuration, ExtensionOption, ListOption
+from trac.ticket.api import ITicketActionController, ITicketManipulator, TicketSystem
 from trac.ticket.model import Resolution
 from trac.util.text import obfuscate_email_address
 from trac.util.translation import _, tag_
 from trac.web.chrome import Chrome
+
+from trac.project.api import ProjectManagement
+from trac.user.api import GroupManagement
 
 # -- Utilities for the ConfigurableTicketWorkflow
 
@@ -90,6 +93,12 @@ def load_workflow_config_snippet(config, filename):
         config.set('ticket-workflow', name, value)
 
 
+class IValidOwnerProvider(Interface):
+
+    def get_owners(req, ticket, next_action_obj):
+        """Returns a list of valid usernames for set_owner ticket actions"""
+
+
 class ConfigurableTicketWorkflow(Component):
     """Ticket action controller which provides actions according to a
     workflow defined in trac.ini.
@@ -97,27 +106,14 @@ class ConfigurableTicketWorkflow(Component):
     The workflow is idefined in the `[ticket-workflow]` section of the
     [wiki:TracIni#ticket-workflow-section trac.ini] configuration file.
     """
-    
-    def __init__(self, *args, **kwargs):
-        self.actions = get_workflow_config(self.config)
-        if not '_reset' in self.actions:
-            # Special action that gets enabled if the current status no longer
-            # exists, as no other action can then change its state. (#5307)
-            self.actions['_reset'] = {
-                'default': 0,
-                'name': 'reset',
-                'newstate': 'new',
-                'oldstates': [],  # Will not be invoked unless needed
-                'operations': ['reset_workflow'],
-                'permissions': []}
-        self.log.debug('Workflow actions at initialization: %s\n' %
-                       str(self.actions))
-        for name, info in self.actions.iteritems():
-            if not info['newstate']:
-                self.log.warning("Ticket workflow action '%s' doesn't define "
-                                 "any transitions", name)
 
-    implements(ITicketActionController, IEnvironmentSetupParticipant)
+    valid_owner_provider = ExtensionOption('ticket-workflow-config', 'valid_owner_provider',
+                                           IValidOwnerProvider, 'OwnerGroupProvider')
+    
+    implements(ITicketActionController, IEnvironmentSetupParticipant, ITicketManipulator)
+
+    def __init__(self, *args, **kwargs):
+        self._actions = {} # syllabus_id: actions
 
     # IEnvironmentSetupParticipant methods
 
@@ -128,19 +124,20 @@ class ConfigurableTicketWorkflow(Component):
         if not 'ticket-workflow' in self.config.sections():
             load_workflow_config_snippet(self.config, 'basic-workflow.ini')
             self.config.save()
-            self.actions = get_workflow_config(self.config)
+            actions = get_workflow_config(self.config)
 
     def environment_needs_upgrade(self, db):
         """The environment needs an upgrade if there is no [ticket-workflow]
         section in the config.
         """
-        return not list(self.config.options('ticket-workflow'))
+#        return not list(self.config.options('ticket-workflow'))
+        return False
 
     def upgrade_environment(self, db):
         """Insert a [ticket-workflow] section using the original-workflow"""
         load_workflow_config_snippet(self.config, 'original-workflow.ini')
         self.config.save()
-        self.actions = get_workflow_config(self.config)
+        actions = get_workflow_config(self.config)
         info_message = """
 
 ==== Upgrade Notice ====
@@ -172,7 +169,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
 
         ticket_perm = req.perm(ticket.resource)
         allowed_actions = []
-        for action_name, action_info in self.actions.items():
+        for action_name, action_info in self.get_actions(ticket=ticket, req=req).items():
             oldstates = action_info['oldstates']
             if oldstates == ['*'] or status in oldstates:
                 # This action is valid in this state.  Check permissions.
@@ -181,7 +178,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                     allowed_actions.append((action_info['default'],
                                             action_name))
         if not (status in ['new', 'closed'] or \
-                    status in TicketSystem(self.env).get_all_status()) \
+                    status in TicketSystem(self.env).get_all_status(ticket.pid)) \
                 and 'TICKET_ADMIN' in ticket_perm:
             # State no longer exists - add a 'reset' action if admin.
             allowed_actions.append((0, '_reset'))
@@ -196,12 +193,12 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                 return False
         return True
 
-    def get_all_status(self):
+    def get_all_status(self, pid):
         """Return a list of all states described by the configuration.
 
         """
         all_status = set()
-        for action_name, action_info in self.actions.items():
+        for action_name, action_info in self.get_actions(pid=pid).items():
             all_status.update(action_info['oldstates'])
             all_status.add(action_info['newstate'])
         all_status.discard('*')
@@ -212,8 +209,8 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
 
         self.log.debug('render_ticket_action_control: action "%s"' % action)
 
-        this_action = self.actions[action]
-        status = this_action['newstate']        
+        this_action = self.get_actions(ticket=ticket, req=req)[action]
+        status = this_action['newstate']
         operations = this_action['operations']
         current_owner = ticket._old.get('owner', ticket['owner'] or '(none)')
         if not (Chrome(self.env).show_email_addresses
@@ -234,15 +231,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
             id = 'action_%s_reassign_owner' % action
             selected_owner = req.args.get(id, req.authname)
 
-            if this_action.has_key('set_owner'):
-                owners = [x.strip() for x in
-                          this_action['set_owner'].split(',')]
-            elif self.config.getbool('ticket', 'restrict_owner'):
-                perm = PermissionSystem(self.env)
-                owners = perm.get_users_with_permission('TICKET_MODIFY')
-                owners.sort()
-            else:
-                owners = None
+            owners = self.get_valid_owners(req, ticket, this_action)
 
             if owners == None:
                 owner = req.args.get(id, req.authname)
@@ -282,7 +271,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                 resolutions = [x.strip() for x in
                                this_action['set_resolution'].split(',')]
             else:
-                resolutions = [val.name for val in Resolution.select(self.env)]
+                resolutions = [val.name for val in Resolution.select(self.env, pid=ticket.pid)]
             if not resolutions:
                 raise TracError(_("Your workflow attempts to set a resolution "
                                   "but none is defined (configuration issue, "
@@ -318,7 +307,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         return (this_action['name'], tag(*control), '. '.join(hints))
 
     def get_ticket_changes(self, req, ticket, action):
-        this_action = self.actions[action]
+        this_action = self.get_actions(ticket=ticket, req=req)[action]
 
         # Enforce permissions
         if not self._has_perms_for_action(req, this_action, ticket.resource):
@@ -361,6 +350,22 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
     def apply_action_side_effects(self, req, ticket, action):
         pass
 
+    # ITicketManipulator methods
+
+    def prepare_ticket(self, req, ticket, fields, actions):
+        pass
+
+    def validate_ticket(self, req, ticket, action):
+        res = []
+        if action and 'set_owner' in action['operations']:
+            owners = self.get_valid_owners(req, ticket, action)
+            if ticket['owner'] not in owners:
+                res.append(('owner', '"%s" is not valid owner for "%s" action'
+                                    % (ticket['owner'], action['name'])))
+        return res
+
+    # Internal methods
+
     def _has_perms_for_action(self, req, action, resource):
         required_perms = action['permissions']
         if required_perms:
@@ -372,17 +377,37 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                 return False
         return True
 
+    def _prepare_actions(self, actions):
+        if not '_reset' in actions:
+            # Special action that gets enabled if the current status no longer
+            # exists, as no other action can then change its state. (#5307)
+            actions['_reset'] = {
+                'default': 0,
+                'name': 'reset',
+                'newstate': 'new',
+                'oldstates': [],  # Will not be invoked unless needed
+                'operations': ['reset_workflow'],
+                'permissions': []}
+        self.log.debug('Workflow actions at initialization: %s\n' %
+                       str(actions))
+        for name, info in actions.iteritems():
+            if not info['newstate']:
+                self.log.warning("Ticket workflow action '%s' doesn't define "
+                                 "any transitions", name)
+        return actions
+
     # Public methods (for other ITicketActionControllers that want to use
     #                 our config file and provide an operation for an action)
     
-    def get_actions_by_operation(self, operation):
-        """Return a list of all actions with a given operation
-        (for use in the controller's get_all_status())
-        """
-        actions = [(info['default'], action) for action, info
-                   in self.actions.items()
-                   if operation in info['operations']]
-        return actions
+    # UNUSED method!
+#    def get_actions_by_operation(self, operation):
+#        """Return a list of all actions with a given operation
+#        (for use in the controller's get_all_status())
+#        """
+#        actions = [(info['default'], action) for action, info
+#                   in self.actions.items()
+#                   if operation in info['operations']]
+#        return actions
 
     def get_actions_by_operation_for_req(self, req, ticket, operation):
         """Return list of all actions with a given operation that are valid
@@ -394,10 +419,88 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         # Be sure to look at the original status.
         status = ticket._old.get('status', ticket['status'])
         actions = [(info['default'], action) for action, info
-                   in self.actions.items()
+                   in self.get_actions(ticket=ticket, req=req).items()
                    if operation in info['operations'] and
                       ('*' in info['oldstates'] or
                        status in info['oldstates']) and
                       self._has_perms_for_action(req, info, ticket.resource)]
         return actions
+
+    # Public and internals methods at the same time
+
+    def get_actions(self, pid=None, sid=None, ticket=None, req=None):
+        # only one of pid, sid or ticket is required
+        # req is optional for cache
+        if ticket is not None:
+            pid = ticket.pid
+        if pid is not None:
+            pm = ProjectManagement(self.env) # TODO: move to __init__?
+            sid = pm.get_project_syllabus(pid, req, fail_on_none=True)
+        if sid is not None:
+            sid = int(sid)
+            if sid not in self._actions:
+                syl_config = self.env.configs.syllabus(sid)
+                actions = get_workflow_config(syl_config)
+                actions = self._prepare_actions(actions)
+                self._actions[sid] = actions
+            return self._actions[sid]
+        raise TypeError('You must specify one of id''s or ticket argument')
+
+    def get_valid_owners(self, req, ticket, action):
+        if action.has_key('set_owner'):
+            owners = [x.strip() for x in
+                      action['set_owner'].split(',')]
+#        elif self.config.getbool('ticket', 'restrict_owner'):
+#            perm = PermissionSystem(self.env)
+#            owners = perm.get_users_with_permission('TICKET_MODIFY')
+#            owners.sort()
+#        else:
+#            owners = None
+        else:
+            owners = self.valid_owner_provider.get_owners(req, ticket, action)
+        return owners
+
+
+class OwnerGroupProviderError(TracError):
+
+    title = 'Ticket Workflow config error'
+
+
+class OwnerGroupProvider(Component):
+
+    implements(IValidOwnerProvider)
+
+    default_owner_realms = ListOption('ticket-workflow-config', 'default_owner_realm', 'team', sep='|',
+        doc="""Default owner realms for set_owner ticket actions.""", switcher=True)
+
+    def get_owners(self, req, ticket, next_action):
+        realms = action_getlist(next_action, 'owner_realm', sep='|')
+        if not realms:
+            realms = self.default_owner_realms.project(ticket.pid)
+        perm_groups = action_getlist(next_action, 'owner_perm_group', sep='|')
+
+        users = GroupManagement(self.env).get_project_users(ticket.pid, realms, perm_groups)
+        return sorted(users)
+
+
+def action_getlist(action_obj, name, default=None, sep=',', keep_empty=False):
+    """Return a list of values that have been specified as a single
+    comma-separated option.
+
+    A different separator can be specified using the `sep` parameter. If
+    the `skip_empty` parameter is set to `True`, empty elements are omitted
+    from the list.
+    
+    Copied from Section.getlist() in trac/config.py
+    """
+    value = action_obj.get(name, default)
+    items = None
+    if value:
+        if isinstance(value, basestring):
+            items = [item.strip() for item in value.split(sep)]
+        else:
+            items = list(value)
+        if not keep_empty:
+            items = filter(None, items)
+    return items        
 

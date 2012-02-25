@@ -834,12 +834,14 @@ class Type(AbstractEnum):
 class Status(object):
     def __init__(self, env, pid=None):
         self.env = env
+        self.pid = pid
 
     @classmethod
     def select(cls, env, db=None, pid=None):
-        for state in TicketSystem(env).get_all_status():
+        for state in TicketSystem(env).get_all_status(pid=pid):
             status = cls(env)
             status.name = state
+            status.pid = pid
             yield status
 
 

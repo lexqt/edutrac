@@ -40,7 +40,7 @@ from trac.web.chrome import add_ctxtnav, add_link, add_notice, add_script, \
                             INavigationContributor, Chrome
 from trac.wiki import IWikiSyntaxProvider, WikiParser
 
-from project_management.api import ProjectManagement
+from trac.project.api import ProjectManagement
 
 def cell_value(v):
     """Normalize a cell value for display.

@@ -14,11 +14,13 @@
 
 import os
 import tempfile
+import shutil
 import time
 import unittest
 
 from trac.config import *
-from trac.test import Configuration
+from trac.config import ConfigurationSwitcher, AccessorSwitcher
+from trac.test import Configuration, ConfigurationSwitcher, Mock
 from trac.util import create_file
 
 
@@ -441,8 +443,140 @@ class ConfigurationTestCase(unittest.TestCase):
             os.remove(sitename)
 
 
+class ConfigurationSwitcherTestCase(unittest.TestCase):
+    """
+    TestCase for common / syllabus / project confs switches
+    and more tests for Configuration inheritance feature
+    """
+
+    def setUp(self):
+        # create files and folders
+        tmpdir = tempfile.mkdtemp()
+        self.tmpdir = tmpdir
+        s_dir = os.path.join(tmpdir, 'syllabus')
+        p_dir = os.path.join(tmpdir, 'project')
+        os.mkdir(s_dir)
+        os.mkdir(p_dir)
+        self.filename   = os.path.join(tmpdir, 'trac.ini')
+        self.filename_s = os.path.join(s_dir, 'id5.ini')
+        self.filename_p = os.path.join(p_dir, 'id70.ini')
+        # prepare test data
+        self._write(['[a]', 'option = x',
+                     '[overwrite]', 'option = common'])
+        self._write(['[inherit]', 'file = ../trac.ini',
+                     '[b]', 'option = y',
+                     '[overwrite]', 'option = syllabus'], 's')
+        self._write(['[inherit]', 'file = ../syllabus/id5.ini',
+                     '[c]', 'option = z',
+                     '[overwrite]', 'option = project'], 'p')
+        # misc data
+        self.syllabus_id = 5
+        self.project_id  = 70
+        # Option init
+        self._orig_registry = Option.registry
+        Option.registry = {}
+        # Environment mock init and conf init
+        env = Mock()
+        env.config = Configuration(self.filename)
+        env.conf_switcher_cache = {'syllabus': {}, 'project': {}}
+        env.configs = ConfigurationSwitcher(env)
+        self.env = env
+
+    def tearDown(self):
+        Option.registry = self._orig_registry
+        shutil.rmtree(self.tmpdir)
+
+    def _write(self, lines, where='c'):
+        if where == 'c':
+            filename = self.filename
+        elif where == 's':
+            filename = self.filename_s
+        elif where == 'p':
+            filename = self.filename_p
+        fileobj = open(filename, 'w')
+        try:
+            fileobj.write(('\n'.join(lines + [''])).encode('utf-8'))
+        finally:
+            fileobj.close()
+
+    def test_get_conf_from_switcher(self):
+        self.assertIsInstance(self.env.config,  Configuration)
+        self.assertIsInstance(self.env.configs, ConfigurationSwitcher)
+        config = self.env.config
+        cc  = self.env.configs.common()
+        cs  = self.env.configs.syllabus(self.syllabus_id)
+        cp  = self.env.configs.project(self.project_id)
+        self.assertEquals(cc, config)
+        self.assertNotEquals(cs, config)
+        self.assertNotEquals(cp, config)
+        for c in (cc, cs, cp):
+            self.assertIsInstance(c, Configuration)
+
+    def test_conf_filename_cache(self):
+        config  = self.env.config
+        config2 = Configuration(self.filename)
+        cs      = self.env.configs.syllabus(self.syllabus_id)
+        cs2     = Configuration(self.filename_s)
+        self.assertEquals(config, config2)
+        self.assertEquals(cs, cs2)
+
+    def test_switcher_cache(self):
+        cs  = self.env.configs.syllabus(self.syllabus_id)
+        cs2 = self.env.configs.syllabus(self.syllabus_id)
+        cp  = self.env.configs.project(self.project_id)
+        cp2 = self.env.configs.project(self.project_id)
+        self.assertEquals(cs, cs2)
+        self.assertEquals(cp, cp2)
+
+    def test_inherit_init_and_read(self):
+        cc = self.env.config
+        cs = self.env.configs.syllabus(self.syllabus_id)
+        cp = self.env.configs.project(self.project_id)
+        # test inheritance
+        # common
+        self.assertEquals('x', cc.get('a', 'option'))
+        self.assertEquals('',  cc.get('b', 'option'))
+        self.assertEquals('',  cc.get('c', 'option'))
+        # syllabus
+        self.assertEquals('x', cs.get('a', 'option'))
+        self.assertEquals('y', cs.get('b', 'option'))
+        self.assertEquals('',  cs.get('c', 'option'))
+        # project
+        self.assertEquals('x', cp.get('a', 'option'))
+        self.assertEquals('y', cp.get('b', 'option'))
+        self.assertEquals('z', cp.get('c', 'option'))
+        # test overwrite
+        self.assertEquals('common',   cc.get('overwrite', 'option'))
+        self.assertEquals('syllabus', cs.get('overwrite', 'option'))
+        self.assertEquals('project',  cp.get('overwrite', 'option'))
+
+    def test_option_switcher(self):
+        cc = self.env.config
+        
+        class Foo(object):
+            option_a = Option('a', 'option', 'bar', switcher=True)
+            option_c = Option('c', 'option', 'zzz', switcher=True)
+            option_d = Option('d', 'option', 'foo', switcher=True)
+        
+        self.assertEquals('x',   cc.get('a', 'option'))
+        self.assertEquals('foo', cc.get('d', 'option'))
+
+        foo = Foo()
+        foo.env    = self.env
+        foo.config = cc
+
+        oc = foo.option_c
+        self.assertIsInstance(oc, AccessorSwitcher)
+        self.assertEquals('zzz', foo.option_c.common())
+        self.assertEquals('zzz', foo.option_c.syllabus(self.syllabus_id))
+        self.assertEquals('z',   foo.option_c.project(self.project_id))
+
+
 def suite():
-    return unittest.makeSuite(ConfigurationTestCase, 'test')
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.makeSuite(ConfigurationTestCase, 'test'))
+    suite.addTest(unittest.makeSuite(ConfigurationSwitcherTestCase, 'test'))
+    return suite
 
 if __name__ == '__main__':
     unittest.main(defaultTest='suite')

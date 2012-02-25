@@ -27,7 +27,7 @@ try:
 except ImportError:
     Locale = None
 
-from trac.config import Configuration
+from trac.config import Configuration, ConfigurationSwitcher
 from trac.core import Component, ComponentManager
 from trac.env import Environment
 from trac.db.api import _parse_db_str, DatabaseManager

@@ -45,7 +45,7 @@ from trac.web.chrome import add_ctxtnav, add_link, add_script, \
 from trac.wiki.api import IWikiSyntaxProvider
 from trac.wiki.macros import WikiMacroBase # TODO: should be moved in .api
 
-from project_management.api import ProjectManagement
+from trac.project.api import ProjectManagement
 
 class QuerySyntaxError(TracError):
     """Exception raised when a ticket query cannot be parsed from a string."""

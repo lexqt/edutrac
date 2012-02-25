@@ -53,7 +53,7 @@ from trac.web.clearsilver import HDFWrapper
 from trac.web.href import Href
 from trac.web.session import Session
 
-from project_management.api import ProjectSystem
+from trac.project.sys import ProjectSystem
 
 default_tracker = 'http://trac.edgewall.org'
 """This URL is used for semi-automatic bug reports (see
@@ -199,7 +199,7 @@ class RequestDispatcher(Component):
                 chosen_handler = None
                 try:
                     ps = ProjectSystem(self.env)
-                    ps.extract_project_id(req)
+                    ps.init_request(req)
                     for handler in self.handlers:
                         if handler.match_request(req):
                             chosen_handler = handler

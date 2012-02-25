@@ -29,6 +29,7 @@ from trac.util.text import shorten_line
 from trac.util.translation import _, N_, gettext
 from trac.wiki import IWikiSyntaxProvider, WikiParser
 
+from trac.user.api import GroupManagement
 
 class ITicketActionController(Interface):
     """Extension point interface for components willing to participate
@@ -54,9 +55,10 @@ class ITicketActionController(Interface):
 
         When in doubt, use a weight of 0."""
 
-    def get_all_status():
+    def get_all_status(pid):
         """Returns an iterable of all the possible values for the ''status''
         field this action controller knows about.
+        ''pid'' indicates project id.
 
         This will be used to populate the query options and the like.
         It is assumed that the initial status of a ticket is 'new' and
@@ -130,7 +132,7 @@ class ITicketManipulator(Interface):
         """Not currently called, but should be provided for future
         compatibility."""
 
-    def validate_ticket(req, ticket):
+    def validate_ticket(req, ticket, action):
         """Validate a ticket after it's been populated from user input.
         
         Must return a list of `(field, message)` tuples, one for each problem
@@ -172,13 +174,15 @@ class TicketFieldsStore(object):
     def __init__(self, env, pid, ticket_system=None):
         self.env = env
         self.pid = pid
-        self._cache_pid = '%s.%s:project_id.%s' % (
-             TicketFieldsStore.__module__, TicketFieldsStore.__name__, self.pid)
+        modname = TicketFieldsStore.__module__
+        clsname = TicketFieldsStore.__name__
+        self._cache_fields        = '%s.%s.fields:pid.%s'        % (modname, clsname, self.pid)
+        self._cache_custom_fields = '%s.%s.custom_fields:pid.%s' % (modname, clsname, self.pid)
         if ticket_system is None:
             ticket_system = TicketSystem(self.env)
         self.ts = ticket_system
 
-    @cached('_cache_pid')
+    @cached('_cache_fields')
     def fields(self, db):
         """Return the list of fields available for tickets."""
         from trac.ticket import model
@@ -268,7 +272,7 @@ class TicketFieldsStore(object):
 
         return fields
 
-    @cached('_cache_pid')
+    @cached('_cache_custom_fields')
     def custom_fields(self, db):
         """Return the list of custom ticket fields available for tickets."""
         fields = []
@@ -322,6 +326,10 @@ class TicketSystem(Component):
         resulting drop-down menu, so this option should not be used if
         e-mail addresses must remain protected.
         (''since 0.9'')""")
+
+    skip_owner_on_new = BoolOption('ticket-workflow-config', 'skip_owner_on_new', 'true',
+        """Do not allow to set owner on new ticket creation.
+        Manipulations with owner will be controlled by workflow.""", switcher=True)
 
     default_version = Option('ticket', 'default_version', '',
         """Default version for newly created tickets.""")
@@ -381,12 +389,12 @@ class TicketSystem(Component):
                                 actions.items()]
         return [x[1] for x in sorted(all_weighted_actions, reverse=True)]
 
-    def get_all_status(self):
+    def get_all_status(self, pid):
         """Returns a sorted list of all the states all of the action
         controllers know about."""
         valid_states = set()
         for controller in self.action_controllers:
-            valid_states.update(controller.get_all_status() or [])
+            valid_states.update(controller.get_all_status(pid=pid) or [])
         return sorted(valid_states)
 
     def get_ticket_field_labels(self, pid):
@@ -435,17 +443,12 @@ class TicketSystem(Component):
         the TICKET_MODIFY permission (for the given ticket)
         """
         if self.restrict_owner:
-            field['type'] = 'select'
-            possible_owners = []
-            for user in PermissionSystem(self.env) \
-                    .get_users_with_permission('TICKET_MODIFY'):
-                if not ticket or \
-                        'TICKET_MODIFY' in PermissionCache(self.env, user,
-                                                           ticket.resource):
-                    possible_owners.append(user)
-            possible_owners.sort()
-            field['options'] = possible_owners
-            field['optional'] = True
+            possible_owners = GroupManagement(self.env, ticket.pid, ('team',))
+            if possible_owners:
+                possible_owners.sort()
+                field['type'] = 'select'
+                field['options'] = possible_owners
+                field['optional'] = True
 
     # IPermissionRequestor methods
 
