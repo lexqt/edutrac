@@ -31,7 +31,7 @@ from trac.util.translation import _, tag_
 from trac.web.chrome import Chrome
 
 from trac.project.api import ProjectManagement
-from trac.user.api import GroupManagement
+from trac.user.api import UserManagement
 
 # -- Utilities for the ConfigurableTicketWorkflow
 
@@ -479,7 +479,7 @@ class OwnerGroupProvider(Component):
             realms = self.default_owner_realms.project(ticket.pid)
         perm_groups = action_getlist(next_action, 'owner_perm_group', sep='|')
 
-        users = GroupManagement(self.env).get_project_users(ticket.pid, realms, perm_groups)
+        users = UserManagement(self.env).get_project_users(ticket.pid, realms, perm_groups)
         return sorted(users)
 
 

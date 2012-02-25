@@ -5,7 +5,7 @@ from trac.db import DatabaseManager
 import db_schema
 
 
-class ProjectManagement(Component):
+class ProjectManagementEnvironment(Component):
     """
     This class prepare environment for ProjectManagment plugin support.
     """

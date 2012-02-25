@@ -1,8 +1,15 @@
 import re
 
-from trac.core import Component, implements
+from trac.core import Component, implements, ExtensionPoint
 from trac.perm import IPermissionRequestor
-from trac.project.api import *
+from trac.web.main import IRequestHandler, IRequestFilter
+
+from trac.web import chrome
+from trac.web.chrome import INavigationContributor
+from genshi.core import Markup
+from genshi.builder import tag
+
+from trac.project.api import IProjectSwitchListener, ProjectManagement
 
 
 class ProjectSystem(Component):
@@ -35,6 +42,12 @@ class ProjectSystem(Component):
             req.environ['PATH_INFO'] = str(match.group(1) + '/' + match.group(3)).rstrip('/')
             return True
         return False
+
+
+STEP_SET_ROLE    = 1
+STEP_SET_PROJECT = 10
+
+STEP_INIT         = STEP_SET_ROLE
 
 
 class PostloginModule(Component):

@@ -3,7 +3,6 @@ from trac.core import Component, implements, TracError
 from trac.db import with_transaction, call_db_func
 from argparse import ArgumentError
 
-from trac.project.api import IProjectSwitchListener
 
 # Group levels
 GL_TEAM = 1
@@ -23,14 +22,18 @@ class UnknownProjectUserRealm(TracError):
     pass
 
 
-class GroupManagement(Component):
+class UserManagement(Component):
     """
     This class implements API to manage teams and groups.
     """
 
+    USER_ROLE_DEVELOPER = 1
+    USER_ROLE_MANAGER   = 2
+    USER_ROLE_ADMIN     = 3
+
     VALID_PROJECT_USER_REALMS = ('team', 'manager')
 
-    def exists(self, gid, group_lvl=GL_TEAM):
+    def group_exists(self, gid, group_lvl=GL_TEAM):
         """
         Returns whether the group exists.
         """

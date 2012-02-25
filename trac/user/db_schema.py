@@ -1,6 +1,6 @@
 from trac.db import Table, Column, ForeignKey, Index
 
-name = 'group_management'
+name = 'user_management'
 version = 1
 
 schema = [

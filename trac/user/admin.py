@@ -2,17 +2,17 @@ from trac.core import Component, implements
 from trac.admin.api import IAdminPanelProvider
 from trac.web.chrome import ITemplateProvider
 
-from api import GroupManagement
+from api import UserManagement
 
-class GroupManagementAdmin(Component):
+class UserManagementAdmin(Component):
     """
-    Provides admin interface for GroupManagement plugin.
+    Provides admin interface for UserManagement plugin.
     """
 
     implements(ITemplateProvider, IAdminPanelProvider)
 
     def __init__(self):
-        self.gm = GroupManagement(self.env)
+        self.um = UserManagement(self.env)
 
     # IAdminPanelProvider
 

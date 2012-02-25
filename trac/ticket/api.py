@@ -29,7 +29,7 @@ from trac.util.text import shorten_line
 from trac.util.translation import _, N_, gettext
 from trac.wiki import IWikiSyntaxProvider, WikiParser
 
-from trac.user.api import GroupManagement
+from trac.user.api import UserManagement
 
 class ITicketActionController(Interface):
     """Extension point interface for components willing to participate
@@ -443,7 +443,7 @@ class TicketSystem(Component):
         the TICKET_MODIFY permission (for the given ticket)
         """
         if self.restrict_owner:
-            possible_owners = GroupManagement(self.env, ticket.pid, ('team',))
+            possible_owners = UserManagement(self.env).get_project_users(ticket.pid, ('team',))
             if possible_owners:
                 possible_owners.sort()
                 field['type'] = 'select'

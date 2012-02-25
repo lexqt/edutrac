@@ -1,30 +1,10 @@
-from trac.config import Option, ExtensionOption
-from trac.perm import IPermissionGroupProvider
-from trac.db import with_transaction, call_db_func
-from argparse import ArgumentError
-
-
-from trac.core import Component, ExtensionPoint, Interface, implements, TracError
-from trac.resource import IResourceManager
-from trac.web.main import IRequestHandler, IRequestFilter
-
-from trac.web import chrome
-from trac.web.chrome import INavigationContributor
-
-from genshi.core import Markup
-from genshi.builder import tag
-from trac.project.model import ProjectNotSet
-
 import re
 
-USER_ROLE_DEVELOPER = 1
-USER_ROLE_MANAGER   = 2
-USER_ROLE_ADMIN     = 3
+from trac.core import Component, Interface, TracError
 
-STEP_SET_ROLE    = 1
-STEP_SET_PROJECT = 10
+from trac.project.model import ProjectNotSet
+from trac.user.api import UserManagement
 
-STEP_INIT         = STEP_SET_ROLE
 
 class IProjectSwitchListener(Interface):
     """Extension point interface for components which want to perform
@@ -57,7 +37,7 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((USER_ROLE_DEVELOPER, 'Developer'))
+            roles.append((UserManagement.USER_ROLE_DEVELOPER, 'Developer'))
 
         # check for manager
         query = '''
@@ -69,7 +49,7 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((USER_ROLE_MANAGER, 'Project manager'))
+            roles.append((UserManagement.USER_ROLE_MANAGER, 'Project manager'))
 
         # check for admin
         query = '''
@@ -80,27 +60,27 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((USER_ROLE_ADMIN, 'Administrator'))
+            roles.append((UserManagement.USER_ROLE_ADMIN, 'Administrator'))
 
         return roles
 
-    def get_user_projects(self, username, role=USER_ROLE_DEVELOPER):
+    def get_user_projects(self, username, role=UserManagement.USER_ROLE_DEVELOPER):
         db = self.env.get_read_db()
         cursor = db.cursor()
 
-        if role == USER_ROLE_DEVELOPER:
+        if role == UserManagement.USER_ROLE_DEVELOPER:
             query = '''
                 SELECT project_id, project_name
                 FROM developer_projects
                 WHERE username=%s
             '''
-        elif role == USER_ROLE_MANAGER:
+        elif role == UserManagement.USER_ROLE_MANAGER:
             query = '''
                 SELECT project_id, project_name
                 FROM manager_projects
                 WHERE username=%s
             '''
-        elif role == USER_ROLE_ADMIN:
+        elif role == UserManagement.USER_ROLE_ADMIN:
             query = '''
                 SELECT id project_id, name project_name
                 FROM projects

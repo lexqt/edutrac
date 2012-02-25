@@ -5,9 +5,6 @@ from trac.web.chrome import ITemplateProvider
 from api import ProjectManagement
 
 class ProjectManagementAdmin(Component):
-    """
-    Provides admin interface for GroupManagement plugin.
-    """
 
     implements(ITemplateProvider, IAdminPanelProvider)
 

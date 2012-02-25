@@ -5,10 +5,7 @@ from trac.db import DatabaseManager
 import db_schema
 
 
-class GroupManagement(Component):
-    """
-    This class prepare environment for GroupManagment plugin support.
-    """
+class UserManagementEnvironment(Component):
 
     implements(IEnvironmentSetupParticipant)
 
