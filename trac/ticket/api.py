@@ -592,6 +592,13 @@ class TicketSystem(Component):
         else:
             return False
 
+    def get_real_resource_from_url(self, rsc_url, args):
+        m = re.match(r'ticket/(?P<id>\d+)', rsc_url)
+        if m is None:
+            return None
+        from trac.ticket.model import Ticket
+        return Ticket(self.env, m.group('id'))
+
     def has_project_resources(self, realm):
         if realm == 'ticket':
             return True

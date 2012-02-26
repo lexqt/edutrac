@@ -18,6 +18,7 @@
 
 from trac.core import *
 from trac.util.translation import _
+from trac.web.href import Href
 
 
 class ResourceNotFound(TracError):
@@ -331,7 +332,7 @@ class ResourceSystem(Component):
 
 # -- Utilities for manipulating resources in a generic way
 
-def get_resource_url(env, resource, href, **kwargs):
+def get_resource_url(env, resource, href=None, **kwargs):
     """Retrieve the canonical URL for the given resource.
 
     This function delegates the work to the resource manager for that
@@ -340,7 +341,7 @@ def get_resource_url(env, resource, href, **kwargs):
     
     :param env: the `Environment` where `IResourceManager` components live
     :param resource: the `Resource` object specifying the Trac resource
-    :param href: an `Href` object used for building the URL
+    :param href: an `Href` object used for building the URL, None - for partial resource URLs
 
     Additional keyword arguments are translated as query paramaters in the URL.
 
@@ -355,8 +356,8 @@ def get_resource_url(env, resource, href, **kwargs):
     >>> get_resource_url(env, main(version=3), href)
     '/trac.cgi/generic/Main?version=3'
     
-    >>> get_resource_url(env, main(version=3), href)
-    '/trac.cgi/generic/Main?version=3'
+    >>> get_resource_url(env, main(version=3))
+    '/generic/Main?version=3'
     
     >>> get_resource_url(env, main(version=3), href, action='diff')
     '/trac.cgi/generic/Main?action=diff&version=3'
@@ -365,6 +366,8 @@ def get_resource_url(env, resource, href, **kwargs):
     '/trac.cgi/generic/Main?action=diff&version=5'
     
     """
+    if href is None:
+        href = Href('')
     manager = ResourceSystem(env).get_resource_manager(resource.realm)
     if manager and hasattr(manager, 'get_resource_url'):
         return manager.get_resource_url(resource, href, **kwargs)
@@ -372,10 +375,12 @@ def get_resource_url(env, resource, href, **kwargs):
     res = resource
     while res:
         args0 = [res.realm, res.id] + args0
-        pid   = res.pid
-        res   = res.parent
-    if pid is not None:
-        args0 = [u'project', resource.pid] + args0
+        if not res.parent:
+            break
+        else:
+            res = res.parent
+    if res.pid is not None and res.need_pid:
+        args0 = [u'project', res.pid] + args0
     args = {'version': resource.version}
     args.update(kwargs)
     return href(*args0, **args)
@@ -536,3 +541,15 @@ def resource_exists(env, resource):
         return manager.resource_exists(resource)
     elif resource.id is None:
         return False
+
+def get_real_resource_from_url(env, rsc_url, args={}):
+    parts = rsc_url.split('/', 1)
+    if len(parts) != 2:
+        raise ResourceNotFound('Invalid resource URL: %s' % rsc_url)
+    realm = parts[0]
+    manager = ResourceSystem(env).get_resource_manager(realm)
+    if manager and hasattr(manager, 'get_real_resource_from_url'):
+        return manager.get_real_resource_from_url(rsc_url, args)
+    else:
+        # TODO: somehow parse URL
+        raise NotImplementedError
