@@ -110,11 +110,79 @@ schema = [
         Column('base_rev'),
         Index(['repos', 'rev'])],
 
+    # User / group system
+    Table('users', key=('id',))[
+        Column('id', auto_increment=True),
+        Column('username', type='varchar (255)', null=False, unique=True),
+        Column('password', type='varchar (255)'),
+    ],
+    Table('teams', key=('id',))[
+        Column('id', auto_increment=True),
+        Column('name', type='varchar (255)', null=False),
+    ],
+    Table('student_groups', key=('id',))[
+        Column('id', auto_increment=True),
+        Column('name', type='varchar (255)', null=False),
+    ],
+    Table('metagroups', key=('id',))[
+        Column('id', auto_increment=True),
+        Column('name', type='varchar (255)', null=False),
+        Column('year', type='smallint', null=False),
+        Column('active', type='bool', default='TRUE', null=False),
+    ],
+    Table('team_members', key=('user_id', 'team_id'))[
+        Column('user_id', type='int'),
+        Column('team_id', type='int'),
+        ForeignKey('user_id', 'users', 'id', on_delete='CASCADE'),
+        ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
+    ],
+    Table('teamgroup_rel', key=('studgroup_id', 'team_id'))[
+        Column('studgroup_id', type='int'),
+        Column('team_id', type='int'),
+        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
+        ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
+    ],
+    Table('groupmeta_rel', key=('metagroup_id', 'studgroup_id'))[
+        Column('metagroup_id', type='int'),
+        Column('studgroup_id', type='int'),
+        ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
+        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
+    ],
+    Table('team_attributes', key=('gid', 'name'))[
+        Column('gid', type='int'),
+        Column('name', type='varchar (255)'),
+        Column('value', type='text'),
+        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
+        ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
+    ],
+
     # Project system
     Table('projects', key=('id',))[
         Column('id', auto_increment=True),
         Column('name', type='varchar (255)', null=False, unique=True),
         Column('description', type='text', default=''),
+    ],
+    Table('team_project_rel', key=('team_id',))[
+        Column('team_id', type='int'),
+        Column('project_id', type='int'),
+        ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
+    ],
+    Table('project_managers', key=('user_id', 'project_id'))[
+        Column('user_id', type='int'),
+        Column('project_id', type='int'),
+        ForeignKey('user_id', 'users', 'id', on_delete='CASCADE'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
+    ],
+    Table('syllabuses', key=('id',))[
+        Column('id', auto_increment=True),
+        Column('name', type='varchar (255)', null=False),
+    ],
+    Table('metagroup_syllabus_rel', key=('metagroup_id',))[
+        Column('metagroup_id', type='int'),
+        Column('syllabus_id', type='int'),
+        ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
+        ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
     ],
 
     # Ticket system
@@ -159,6 +227,12 @@ schema = [
         Column('name'),
         Column('value'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
+    Table('enum_syllabus', key=('syllabus_id', 'type', 'name'))[
+        Column('syllabus_id', type='int', null=False),
+        Column('type'),
+        Column('name'),
+        Column('value'),
+        ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE')],
     Table('component', key=('project_id', 'name'))[
         Column('project_id', type='int', null=False),
         Column('name'),

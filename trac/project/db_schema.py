@@ -4,28 +4,6 @@ name = 'project_management'
 version = 1
 
 schema = [
-    Table('team_project_rel', key=('team_id',))[
-        Column('team_id', type='int'),
-        Column('project_id', type='int'),
-        ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
-        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
-    ],
-    Table('project_managers', key=('user_id', 'project_id'))[
-        Column('user_id', type='int'),
-        Column('project_id', type='int'),
-        ForeignKey('user_id', 'users', 'id', on_delete='CASCADE'),
-        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
-    ],
-    Table('syllabuses', key=('id',))[
-        Column('id', auto_increment=True),
-        Column('name', type='varchar (255)', null=False),
-    ],
-    Table('metagroup_syllabus_rel', key=('metagroup_id',))[
-        Column('metagroup_id', type='int'),
-        Column('syllabus_id', type='int'),
-        ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
-        ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
-    ],
 ]
 
 extra_statements = (

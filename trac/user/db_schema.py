@@ -4,50 +4,6 @@ name = 'user_management'
 version = 1
 
 schema = [
-    Table('users', key=('id',))[
-        Column('id', auto_increment=True),
-        Column('username', type='varchar (255)', null=False, unique=True),
-        Column('password', type='varchar (255)'),
-    ],
-    Table('teams', key=('id',))[
-        Column('id', auto_increment=True),
-        Column('name', type='varchar (255)', null=False),
-    ],
-    Table('student_groups', key=('id',))[
-        Column('id', auto_increment=True),
-        Column('name', type='varchar (255)', null=False),
-    ],
-    Table('metagroups', key=('id',))[
-        Column('id', auto_increment=True),
-        Column('name', type='varchar (255)', null=False),
-        Column('year', type='smallint', null=False),
-        Column('active', type='bool', default='TRUE', null=False),
-    ],
-    Table('team_members', key=('user_id', 'team_id'))[
-        Column('user_id', type='int'),
-        Column('team_id', type='int'),
-        ForeignKey('user_id', 'users', 'id', on_delete='CASCADE'),
-        ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
-    ],
-    Table('teamgroup_rel', key=('studgroup_id', 'team_id'))[
-        Column('studgroup_id', type='int'),
-        Column('team_id', type='int'),
-        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
-        ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
-    ],
-    Table('groupmeta_rel', key=('metagroup_id', 'studgroup_id'))[
-        Column('metagroup_id', type='int'),
-        Column('studgroup_id', type='int'),
-        ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
-        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
-    ],
-    Table('team_attributes', key=('gid', 'name'))[
-        Column('gid', type='int'),
-        Column('name', type='varchar (255)'),
-        Column('value', type='text'),
-        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
-        ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
-    ],
 ]
 
 extra_statements = (
@@ -72,7 +28,7 @@ FROM users u LEFT JOIN (
 # optimized
 #SELECT u.id user_id, u.username, tm.team_id team_id, tr.studgroup_id studgroup_id, mg.id metagroup_id,  mg.active meta_active
 #FROM users u LEFT JOIN (
-#    team_members tm
+#    team_members     tm
 #    JOIN teamgroup_rel tr ON tr.team_id=tm.team_id
 #    JOIN groupmeta_rel gr ON gr.studgroup_id=tr.studgroup_id
 #    JOIN metagroups mg ON mg.id=gr.metagroup_id
