@@ -19,7 +19,7 @@ class ProjectSystem(Component):
 
     implements(IPermissionRequestor)
 
-    permissions = ('MULTIPROJECT_VIEW',)
+    permissions = ('MULTIPROJECT_ACTION',)
 
     def __init__(self):
         pass
@@ -42,6 +42,17 @@ class ProjectSystem(Component):
             req.environ['PATH_INFO'] = str(match.group(1) + '/' + match.group(3)).rstrip('/')
             return True
         return False
+
+    # Request callbacks methods
+
+    def get_session_user_projects(self, req):
+        return [int(pid) for pid in req.session.get('projects', '').split()]
+
+    def get_session_project(self, req):
+        s = req.session
+        if 'project' not in s:
+            return None
+        return int(s['project'])
 
 
 STEP_SET_ROLE    = 1
@@ -178,6 +189,9 @@ class PostloginModule(Component):
                 s['project_team']      = info['team_id']
                 s['project_studgroup'] = info['studgroup_id']
                 s['project_metagroup'] = info['metagroup_id']
+                multiproject = 'MULTIPROJECT_ACTION' in req.perm
+                if multiproject:
+                    s['projects'] = ' '.join([str(p[0]) for p in data['projects']])
                 data['finalize'] = True
                 for listener in self.project_switch_listeners:
                     listener.project_switched(req, project_id, old_project_id)

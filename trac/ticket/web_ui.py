@@ -167,11 +167,11 @@ class TicketModule(Component):
 
     def process_request(self, req):
         self.pm = ProjectManagement(self.env)
-        pid = self.pm.get_session_project(req, err_msg='Can not operate with tickets without setting current session project')
         if 'id' in req.args:
             if req.path_info == '/newticket':
                 raise TracError(_("id can't be set for a new ticket request."))
-            return self._process_ticket_request(req, pid)
+            return self._process_ticket_request(req)
+        pid = self.pm.get_session_project(req, err_msg='Can not create new tickets without setting current session project')
         return self._process_newticket_request(req, pid)
 
     # ITemplateProvider methods
@@ -448,7 +448,7 @@ class TicketModule(Component):
         Chrome(self.env).add_wiki_toolbars(req)
         return 'ticket.html', data, None
 
-    def _process_ticket_request(self, req, pid):
+    def _process_ticket_request(self, req):
         id = int(req.args.get('id'))
         version = req.args.get('version', None)
         if version is not None:
@@ -459,8 +459,9 @@ class TicketModule(Component):
 
         req.perm('ticket', id, version).require('TICKET_VIEW')
         ticket = Ticket(self.env, id, version=version)
-        if not self.pm.check_session_project(req, ticket.pid):
-            raise ResourceProjectMismatch('Can not view tickets of another project')
+
+        self.pm.check_session_project(req, ticket.pid, allow_multi=True)
+
         action = req.args.get('action', ('history' in req.args and 'history' or
                                          'view'))
 

@@ -2,7 +2,7 @@ import re
 
 from trac.core import Component, Interface, TracError
 
-from trac.project.model import ProjectNotSet
+from trac.project.model import ProjectNotSet, ResourceProjectMismatch
 from trac.user.api import UserManagement
 
 
@@ -92,17 +92,33 @@ class ProjectManagement(Component):
         projects = cursor.fetchall()
         return projects
 
-    def get_session_project(self, req, err_msg=None):
-        s = req.session
-        if 'project' not in s:
-            msg = err_msg or 'Can not get session project variable'
-            raise ProjectNotSet(msg)
-        return int(s['project'])
+    def get_current_project(self, req, err_msg=None, fail_on_none=True):
+        pid = req.args.getint('pid')
 
-    def check_session_project(self, req, pid):
-        cur_pid = self.get_session_project(req)
-        pid     = int(pid)
-        return cur_pid == pid
+        if pid is None:
+            msg = err_msg or 'Can not get neither request, nor session project variable'
+            pid = self.get_session_project(req, err_msg=msg, fail_on_none=fail_on_none)
+
+        return pid
+
+    def get_session_project(self, req, err_msg=None, fail_on_none=True):
+        if req.session_project is None:
+            if fail_on_none:
+                msg = err_msg or 'Can not get session project variable'
+                raise ProjectNotSet(msg)
+            else:
+                return None
+        return req.session_project
+
+    def check_session_project(self, req, pid, allow_multi=False, fail_on_false=True):
+        pid = int(pid)
+        if allow_multi and 'MULTIPROJECT_ACTION' in req.perm:
+            check = pid in req.user_projects
+        else:
+            check = pid == self.get_session_project(req)
+        if fail_on_false and not check:
+            raise ResourceProjectMismatch('You have not enough rights in project #%s.' % pid)
+        return check
 
     # optional req argument for per-request cache
     # TODO: per-env cache?
@@ -134,7 +150,9 @@ class ProjectManagement(Component):
                 raise TracError('Project #%s is not associated with any syllabus / group info' % pid)
             else:
                 return None
-        names  = [r[0] for r in cursor.description]
+        from trac.db.api import get_column_names
+#        names  = [r[0] for r in cursor.description]
+        names  = get_column_names(cursor)
         return dict(zip(names, values))
 
     # Internal methods

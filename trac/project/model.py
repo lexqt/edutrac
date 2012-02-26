@@ -22,7 +22,7 @@ class ResourceProjectMismatch(TracError):
     """Exception that indicates suppressed access to resource of another project"""
 
     def __init__(self, msg):
-        super(ResourceProjectMismatch, self).__init__(msg, 'Access to a resource not of the current session project')
+        super(ResourceProjectMismatch, self).__init__(msg, 'No access to resources of requested project')
 
 
 class ProjectNotFound(ResourceNotFound):

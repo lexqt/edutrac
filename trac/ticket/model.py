@@ -970,10 +970,11 @@ class Component(object):
 class Milestone(object):
     def __init__(self, env, pid=None, name=None, db=None):
         self.env = env
+        pid = int(pid) if pid is not None else pid
         if pid is not None and name:
             self._fetch(pid, name, db)
         else:
-            self.pid = int(pid) if pid is not None else pid
+            self.pid = pid
             self.name = None
             self.due = self.completed = None
             self.description = ''

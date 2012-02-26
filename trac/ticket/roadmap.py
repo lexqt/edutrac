@@ -339,7 +339,8 @@ class RoadmapModule(Component):
         req.perm.require('MILESTONE_VIEW')
 
         pm = ProjectManagement(self.env)
-        pid = pm.get_session_project(req)
+        pid = pm.get_current_project(req)
+        pm.check_session_project(req, pid, allow_multi=True)
 
         show = req.args.getlist('show')
         if 'all' in show:
@@ -590,12 +591,6 @@ class MilestoneModule(Component):
     # IRequestHandler methods
 
     def match_request(self, req):
-#        match = re.match(r'/milestone(?:/(.+)/project/(\d+))?$', req.path_info)
-#        if match:
-#            if match.group(1):
-#                req.args['id']  = match.group(1)
-#                req.args['pid'] = match.group(2)
-#            return True
         match = re.match(r'/milestone(?:/(.+))?$', req.path_info)
         if match:
             if match.group(1):
@@ -604,19 +599,12 @@ class MilestoneModule(Component):
 
     def process_request(self, req):
         milestone_id = req.args.get('id')
-        milestone_pid = req.args.getint('pid')
         action = req.args.get('action', 'view')
 
         pm = ProjectManagement(self.env)
-        pid = pm.get_session_project(req)
-
-        if action == 'new' and milestone_pid is None:
-            milestone_pid = pid
-
-        if milestone_pid is None:
-            raise TracError('Project ID is not present in milestone URL')
-
-        pm.check_session_project(req, milestone_pid)
+        pid = pm.get_current_project(req)
+        pm.check_session_project(req, pid, allow_multi=True)
+        milestone_pid = pid
 
         req.perm('milestone', milestone_id).require('MILESTONE_VIEW')
         
@@ -635,7 +623,7 @@ class MilestoneModule(Component):
         if req.method == 'POST':
             if req.args.has_key('cancel'):
                 if milestone.exists:
-                    req.redirect(req.href.milestone(milestone.name, 'project', milestone.pid))
+                    req.redirect(get_resource_url(self.env, milestone.resource, req.href))
                 else:
                     req.redirect(req.href.roadmap())
             elif action == 'edit':
@@ -650,7 +638,7 @@ class MilestoneModule(Component):
         if not milestone.name:
             req.redirect(req.href.roadmap())
 
-        return self._render_view(req, milestone_pid, db, milestone)
+        return self._render_view(req, db, milestone)
 
     # Internal methods
 
@@ -742,7 +730,8 @@ class MilestoneModule(Component):
             milestone.insert()
 
         add_notice(req, _('Your changes have been saved.'))
-        req.redirect(req.href.milestone(milestone.name, 'project', milestone.pid))
+        req.redirect(get_resource_url(self.env, milestone.resource, req.href))
+#        req.redirect(req.href.milestone(milestone.name, 'project', milestone.pid))
 
     def _render_confirm(self, req, db, milestone):
         req.perm(milestone.resource).require('MILESTONE_DELETE')
@@ -784,7 +773,8 @@ class MilestoneModule(Component):
         Chrome(self.env).add_wiki_toolbars(req)
         return 'milestone_edit.html', data, None
 
-    def _render_view(self, req, pid, db, milestone):
+    def _render_view(self, req, db, milestone):
+        pid = milestone.pid
         milestone_groups = []
         available_groups = []
         component_group_available = False

@@ -180,6 +180,7 @@ class RequestDispatcher(Component):
         """
         self.log.debug('Dispatching %r', req)
         chrome = Chrome(self.env)
+        ps = ProjectSystem(self.env)
 
         # Setup request callbacks for lazily-evaluated properties
         req.callbacks.update({
@@ -190,7 +191,9 @@ class RequestDispatcher(Component):
             'session': self._get_session,
             'locale': self._get_locale,
             'tz': self._get_timezone,
-            'form_token': self._get_form_token
+            'form_token': self._get_form_token,
+            'session_project': ps.get_session_project,
+            'user_projects': ps.get_session_user_projects,
         })
 
         try:
@@ -198,7 +201,6 @@ class RequestDispatcher(Component):
                 # Select the component that should handle the request
                 chosen_handler = None
                 try:
-                    ps = ProjectSystem(self.env)
                     ps.init_request(req)
                     for handler in self.handlers:
                         if handler.match_request(req):
