@@ -164,10 +164,8 @@ class Resource(object):
         if self._need_pid is not None:
             return self._need_pid
         if self._realm_need_pid is not None:
-            rs = ResourceSystem(self.env)
-            # assumption
-            self._realm_need_pid = bool(rs.has_project_resources(self.realm))
-        return self._realm_need_pid
+            return self._realm_need_pid
+        return False
 
     def _set_need_pid(self, val):
         self._need_pid = val
@@ -332,6 +330,15 @@ class ResourceSystem(Component):
 
 # -- Utilities for manipulating resources in a generic way
 
+def _get_realm_need_pid(resource, env):
+    # FIXME: get Resource class cache for realms _realm_need_pid
+    if resource._realm_need_pid is None:
+        rs = ResourceSystem(env)
+        # assumption
+        resource._realm_need_pid = bool(rs.has_project_resources(resource.realm))
+    return resource._realm_need_pid
+
+
 def get_resource_url(env, resource, href=None, **kwargs):
     """Retrieve the canonical URL for the given resource.
 
@@ -379,7 +386,7 @@ def get_resource_url(env, resource, href=None, **kwargs):
             break
         else:
             res = res.parent
-    if res.pid is not None and res.need_pid:
+    if res.pid is not None and (res.need_pid or _get_realm_need_pid(res, env)):
         args0 = [u'project', res.pid] + args0
     args = {'version': resource.version}
     args.update(kwargs)
