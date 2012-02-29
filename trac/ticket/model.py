@@ -69,7 +69,7 @@ class Ticket(object):
         self.resource.need_pid = False
 
         self.fields = TicketSystem(self.env).get_ticket_fields(self.pid)
-        self.time_fields = [f['name'] for f in self.fields
+        self.time_fields = [n for n, f in self.fields.iteritems()
                             if f['type'] == 'time']
         if tkt_id is not None:
             self._fetch_ticket(tkt_id, db)
@@ -123,7 +123,7 @@ class Ticket(object):
     exists = property(lambda self: self.id is not None)
 
     def _init_defaults(self, db=None):
-        for field in self.fields:
+        for name, field in self.fields.iteritems():
             default = None
             if field['name'] in self.protected_fields:
                 # Ignore for new - only change through workflow
@@ -150,7 +150,7 @@ class Ticket(object):
             db = self._get_db(db)
 
             # Fetch the standard ticket fields
-            std_fields = [f['name'] for f in self.fields
+            std_fields = [n for n, f in self.fields.iteritems()
                           if not f.get('custom') and not f.get('virtual')]
             cursor = db.cursor()
             cursor.execute("SELECT %s FROM ticket WHERE id=%%s"
@@ -171,7 +171,7 @@ class Ticket(object):
                 self.values[field] = unicode(value)
 
         # Fetch custom fields if available
-        custom_fields = [f['name'] for f in self.fields if f.get('custom')]
+        custom_fields = [n for n, f in self.fields.iteritems() if f.get('custom')]
         cursor.execute("SELECT name,value FROM ticket_custom WHERE ticket=%s",
                        (tkt_id,))
         for name, value in cursor:
@@ -196,8 +196,8 @@ class Ticket(object):
         if value:
             if isinstance(value, list):
                 raise TracError(_("Multi-values fields not supported yet"))
-            field = [field for field in self.fields if field['name'] == name]
-            if field and field[0].get('type') != 'textarea':
+            field = self.fields.get(name)
+            if field and field.get('type') != 'textarea':
                 value = value.strip()
         self.values[name] = value
 
@@ -208,15 +208,15 @@ class Ticket(object):
             value = self.values[name]
             if value is not empty:
                 return value
-            field = [field for field in self.fields if field['name'] == name]
+            field = self.fields.get(name)
             if field:
-                return field[0].get('value', '')
+                return field.get('value', '')
         except KeyError:
             pass
 
     def populate(self, values):
         """Populate the ticket with 'suitable' values from a dictionary"""
-        field_names = [f['name'] for f in self.fields]
+        field_names = self.fields.keys()
         for name in [name for name in values.keys() if name in field_names]:
             self[name] = values.get(name, '')
 
@@ -260,10 +260,9 @@ class Ticket(object):
         # Insert ticket record
         std_fields = []
         custom_fields = []
-        for f in self.fields:
+        for fname, f in self.fields.iteritems():
             if f.get('virtual'):
                 continue
-            fname = f['name']
             if fname in self.values:
                 if f.get('custom'):
                     custom_fields.append(fname)
@@ -360,7 +359,7 @@ class Ticket(object):
                 comment_num = str(num + 1)
 
             # store fields
-            custom_fields = [f['name'] for f in self.fields if f.get('custom')]
+            custom_fields = [n for n, f in self.fields.iteritems() if f.get('custom')]
 
             for name in self._old.keys():
                 if name in custom_fields:
@@ -495,7 +494,7 @@ class Ticket(object):
                 return
             ts = row[0]
 
-            custom_fields = set(f['name'] for f in self.fields
+            custom_fields = set(n for n, f in self.fields.iteritems()
                                 if f.get('custom'))
 
             # Find modified fields and their previous value

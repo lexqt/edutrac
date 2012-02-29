@@ -980,7 +980,7 @@ Resolution:  fixed                   |"""
         self.assertNotEqual(None, notifysuite.smtpd.get_message())
         self.assertEqual('My Summary', ticket['summary'])
         self.assertEqual('Some description', ticket['description'])
-        valid_fieldnames = set([f['name'] for f in ticket.fields])
+        valid_fieldnames = set(ticket.fields)
         current_fieldnames = set(ticket.values.keys())
         self.assertEqual(set(), current_fieldnames - valid_fieldnames)
 

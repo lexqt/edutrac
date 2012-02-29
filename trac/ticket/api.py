@@ -196,8 +196,9 @@ class TicketFieldsStore(object):
         fields = []
 
         # Basic text fields
-        fields.append({'name': 'project_id', 'type': 'text',
+        fields.append({'name': 'project_id', 'type': 'id',
                        'label': N_('Project ID'),
+                       'notnull': True,
                        'value': self.pid, 'skip': True})
 #        fields.append({'name': 'project_name', 'type': 'text',
 #                       'label': N_('Project name'),
@@ -270,7 +271,12 @@ class TicketFieldsStore(object):
             field['custom'] = True
             fields.append(field)
 
-        return fields
+        from collections import OrderedDict
+        fields_dict = OrderedDict()
+        for field in fields:
+            fields_dict[field['name']] = field
+
+        return fields_dict
 
     @cached('_cache_custom_fields')
     def custom_fields(self, db):
@@ -399,8 +405,8 @@ class TicketSystem(Component):
 
     def get_ticket_field_labels(self, pid):
         """Produce a (name,label) mapping from `get_ticket_fields`."""
-        labels = dict((f['name'], f['label'])
-                      for f in TicketSystem(self.env).get_ticket_fields(pid))
+        labels = dict((n, f['label'])
+                      for n, f in TicketSystem(self.env).get_ticket_fields(pid).iteritems())
         labels['attachment'] = _("Attachment")
         return labels
 
@@ -415,7 +421,7 @@ class TicketSystem(Component):
         stor = TicketFieldsStore(self.env, pid)
         fields = copy.deepcopy(stor.fields)
         label = 'label' # workaround gettext extraction bug
-        for f in fields:
+        for n, f in fields.iteritems():
             f[label] = gettext(f[label])
         return fields
 

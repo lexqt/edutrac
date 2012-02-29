@@ -266,7 +266,8 @@ def get_tickets_for_milestone(env, db, milestone, field='component'):
     pid  = milestone.pid
     name = milestone.name
     fields = TicketSystem(env).get_ticket_fields(pid)
-    if field in [f['name'] for f in fields if not f.get('custom')]:
+    f = fields.get(field)
+    if f and not f.get('custom'):
         cursor.execute("SELECT id,status,%s FROM ticket WHERE project_id=%%s AND milestone=%%s "
                        "ORDER BY %s" % (field, field), (pid, name))
     else:
@@ -781,12 +782,12 @@ class MilestoneModule(Component):
         ticket_fields = TicketSystem(self.env).get_ticket_fields(pid)
 
         # collect fields that can be used for grouping
-        for field in ticket_fields:
-            if field['type'] == 'select' and field['name'] != 'milestone' \
-                    or field['name'] in ('owner', 'reporter'):
-                available_groups.append({'name': field['name'],
+        for name, field in ticket_fields.iteritems():
+            if field['type'] == 'select' and name != 'milestone' \
+                    or name in ('owner', 'reporter'):
+                available_groups.append({'name': name,
                                          'label': field['label']})
-                if field['name'] == 'component':
+                if name == 'component':
                     component_group_available = True
 
         # determine the field currently used for grouping
@@ -814,19 +815,19 @@ class MilestoneModule(Component):
 
         if by:
             groups = []
-            for field in ticket_fields:
-                if field['name'] == by:
-                    if 'options' in field:
-                        groups = field['options']
-                        if field.get('optional'):
-                            groups.insert(0, '')
-                    else:
-                        cursor = db.cursor()
-                        cursor.execute("""
-                            SELECT DISTINCT COALESCE(%s,'') FROM ticket
-                            ORDER BY COALESCE(%s,'')
-                            """ % (by, by))
-                        groups = [row[0] for row in cursor]
+            field = ticket_fields.get(by)
+            if field:
+                if 'options' in field:
+                    groups = field['options']
+                    if field.get('optional'):
+                        groups.insert(0, '')
+                else:
+                    cursor = db.cursor()
+                    cursor.execute("""
+                        SELECT DISTINCT COALESCE(%s,'') FROM ticket
+                        ORDER BY COALESCE(%s,'')
+                        """ % (by, by))
+                    groups = [row[0] for row in cursor]
 
             max_count = 0
             group_stats = []

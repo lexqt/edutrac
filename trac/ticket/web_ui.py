@@ -429,17 +429,17 @@ class TicketModule(Component):
         # position 'owner' immediately before 'cc',
         # if not already positioned after (?)
 
-        field_names = [field['name'] for field in ticket.fields
-                       if not field.get('custom')]
-        if 'owner' in field_names:
-            curr_idx = field_names.index('owner')
-            if 'cc' in field_names:
-                insert_idx = field_names.index('cc')
-            else:
-                insert_idx = len(field_names)
-            if curr_idx < insert_idx:
-                ticket.fields.insert(insert_idx, ticket.fields[curr_idx])
-                del ticket.fields[curr_idx]
+#        field_names = [n for n, field in ticket.fields.iteritems()
+#                       if not field.get('custom')]
+#        if 'owner' in field_names:
+#            curr_idx = field_names.index('owner')
+#            if 'cc' in field_names:
+#                insert_idx = field_names.index('cc')
+#            else:
+#                insert_idx = len(field_names)
+#            if curr_idx < insert_idx:
+#                ticket.fields.insert(insert_idx, ticket.fields[curr_idx])
+#                del ticket.fields[curr_idx]
 
         data['fields'] = fields
 
@@ -1037,8 +1037,8 @@ class TicketModule(Component):
     def export_csv(self, req, ticket, sep=',', mimetype='text/plain'):
         # FIXME: consider dumping history of changes here as well
         #        as one row of output doesn't seem to be terribly useful...
-        fields = [f for f in ticket.fields 
-                  if f['name'] not in ('time', 'changetime')]
+        fields = [f for n, f in ticket.fields.iteritems()
+                  if n not in ('time', 'changetime')]
         content = StringIO()
         writer = csv.writer(content, delimiter=sep, quoting=csv.QUOTE_MINIMAL)
         writer.writerow(['id'] + [unicode(f['name']) for f in fields])
@@ -1148,12 +1148,11 @@ class TicketModule(Component):
             valid = False
             
         # Always validate for known values
-        for field in ticket.fields:
+        for name, field in ticket.fields.iteritems():
             if 'options' not in field:
                 continue
-            if field['name'] == 'status':
+            if name == 'status':
                 continue
-            name = field['name']
             if name in ticket.values and name in ticket._old:
                 value = ticket[name]
                 if value:
@@ -1361,8 +1360,7 @@ class TicketModule(Component):
         context = Context.from_request(req, ticket.resource)
         fields = []
         owner_field = None
-        for field in ticket.fields:
-            name = field['name']
+        for name, field in ticket.fields.iteritems():
             type_ = field['type']
  
             # enable a link to custom query for all choice fields
@@ -1613,11 +1611,8 @@ class TicketModule(Component):
                               resource_new=None):
         rendered = None
         # per type special rendering of diffs
-        type_ = None
-        for f in ticket.fields:
-            if f['name'] == field:
-                type_ = f['type']
-                break
+        f = ticket.fields.get(field)
+        type_ = f and f['type']
         if type_ == 'checkbox':
             rendered = new == '1' and _("set") or _("unset")
         elif type_ == 'textarea':
