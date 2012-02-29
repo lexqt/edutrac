@@ -122,7 +122,7 @@ class ProjectManagement(Component):
 
     # optional req argument for per-request cache
     # TODO: per-env cache?
-    def get_project_syllabus(self, pid, req=None, fail_on_none=False):
+    def get_project_syllabus(self, pid, req=None, fail_on_none=True):
         pid = int(pid)
         if req is None or pid not in req._proj_syl_cache:
             s = self._get_syllabus(pid)
@@ -133,7 +133,7 @@ class ProjectManagement(Component):
             raise TracError('Project #%s is not associated with any syllabus' % pid)
         return req._proj_syl_cache[pid]
 
-    def get_project_info(self, pid, fail_on_none=False):
+    def get_project_info(self, pid, fail_on_none=True):
         """Returns dict (active, team_id, studgroup_id, metagroup_id, syllabus_id)
         """
         db = self.env.get_read_db()
