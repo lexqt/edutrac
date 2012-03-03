@@ -824,6 +824,20 @@ class AbstractEnum(object):
             obj.value = obj._old_value = value
             yield obj
 
+    @classmethod
+    def get_min_max(cls, env, db=None, pid=None):
+        if not db:
+            db = env.get_read_db()
+        cursor = db.cursor()
+        cursor.execute("""
+            SELECT MIN(int_val) min_value, MAX(int_val) max_value
+            FROM (SELECT CAST(value AS int) int_val
+            FROM enum
+            WHERE project_id=%s AND type=%s) AS vals
+            """, (pid, cls.type))
+        row = cursor.fetchone()
+        return row
+
 
 class Type(AbstractEnum):
     type = 'ticket_type'

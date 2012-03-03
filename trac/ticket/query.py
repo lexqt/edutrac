@@ -665,6 +665,7 @@ class Query(object):
         for name, desc in order_cols:
             if name in enum_columns:
                 col = name + '.value'
+                desc = not desc
             elif name in custom_fields:
                 col = '%s.value' % db.quote(name)
             else:
@@ -828,6 +829,10 @@ class Query(object):
                                 'string': str(results.page + 1),
                                 'title':None}
 
+        from trac.ticket.model import Priority
+        pmin, pmax =  Priority.get_min_max(env=self.env, pid=pid)
+        priorities = {'min': pmin, 'max': pmax}
+
         return {'query': self,
                 'context': context,
                 'col': cols,
@@ -835,6 +840,7 @@ class Query(object):
                 'clauses': clauses,
                 'headers': headers,
                 'fields': fields,
+                'priorities': priorities,
                 'modes': self.get_modes(),
                 'tickets': tickets,
                 'groups': groupsequence or [(None, tickets)],
