@@ -59,15 +59,28 @@ class QueryValueError(TracError):
 
 
 class Query(object):
-    substitutions = ['$USER']
+    substitutions = ['$USER', '$PID']
     clause_re = re.compile(r'(?P<clause>\d+)_(?P<field>.+)$')
 
     def __init__(self, env, report=None, constraints=None, cols=None,
                  order=None, desc=0, group=None, groupdesc=0, verbose=0,
-                 rows=None, page=None, max=None, format=None, pid=None):
+                 rows=None, page=None, max=None, format=None,
+                 area='project', project=None, studgroup=None, syllabus=None):
         self.env = env
         self.id = report # if not None, it's the corresponding saved query
-        self.pid = pid
+        self.area = area
+        if area == 'project':
+            if project is None:
+                raise TracError(_('Project must be defined for project area query'))
+        elif area == 'group':
+            raise NotImplementedError
+        elif area == 'syllabus':
+            raise NotImplementedError
+        else:
+            raise TracError(_('Unknown area "%(area)s" specified for query', area=area))
+        self.pid = project
+        self.studgroup_id = studgroup
+        self.syllabus_id = syllabus
         constraints = constraints or []
         if isinstance(constraints, dict):
             constraints = [constraints]
@@ -117,12 +130,23 @@ class Query(object):
             rows = []
         if verbose and 'description' not in rows: # 0.10 compatibility
             rows.append('description')
-        self.fields = TicketSystem(self.env).get_ticket_fields(self.pid)
-        self.time_fields = set(f['name'] for f in self.fields
+
+        constraint_cols = {}
+
+        if self.area == 'project':
+            fields = TicketSystem(self.env).get_ticket_fields(self.pid)
+            del fields['project_id']
+            self.fields = fields
+
+            include_column = lambda c: c in field_names or c == 'id'
+
+            self.constraints[0].update({'project_id': [str(self.pid)]})
+#            constraint_cols.update({'project_id': [str(self.pid)]})
+
+        self.time_fields = set(n for n, f in self.fields.iteritems()
                                if f['type'] == 'time')
-        field_names = set(f['name'] for f in self.fields)
-        self.cols = [c for c in cols or [] if c in field_names or 
-                     c == 'id']
+        field_names = set(self.fields)
+        self.cols = [c for c in cols or [] if include_column(c)]
         self.rows = [c for c in rows if c in field_names]
         if self.order != 'id' and self.order not in field_names:
             self.order = 'priority'
@@ -130,10 +154,9 @@ class Query(object):
         if self.group not in field_names:
             self.group = None
 
-        constraint_cols = {}
         for clause in self.constraints:
             for k, v in clause.items():
-                if k == 'id' or k in field_names:
+                if k in field_names or k == 'id' or k == 'project_id':
                     constraint_cols.setdefault(k, []).append(v)
                 else:
                     clause.pop(k)
@@ -208,12 +231,12 @@ class Query(object):
         return self.cols
 
     def get_all_textareas(self):
-        return [f['name'] for f in self.fields if f['type'] == 'textarea']
+        return [n for n, f in self.fields.iteritems() if f['type'] == 'textarea']
 
     def get_all_columns(self):
         # Prepare the default list of columns
         cols = ['id']
-        cols += [f['name'] for f in self.fields if f['type'] != 'textarea']
+        cols += [n for n, f in self.fields.iteritems() if f['type'] != 'textarea']
         for col in ('reporter', 'keywords', 'cc'):
             if col in cols:
                 cols.remove(col)
@@ -296,7 +319,7 @@ class Query(object):
         if req is not None:
             href = req.href
         if not db:
-            db = self.env.get_db_cnx()
+            db = self.env.get_read_db()
         cursor = db.cursor()
 
         self.num_items = 0
@@ -325,7 +348,7 @@ class Query(object):
         columns = get_column_names(cursor)
         fields = []
         for column in columns:
-            fields += [f for f in self.fields if f['name'] == column] or [None]
+            fields.append(self.fields.get(column))
         results = []
 
         column_indices = range(len(columns))
@@ -405,7 +428,12 @@ class Query(object):
             constraints.extend(clause.iteritems())
             constraints.append(("or", empty))
         del constraints[-1:]
-        
+
+        extra = {'area': self.area}
+        if self.area == 'project':
+            extra['project'] = self.pid
+            constraints = filter(lambda p: p[0] != 'project', constraints)
+
         return href.query(constraints,
                           report=id,
                           order=order, desc=desc and 1 or None,
@@ -415,7 +443,8 @@ class Query(object):
                           row=self.rows,
                           max=max,
                           page=page,
-                          format=format)
+                          format=format,
+                          **extra)
 
     def to_string(self):
         """Return a user readable and editable representation of the query.
@@ -449,7 +478,7 @@ class Query(object):
         add_cols('status', 'priority', 'time', 'changetime', self.order)
         cols.extend([c for c in self.constraint_cols if not c in cols])
 
-        custom_fields = [f['name'] for f in self.fields if 'custom' in f]
+        custom_fields = [n for n, f in self.fields.iteritems() if 'custom' in f]
 
         sql = []
         sql.append("SELECT " + ",".join(['t.%s AS %s' % (c, c) for c in cols
@@ -469,14 +498,14 @@ class Query(object):
         for col in [c for c in enum_columns
                     if c == self.order or c == self.group or c == 'priority']:
             sql.append("\n  LEFT OUTER JOIN enum AS %s ON "
-                       "(%s.type='%s' AND %s.name=%s)"
-                       % (col, col, col, col, col))
+                       "(%s.type='%s' AND %s.name=%s AND %s.project_id=t.project_id)"
+                       % (col, col, col, col, col, col))
 
         # Join with the version/milestone tables for proper sorting
         for col in [c for c in ['milestone', 'version']
                     if c == self.order or c == self.group]:
-            sql.append("\n  LEFT OUTER JOIN %s ON (%s.name=%s)"
-                       % (col, col, col))
+            sql.append("\n  LEFT OUTER JOIN %s ON (%s.name=%s AND %s.project_id=t.project_id)"
+                       % (col, col, col, col))
 
         def get_timestamp(date):
             if date:
@@ -492,6 +521,10 @@ class Query(object):
             else:
                 col = '%s.value' % db.quote(name)
             value = value[len(mode) + neg:]
+
+            if name == 'project_id':
+                return ("%s%s=%%s" % (col, neg and '!' or ''),
+                        (int(value), ))
 
             if name in self.time_fields:
                 if '..' in value:
@@ -693,9 +726,8 @@ class Query(object):
         return modes
 
     def template_data(self, context, tickets, orig_list=None, orig_time=None,
-                      req=None, pid=None):
-        pm = ProjectManagement(self.env)
-        pid = pid if pid is not None else req and pm.get_session_project(req)
+                      req=None):
+        pid = self.pid
         clauses = []
         for clause in self.constraints:
             constraints = {}
@@ -718,7 +750,7 @@ class Query(object):
 
         cols = self.get_columns()
         labels = TicketSystem(self.env).get_ticket_field_labels(pid)
-        wikify = set(f['name'] for f in self.fields 
+        wikify = set(n for n, f in self.fields.iteritems()
                      if f['type'] == 'text' and f.get('format') == 'wiki')
 
         headers = [{
@@ -729,8 +761,7 @@ class Query(object):
         } for col in cols]
 
         fields = {'id': {'type': 'id', 'label': _("Ticket")}}
-        for field in self.fields:
-            name = field['name']
+        for name, field in self.fields.iteritems():
             if name == 'owner' and field['type'] == 'select':
                 # Make $USER work when restrict_owner = true
                 field = field.copy()
@@ -874,10 +905,34 @@ class QueryModule(Component):
     def process_request(self, req):
         req.perm.assert_permission('TICKET_VIEW')
 
-        pm = ProjectManagement(self.env)
-        pid = pm.get_session_project(req)
-        constraints = self._get_constraints(req, pid=pid)
         args = req.args
+
+        if args.get('area', 'project') != 'project':
+            raise NotImplementedError
+        pid = None
+        pid_arg = args.getint('project')
+        if 'report' in args:
+            report_id = args.getint('report')
+            # FIXME: create Report model
+            db = self.env.get_read_db()
+            cursor = db.cursor()
+            cursor.execute('SELECT project_id FROM project_reports WHERE id=%s',
+                           (report_id,))
+            row = cursor.fetchone()
+            if row:
+                pid = row[0]
+                if pid_arg is not None and pid != pid_arg:
+                    add_warning(req, _('Can not change "project" param to "%(ppid)s" '
+                                       'for project #%(rpid)s report', ppid=pid_arg, rpid=pid))
+        if pid is None:
+            pm = ProjectManagement(self.env)
+            if pid_arg is not None:
+                pid = pid_arg
+            else:
+                pid = pm.get_current_project(req)
+            pm.check_session_project(req, pid, allow_multi=True)
+
+        constraints = self._get_constraints(req, pid=pid)
         if not constraints and not 'order' in req.args:
             # If no constraints are given in the URL, use the default ones.
             if req.authname and req.authname != 'anonymous':
@@ -895,7 +950,7 @@ class QueryModule(Component):
                 args = arg_list_to_args(arg_list)
                 constraints = self._get_constraints(arg_list=arg_list, pid=pid)
             else:
-                query = Query.from_string(self.env, qstring)
+                query = Query.from_string(self.env, qstring, project=pid)
                 args = {'order': query.order, 'group': query.group,
                         'col': query.cols, 'max': query.max}
                 if query.desc:
@@ -936,7 +991,7 @@ class QueryModule(Component):
                       rows,
                       args.get('page'), 
                       max,
-                      pid=pid)
+                      project=pid)
 
         if 'update' in req.args:
             # Reset session vars
@@ -967,7 +1022,6 @@ class QueryModule(Component):
     def _get_constraints(self, req=None, arg_list=[], pid=None):
         fields = TicketSystem(self.env).get_ticket_fields(pid)
         synonyms = TicketSystem(self.env).get_field_synonyms()
-        fields = dict((f['name'], f) for f in fields)
         fields['id'] = {'type': 'id'}
         fields.update((k, fields[v]) for k, v in synonyms.iteritems())
         
@@ -1046,7 +1100,7 @@ class QueryModule(Component):
         return clauses
 
     def display_html(self, req, query):
-        db = self.env.get_db_cnx()
+        db = self.env.get_read_db()
 
         # The most recent query is stored in the user session;
         orig_list = None
@@ -1073,9 +1127,10 @@ class QueryModule(Component):
                 add_warning(req, error)
 
         context = Context.from_request(req, 'query')
-        owner_field = [f for f in query.fields if f['name'] == 'owner']
+        owner_field = query.fields.get('owner')
         if owner_field:
-            TicketSystem(self.env).eventually_restrict_owner(owner_field[0])
+            TicketSystem(self.env).eventually_restrict_owner(owner_field)
+        # FIXME: valid for area 'project' only
         data = query.template_data(context, tickets, orig_list, orig_time, req)
 
         req.session['query_href'] = query.get_href(context.href)
@@ -1306,7 +1361,7 @@ class TicketQueryMacro(WikiMacroBase):
 
         if format == 'table':
             data = query.template_data(formatter.context, tickets,
-                                       req=formatter.context.req, pid=pid)
+                                       req=formatter.context.req)
 
             add_stylesheet(req, 'common/css/report.css')
             

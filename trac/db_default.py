@@ -260,7 +260,9 @@ schema = [
         Column('title'),
         Column('query'),
         Column('description'),
+        Column('syllabus_id', type='int', null=True),
         Column('project_id', type='int', null=True),
+        ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
 ]
 

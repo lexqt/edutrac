@@ -40,6 +40,27 @@ JOIN team_project_rel tpr ON tpr.project_id=p.id
 JOIN teams t ON tpr.team_id=t.id
 ''',
 '''
+CREATE OR REPLACE VIEW syllabus_reports AS
+SELECT id, author, title, query, description, syllabus_id
+FROM report
+WHERE syllabus_id IS NOT NULL
+''',
+'''
+CREATE OR REPLACE VIEW project_reports AS
+SELECT id, author, title, query, description, project_id
+FROM report
+WHERE project_id IS NOT NULL
+''',
+'''
+CREATE OR REPLACE VIEW global_reports AS
+SELECT id, author, title, query, description
+FROM report
+WHERE project_id IS NULL AND syllabus_id IS NULL
+''',
+'''
+
+''',
+'''
 
 ''',
 )

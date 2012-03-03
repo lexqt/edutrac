@@ -96,10 +96,14 @@ class ReportModule(Component):
         id = int(req.args.get('id', -1))
         action = req.args.get('action', 'view')
 
+        self.pm = ProjectManagement(self.env)
+        pid = self.pm.get_current_project(req)
+        self.pm.check_session_project(req, pid, allow_multi=True)
+
         data = {}
         if req.method == 'POST':
             if action == 'new':
-                self._do_create(req)
+                self._do_create(req, pid)
             elif action == 'delete':
                 self._do_delete(req, id)
             elif action == 'edit':
@@ -112,7 +116,7 @@ class ReportModule(Component):
             template = 'report_delete.html'
             data = self._render_confirm_delete(req, id)
         elif id == -1:
-            template, data, content_type = self._render_list(req)
+            template, data, content_type = self._render_list(req, pid)
             if content_type: # i.e. alternate format
                 return template, data, content_type
         else:
@@ -141,7 +145,14 @@ class ReportModule(Component):
 
     # Internal methods
 
-    def _do_create(self, req):
+    def _check_if_sql(self, req, query):
+        m = re.match(r'\?|query:', query.strip())
+        is_sql_query = m is None
+
+        if is_sql_query:
+            req.perm.require('REPORT_SQL_CREATE')
+
+    def _do_create(self, req, pid):
         req.perm.require('REPORT_CREATE')
 
         if 'cancel' in req.args:
@@ -150,12 +161,13 @@ class ReportModule(Component):
         title = req.args.get('title', '')
         query = req.args.get('query', '')
         description = req.args.get('description', '')
+        self._check_if_sql(req, query)
         report_id = [ None ]
         @self.env.with_transaction()
         def do_create(db):
             cursor = db.cursor()
-            cursor.execute("INSERT INTO report (title,query,description) "
-                           "VALUES (%s,%s,%s)", (title, query, description))
+            cursor.execute("INSERT INTO report (title,query,description,project_id) "
+                           "VALUES (%s,%s,%s,%s)", (title, query, description, pid))
             report_id[0] = db.get_last_id(cursor, 'report')
         add_notice(req, _('The report has been created.'))
         req.redirect(req.href.report(report_id[0]))
@@ -181,6 +193,7 @@ class ReportModule(Component):
             title = req.args.get('title', '')
             query = req.args.get('query', '')
             description = req.args.get('description', '')
+            self._check_if_sql(req, query)
             @self.env.with_transaction()
             def do_save(db):
                 cursor = db.cursor()
@@ -193,7 +206,7 @@ class ReportModule(Component):
     def _render_confirm_delete(self, req, id):
         req.perm.require('REPORT_DELETE')
 
-        db = self.env.get_db_cnx()
+        db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute("SELECT title FROM report WHERE id=%s", (id,))
         for title, in cursor:
@@ -208,7 +221,7 @@ class ReportModule(Component):
     def _render_editor(self, req, id, copy):
         if id != -1:
             req.perm.require('REPORT_MODIFY')
-            db = self.env.get_db_cnx()
+            db = self.env.get_read_db()
             cursor = db.cursor()
             cursor.execute("SELECT title,description,query FROM report "
                            "WHERE id=%s", (id,))
@@ -241,19 +254,38 @@ class ReportModule(Component):
                           'sql': query, 'description': description}
         return data
 
-    def _render_list(self, req):
+    def _render_list(self, req, pid):
         """Render the list of available reports."""
         sort = req.args.get('sort', 'report')
         asc = bool(int(req.args.get('asc', 1)))
         format = req.args.get('format')
-        
-        db = self.env.get_db_cnx()
+
+        syllabus_id = self.pm.get_project_syllabus(pid, req=req)
+
+        orderby_clause = ' ORDER BY %s%s' % (
+                          sort == 'title' and 'title' or 'id',
+                          not asc and ' DESC' or '')
+        select_clause   = "SELECT id, CONCAT('{prefix}', title) FROM {table}"
+
+        query_tmpl     = select_clause + orderby_clause
+        query_tmpl_ext = select_clause + ' WHERE {filter}=%s' + orderby_clause
+
+        db = self.env.get_read_db()
         cursor = db.cursor()
-        cursor.execute("SELECT id, title FROM report ORDER BY %s%s"
-                       % (sort == 'title' and 'title' or 'id',
-                          not asc and ' DESC' or ''))
-        rows = list(cursor)
-        
+
+        cursor.execute(query_tmpl.format(prefix='[GLOBAL] ', table='global_reports'))
+        reports_global = list(cursor)
+        cursor.execute(query_tmpl_ext.format(
+                       prefix='[SYLLABUS] ', table='syllabus_reports', filter='syllabus_id'),
+                       (syllabus_id,))
+        reports_syllabus = list(cursor)
+        cursor.execute(query_tmpl_ext.format(
+                       prefix='[PROJECT] ', table='project_reports', filter='project_id'),
+                       (pid,))
+        reports_project = list(cursor)
+
+        rows = reports_global + reports_syllabus + reports_project
+
         if format == 'rss':
             data = {'rows': rows}
             return 'report_list.rss', data, 'application/rss+xml'
@@ -289,11 +321,11 @@ class ReportModule(Component):
 
     def _render_view(self, req, id):
         """Retrieve the report results and pre-process them for rendering."""
-        db = self.env.get_db_cnx()
+        db = self.env.get_read_db()
         cursor = db.cursor()
-        cursor.execute("SELECT title,query,description from report "
+        cursor.execute("SELECT title,query,description,project_id,syllabus_id from report "
                        "WHERE id=%s", (id,))
-        for title, sql, description in cursor:
+        for title, sql, description, project_id, syllabus_id in cursor:
             break
         else:
             raise ResourceNotFound(
@@ -325,8 +357,15 @@ class ReportModule(Component):
                 if query[-1] != '?':
                     query += '&'
                 query += report_id
+            # project area query
+            if project_id is not None:
+                if 'project=' in query:
+                    err = _('Parameter "project" mustn\'t be specified in "project" area report.')
+                    req.redirect(req.href.report(id, action='edit', error=err))
+                query += '&project=%s' % project_id
             req.redirect(req.href.query() + quote_query_string(query))
         elif query.startswith('query:'):
+            raise NotImplementedError('Fix project substitution!')
             try:
                 from trac.ticket.query import Query, QuerySyntaxError
                 query = Query.from_string(self.env, query[6:], report=id)
@@ -337,6 +376,7 @@ class ReportModule(Component):
 
         format = req.args.get('format')
         if format == 'sql':
+            req.perm.require('TRAC_ADMIN')
             self._send_sql(req, id, title, description, sql)
 
         title = '{%i} %s' % (id, title)
@@ -447,7 +487,7 @@ class ReportModule(Component):
                         # must fetch sort values for that columns
                         # instead of comparing them as strings
                         if not db:
-                            db = self.env.get_db_cnx()
+                            db = self.env.get_read_db()
                         cursor = db.cursor()
                         cursor.execute("SELECT name," + 
                                        db.cast('value', 'int') + 
@@ -685,7 +725,7 @@ class ReportModule(Component):
 
     def sql_sub_vars(self, sql, args, db=None):
         if db is None:
-            db = self.env.get_db_cnx()
+            db = self.env.get_read_db()
         names = set()
         values = []
         missing_args = []
