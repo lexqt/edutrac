@@ -23,7 +23,7 @@ from genshi.builder import tag
 from trac.core import *
 from trac.perm import PermissionSystem
 from trac.env import IEnvironmentSetupParticipant
-from trac.config import Configuration, ExtensionOption, ListOption
+from trac.config import Configuration, ExtensionOption, ListOption, OrderedExtensionsOption
 from trac.ticket.api import ITicketActionController, ITicketManipulator, TicketSystem
 from trac.ticket.model import Resolution
 from trac.util.text import obfuscate_email_address
@@ -107,12 +107,20 @@ class ConfigurableTicketWorkflow(Component):
     [wiki:TracIni#ticket-workflow-section trac.ini] configuration file.
     """
 
+    action_controllers = OrderedExtensionsOption('ticket', 'workflow',
+        ITicketActionController, default='ConfigurableTicketWorkflow',
+        include_missing=False,
+        doc="""Ordered list of workflow controllers to use for ticket actions
+            (''since 0.11'').""")
+
     valid_owner_provider = ExtensionOption('ticket-workflow-config', 'valid_owner_provider',
                                            IValidOwnerProvider, 'OwnerGroupProvider')
     
     implements(ITicketActionController, IEnvironmentSetupParticipant, ITicketManipulator)
 
     def __init__(self, *args, **kwargs):
+        self.log.debug('action controllers for ticket workflow: %r' % 
+                [c.__class__.__name__ for c in self.action_controllers])
         self._actions = {} # syllabus_id: actions
 
     # IEnvironmentSetupParticipant methods
@@ -426,7 +434,30 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                       self._has_perms_for_action(req, info, ticket.resource)]
         return actions
 
-    # Public and internals methods at the same time
+    # Public methods
+
+    def get_available_actions(self, req, ticket):
+        """Returns a sorted list of available actions"""
+        # The list should not have duplicates.
+        actions = {}
+        for controller in self.action_controllers:
+            weighted_actions = controller.get_ticket_actions(req, ticket) or []
+            for weight, action in weighted_actions:
+                if action in actions:
+                    actions[action] = max(actions[action], weight)
+                else:
+                    actions[action] = weight
+        all_weighted_actions = [(weight, action) for action, weight in
+                                actions.items()]
+        return [x[1] for x in sorted(all_weighted_actions, reverse=True)]
+
+    def get_available_statuses(self, pid):
+        """Returns a sorted list of all the states all of the action
+        controllers know about."""
+        valid_states = set()
+        for controller in self.action_controllers:
+            valid_states.update(controller.get_all_status(pid=pid) or [])
+        return sorted(valid_states)
 
     def get_actions(self, pid=None, sid=None, ticket=None, req=None):
         # only one of pid, sid or ticket is required

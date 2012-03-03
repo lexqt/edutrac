@@ -316,12 +316,6 @@ class TicketSystem(Component):
     change_listeners = ExtensionPoint(ITicketChangeListener)
     milestone_change_listeners = ExtensionPoint(IMilestoneChangeListener)
     
-    action_controllers = OrderedExtensionsOption('ticket', 'workflow',
-        ITicketActionController, default='ConfigurableTicketWorkflow',
-        include_missing=False,
-        doc="""Ordered list of workflow controllers to use for ticket actions
-            (''since 0.11'').""")
-
     restrict_owner = BoolOption('ticket', 'restrict_owner', 'false',
         """Make the owner field of tickets use a drop-down menu.
         Be sure to understand the performance implications before activating
@@ -375,33 +369,23 @@ class TicketSystem(Component):
         (''since 0.11'').""")
 
     def __init__(self):
-        self.log.debug('action controllers for ticket workflow: %r' % 
-                [c.__class__.__name__ for c in self.action_controllers])
+        from trac.ticket.default_workflow import ConfigurableTicketWorkflow
+        self.workflow = ConfigurableTicketWorkflow(self.env)
 
     # Public API
 
+    @property
+    def action_controllers(self):
+        return self.workflow.action_controllers
+
     def get_available_actions(self, req, ticket):
         """Returns a sorted list of available actions"""
-        # The list should not have duplicates.
-        actions = {}
-        for controller in self.action_controllers:
-            weighted_actions = controller.get_ticket_actions(req, ticket) or []
-            for weight, action in weighted_actions:
-                if action in actions:
-                    actions[action] = max(actions[action], weight)
-                else:
-                    actions[action] = weight
-        all_weighted_actions = [(weight, action) for action, weight in
-                                actions.items()]
-        return [x[1] for x in sorted(all_weighted_actions, reverse=True)]
+        return self.workflow.get_available_actions(req, ticket)
 
     def get_all_status(self, pid):
         """Returns a sorted list of all the states all of the action
         controllers know about."""
-        valid_states = set()
-        for controller in self.action_controllers:
-            valid_states.update(controller.get_all_status(pid=pid) or [])
-        return sorted(valid_states)
+        return self.workflow.get_available_statuses(pid)
 
     def get_ticket_field_labels(self, pid):
         """Produce a (name,label) mapping from `get_ticket_fields`."""
