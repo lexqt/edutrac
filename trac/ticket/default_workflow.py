@@ -470,7 +470,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         if sid is not None:
             sid = int(sid)
             if sid not in self._actions:
-                syl_config = self.env.configs.syllabus(sid)
+                syl_config = self.configs.syllabus(sid)
                 actions = get_workflow_config(syl_config)
                 actions = self._prepare_actions(actions)
                 self._actions[sid] = actions

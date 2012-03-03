@@ -250,6 +250,7 @@ class Environment(Component, ComponentManager):
         environment configuration) and `log` (a logger object)."""
         component.env = self
         component.config = self.config
+        component.configs = self.configs
         component.log = self.log
 
     def _component_name(self, name_or_class):
