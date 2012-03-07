@@ -174,6 +174,8 @@ class TicketFieldsStore(object):
     def __init__(self, env, pid, ticket_system=None):
         self.env = env
         self.pid = pid
+        from trac.project.api import ProjectManagement
+        self.syllabus_id = ProjectManagement(self.env).get_project_syllabus(pid)
         modname = TicketFieldsStore.__module__
         clsname = TicketFieldsStore.__name__
         self._cache_fields        = '%s.%s.fields:pid.%s'        % (modname, clsname, self.pid)
@@ -282,7 +284,7 @@ class TicketFieldsStore(object):
     def custom_fields(self, db):
         """Return the list of custom ticket fields available for tickets."""
         fields = []
-        config = self.ts.config['ticket-custom']
+        config = self.ts.configs.syllabus(self.syllabus_id)['ticket-custom']
         for name in [option for option, value in config.options()
                      if '.' not in option]:
             field = {
@@ -313,7 +315,7 @@ class TicketFieldsStore(object):
 class TicketSystem(Component):
     implements(IPermissionRequestor, IWikiSyntaxProvider, IResourceManager)
 
-    change_listeners = ExtensionPoint(ITicketChangeListener)
+    change_listeners = SyllabusExtensionPoint(ITicketChangeListener)
     milestone_change_listeners = ExtensionPoint(IMilestoneChangeListener)
     
     restrict_owner = BoolOption('ticket', 'restrict_owner', 'false',

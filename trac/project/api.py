@@ -5,6 +5,7 @@ from trac.core import Component, Interface, TracError
 from trac.project.model import ProjectNotSet, ResourceProjectMismatch
 from trac.user.api import UserManagement
 
+from trac.config import ComponentDisabled
 
 class IProjectSwitchListener(Interface):
     """Extension point interface for components which want to perform
@@ -154,6 +155,19 @@ class ProjectManagement(Component):
 #        names  = [r[0] for r in cursor.description]
         names  = get_column_names(cursor)
         return dict(zip(names, values))
+
+    def check_component_enabled(self, component, pid=None, syllabus_id=None, raise_on_disabled=True):
+        if pid is not None:
+            syllabus_id = self.get_project_syllabus(pid)
+        assert syllabus_id is not None
+        if not isinstance(component, type):
+            component = component.__class__
+        res = self.compmgr.is_component_enabled(component, syllabus=syllabus_id)
+        if raise_on_disabled and not res:
+            raise ComponentDisabled('Component "%s" is disabled in the syllabus #%s.' %
+                                    (component.__name__, syllabus_id))
+        return res
+
 
     # Internal methods
 

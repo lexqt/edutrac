@@ -62,7 +62,11 @@ class ReportModule(Component):
     items_per_page_rss = IntOption('report', 'items_per_page_rss', 0,
         """Number of tickets displayed in the rss feeds for reports
         (''since 0.11'')""")
-    
+
+    AREA_GLOBAL = 1
+    AREA_SYLLABUS = 2
+    AREA_PROJECT = 3
+
     # INavigationContributor methods
 
     def get_active_navigation_item(self, req):
@@ -120,7 +124,7 @@ class ReportModule(Component):
             if content_type: # i.e. alternate format
                 return template, data, content_type
         else:
-            template, data, content_type = self._render_view(req, id)
+            template, data, content_type = self._render_view(req, id, pid)
             if content_type: # i.e. alternate format
                 return template, data, content_type
 
@@ -260,7 +264,7 @@ class ReportModule(Component):
         asc = bool(int(req.args.get('asc', 1)))
         format = req.args.get('format')
 
-        syllabus_id = self.pm.get_project_syllabus(pid, req=req)
+        syllabus_id = self.pm.get_project_syllabus(pid)
 
         orderby_clause = ' ORDER BY %s%s' % (
                           sort == 'title' and 'title' or 'id',
@@ -319,7 +323,7 @@ class ReportModule(Component):
     _html_cols = set(['__style__', '__color__', '__fgcolor__',
                          '__bgcolor__', '__grouplink__'])
 
-    def _render_view(self, req, id):
+    def _render_view(self, req, id, cur_pid):
         """Retrieve the report results and pre-process them for rendering."""
         db = self.env.get_read_db()
         cursor = db.cursor()
@@ -331,6 +335,17 @@ class ReportModule(Component):
             raise ResourceNotFound(
                 _('Report {%(num)s} does not exist.', num=id),
                 _('Invalid Report Number'))
+
+        if project_id is not None:
+            area = self.AREA_PROJECT
+            if project_id != cur_pid:
+                self.pm.check_session_project(req, project_id, allow_multi=True)
+            syllabus_id = self.pm.get_project_syllabus(project_id)
+        elif syllabus_id is not None:
+            area = self.AREA_SYLLABUS
+        else:
+            area = self.AREA_GLOBAL
+            syllabus_id = self.pm.get_project_syllabus(cur_pid)
 
         try:
             args = self.get_var_args(req)
@@ -357,8 +372,7 @@ class ReportModule(Component):
                 if query[-1] != '?':
                     query += '&'
                 query += report_id
-            # project area query
-            if project_id is not None:
+            if area == self.AREA_PROJECT:
                 if 'project=' in query:
                     err = _('Parameter "project" mustn\'t be specified in "project" area report.')
                     req.redirect(req.href.report(id, action='edit', error=err))
@@ -411,7 +425,10 @@ class ReportModule(Component):
             return req.href.report(id, params)
 
         data = {'action': 'view',
-                'report': {'id': id, 'resource': report_resource},
+                'report': {
+                    'id': id, 'area': area,
+                    'syllabus_id': syllabus_id,
+                    'resource': report_resource},
                 'context': context,
                 'title': title, 'description': description,
                 'max': limit, 'args': args, 'show_args_form': False,

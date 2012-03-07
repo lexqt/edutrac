@@ -109,7 +109,7 @@ class ConfigurableTicketWorkflow(Component):
 
     action_controllers = OrderedExtensionsOption('ticket', 'workflow',
         ITicketActionController, default='ConfigurableTicketWorkflow',
-        include_missing=False,
+        include_missing=False, syllabus_switcher=True,
         doc="""Ordered list of workflow controllers to use for ticket actions
             (''since 0.11'').""")
 
@@ -119,8 +119,9 @@ class ConfigurableTicketWorkflow(Component):
     implements(ITicketActionController, IEnvironmentSetupParticipant, ITicketManipulator)
 
     def __init__(self, *args, **kwargs):
-        self.log.debug('action controllers for ticket workflow: %r' % 
-                [c.__class__.__name__ for c in self.action_controllers])
+        self.pm = ProjectManagement(self.env)
+#        self.log.debug('action controllers for ticket workflow (global): %r' % 
+#                [c.__class__.__name__ for c in self.action_controllers(None)])
         self._actions = {} # syllabus_id: actions
 
     # IEnvironmentSetupParticipant methods
@@ -440,7 +441,8 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         """Returns a sorted list of available actions"""
         # The list should not have duplicates.
         actions = {}
-        for controller in self.action_controllers:
+        sid = self.pm.get_project_syllabus(ticket.pid)
+        for controller in self.action_controllers(sid):
             weighted_actions = controller.get_ticket_actions(req, ticket) or []
             for weight, action in weighted_actions:
                 if action in actions:
@@ -455,7 +457,8 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         """Returns a sorted list of all the states all of the action
         controllers know about."""
         valid_states = set()
-        for controller in self.action_controllers:
+        sid = self.pm.get_project_syllabus(pid)
+        for controller in self.action_controllers(sid):
             valid_states.update(controller.get_all_status(pid=pid) or [])
         return sorted(valid_states)
 
@@ -465,8 +468,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         if ticket is not None:
             pid = ticket.pid
         if pid is not None:
-            pm = ProjectManagement(self.env) # TODO: move to __init__?
-            sid = pm.get_project_syllabus(pid, req, fail_on_none=True)
+            sid = self.pm.get_project_syllabus(pid)
         if sid is not None:
             sid = int(sid)
             if sid not in self._actions:

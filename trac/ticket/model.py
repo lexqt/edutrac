@@ -30,6 +30,7 @@ from trac.util.datefmt import from_utimestamp, to_utimestamp, utc, utcmax
 from trac.util.translation import _
 
 from trac.project.model import Project
+from trac.project.api import ProjectManagement
 
 __all__ = ['Ticket', 'Type', 'Status', 'Resolution', 'Priority', 'Severity',
            'Component', 'Milestone', 'Version', 'group_milestones']
@@ -289,7 +290,8 @@ class Ticket(object):
         self.resource = self.resource(id=tkt_id[0])
         self._old = {}
 
-        for listener in TicketSystem(self.env).change_listeners:
+        sid = ProjectManagement(self.env).get_project_syllabus(self.pid)
+        for listener in TicketSystem(self.env).change_listeners(sid):
             listener.ticket_created(self)
 
         return self.id
@@ -402,7 +404,8 @@ class Ticket(object):
         self._old = {}
         self.values['changetime'] = when
 
-        for listener in TicketSystem(self.env).change_listeners:
+        sid = ProjectManagement(self.env).get_project_syllabus(self.pid)
+        for listener in TicketSystem(self.env).change_listeners(sid):
             listener.ticket_changed(self, comment, author, old_values)
         return True
 
@@ -463,7 +466,8 @@ class Ticket(object):
             cursor.execute("DELETE FROM ticket_custom WHERE ticket=%s",
                            (self.id,))
 
-        for listener in TicketSystem(self.env).change_listeners:
+        sid = ProjectManagement(self.env).get_project_syllabus(self.pid)
+        for listener in TicketSystem(self.env).change_listeners(sid):
             listener.ticket_deleted(self)
 
     def get_change(self, cnum, db=None):

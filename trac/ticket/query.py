@@ -72,15 +72,16 @@ class Query(object):
         if area == 'project':
             if project is None:
                 raise TracError(_('Project must be defined for project area query'))
+            self.pid = int(project)
+            self.syllabus_id = ProjectManagement(self.env).get_project_syllabus(self.pid)
         elif area == 'group':
             raise NotImplementedError
+            self.studgroup_id = studgroup
         elif area == 'syllabus':
             raise NotImplementedError
+            self.syllabus_id = syllabus
         else:
             raise TracError(_('Unknown area "%(area)s" specified for query', area=area))
-        self.pid = project
-        self.studgroup_id = studgroup
-        self.syllabus_id = syllabus
         constraints = constraints or []
         if isinstance(constraints, dict):
             constraints = [constraints]

@@ -33,7 +33,7 @@ from genshi.output import DocType
 from genshi.template import TemplateLoader
 
 from trac import __version__ as TRAC_VERSION
-from trac.config import ExtensionOption, Option, OrderedExtensionsOption
+from trac.config import ExtensionOption, Option, OrderedExtensionsOption, ComponentDisabled
 from trac.core import *
 from trac.env import open_environment
 from trac.loader import get_plugin_info, match_plugins_to_frames
@@ -203,9 +203,12 @@ class RequestDispatcher(Component):
                 try:
                     ps.init_request(req)
                     for handler in self.handlers:
-                        if handler.match_request(req):
-                            chosen_handler = handler
-                            break
+                        try:
+                            if handler.match_request(req):
+                                chosen_handler = handler
+                                break
+                        except ComponentDisabled:
+                            pass
                     if not chosen_handler:
                         if not req.path_info or req.path_info == '/':
                             chosen_handler = self.default_handler
@@ -247,7 +250,10 @@ class RequestDispatcher(Component):
                                                ' %(msg)s', msg=msg))
 
                 # Process the request and render the template
-                resp = chosen_handler.process_request(req)
+                try:
+                    resp = chosen_handler.process_request(req)
+                except ComponentDisabled, e:
+                    raise TracError(e.message)
                 if resp:
                     if len(resp) == 2: # Clearsilver
                         chrome.populate_hdf(req)
@@ -354,7 +360,10 @@ class RequestDispatcher(Component):
 
     def _pre_process_request(self, req, chosen_handler):
         for filter_ in self.filters:
-            chosen_handler = filter_.pre_process_request(req, chosen_handler)
+            try:
+                chosen_handler = filter_.pre_process_request(req, chosen_handler)
+            except ComponentDisabled:
+                pass
         return chosen_handler
 
     def _post_process_request(self, req, *args):
@@ -365,11 +374,14 @@ class RequestDispatcher(Component):
             # Trac 0.10, only filters with same arity gets passed real values.
             # Errors will call all filters with None arguments,
             # and results will not be not saved.
-            extra_arg_count = arity(f.post_process_request) - 1
-            if extra_arg_count == nbargs:
-                resp = f.post_process_request(req, *resp)
-            elif nbargs == 0:
-                f.post_process_request(req, *(None,)*extra_arg_count)
+            try:
+                extra_arg_count = arity(f.post_process_request) - 1
+                if extra_arg_count == nbargs:
+                    resp = f.post_process_request(req, *resp)
+                elif nbargs == 0:
+                    f.post_process_request(req, *(None,)*extra_arg_count)
+            except ComponentDisabled:
+                pass
         return resp
 
 _slashes_re = re.compile(r'/+')

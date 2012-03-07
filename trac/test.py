@@ -28,7 +28,7 @@ except ImportError:
     Locale = None
 
 from trac.config import Configuration, ConfigurationSwitcher
-from trac.core import Component, ComponentManager
+from trac.core import Component, ComponentManager, canonical_component_name
 from trac.env import Environment
 from trac.db.api import _parse_db_str, DatabaseManager
 from trac.db.sqlite_backend import SQLiteConnection
@@ -270,7 +270,7 @@ class EnvironmentStub(Environment):
         if enable is not None:
             self.config.set('components', 'trac.*', 'disabled')
         for name_or_class in enable or ():
-            config_key = self._component_name(name_or_class)
+            config_key = canonical_component_name(name_or_class)
             self.config.set('components', config_key, 'enabled')
 
         # -- logging
@@ -393,7 +393,7 @@ class EnvironmentStub(Environment):
     # overriden
 
     def is_component_enabled(self, cls):
-        if self._component_name(cls).startswith('__main__.'):
+        if canonical_component_name(cls).startswith('__main__.'):
             return True
         return Environment.is_component_enabled(self, cls)
 

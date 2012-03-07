@@ -25,7 +25,8 @@ from trac.util.translation import _, N_
 
 __all__ = ['Configuration', 'Option', 'BoolOption', 'IntOption', 'FloatOption',
            'ListOption', 'ChoiceOption', 'PathOption', 'ExtensionOption',
-           'OrderedExtensionsOption', 'ConfigurationError']
+           'SyllabusExtensionPoint', 'OrderedExtensionsOption', 'ConfigurationError',
+           'ComponentDisabled']
 
 # Retained for backward-compatibility, use as_bool() instead
 _TRUE_VALUES = ('yes', 'true', 'enabled', 'on', 'aye', '1', 1, True)
@@ -39,6 +40,10 @@ def _to_utf8(basestr):
 class ConfigurationError(TracError):
     """Exception raised when a value in the configuration file is not valid."""
     title = N_('Configuration Error')
+
+
+class ComponentDisabled(Exception):
+    """Exception to indicate that component is disabled by config"""
 
 
 class Configuration(object):
@@ -668,8 +673,8 @@ class ListOption(Option):
     """
 
     def __init__(self, section, name, default=None, sep=',', keep_empty=False,
-                 doc='', switcher=False):
-        Option.__init__(self, section, name, default, doc, switcher)
+                 doc='', **kwargs):
+        Option.__init__(self, section, name, default, doc, **kwargs)
         self.sep = sep
         self.keep_empty = keep_empty
 
@@ -684,8 +689,8 @@ class ChoiceOption(Option):
     The default value is the first choice in the list.
     """
     
-    def __init__(self, section, name, choices, doc='', switcher=False):
-        Option.__init__(self, section, name, _to_utf8(choices[0]), doc, switcher)
+    def __init__(self, section, name, choices, doc='', **kwargs):
+        Option.__init__(self, section, name, _to_utf8(choices[0]), doc, **kwargs)
         self.choices = set(_to_utf8(choice).strip() for choice in choices)
 
     def accessor(self, section, name, default):
@@ -705,25 +710,66 @@ class PathOption(Option):
     accessor = Section.getpath
 
 
+class SyllabusExtensionPoint(ExtensionPoint):
+
+    _cache = {}
+
+    def extensions(self, component):
+        idx = self.interface
+        # per-interface cache
+        if idx not in self._cache:
+            self._cache[idx] = {}
+        stor = self._cache[idx]
+
+        check = component.compmgr.is_component_enabled
+        extensions = super(SyllabusExtensionPoint, self).extensions(component)
+
+        def get_syllabus_extensions(syllabus=None):
+            if syllabus is None:
+                return extensions
+            syllabus_id = int(syllabus)
+            # per-syllabus cache
+            if syllabus_id not in stor:
+                exts = filter(lambda e: check(e.__class__, syllabus=syllabus_id), extensions)
+                stor[syllabus_id] = exts
+            return stor[syllabus_id]
+
+        return get_syllabus_extensions
+
 class ExtensionOption(Option):
 
-    def __init__(self, section, name, interface, default=None, doc=''):
-        Option.__init__(self, section, name, default, doc)
-        self.xtnpt = ExtensionPoint(interface)
+    def __init__(self, section, name, interface, default=None, doc='', syllabus_switcher=False):
+        Option.__init__(self, section, name, default, doc, switcher=syllabus_switcher)
+        EPClass = SyllabusExtensionPoint if syllabus_switcher else ExtensionPoint
+        self.xtnpt = EPClass(interface)
 
     def __get__(self, instance, owner):
         if instance is None:
             return self
         value = Option.__get__(self, instance, owner)
-        for impl in self.xtnpt.extensions(instance):
+        if self.switcher:
+            def get_syllabus_component(syllabus_id):
+                if syllabus_id is None:
+                    v = value.common()
+                else:
+                    v = value.syllabus(syllabus_id)
+                return self._get_component(instance, v, syllabus_id)
+            return get_syllabus_component
+        else:
+            return self._get_component(instance, value)
+
+    def _get_component(self, component, value, syllabus=None):
+        exts = self.xtnpt.extensions(component)
+        if syllabus is not None:
+            exts = exts(syllabus)
+        for impl in exts:
             if impl.__class__.__name__ == value:
                 return impl
         raise AttributeError('Cannot find an implementation of the "%s" '
                              'interface named "%s".  Please update the option '
-                             '%s.%s in trac.ini.'
+                             '%s.%s in configuration file.'
                              % (self.xtnpt.interface.__name__, value,
                                 self.section, self.name))
-
 
 class OrderedExtensionsOption(ListOption):
     """A comma separated, ordered, list of components implementing `interface`.
@@ -733,20 +779,35 @@ class OrderedExtensionsOption(ListOption):
     interface are returned, with those specified by the option ordered first."""
 
     def __init__(self, section, name, interface, default=None,
-                 include_missing=True, doc=''):
-        ListOption.__init__(self, section, name, default, doc=doc)
-        self.xtnpt = ExtensionPoint(interface)
+                 include_missing=True, doc='', syllabus_switcher=False):
+        ListOption.__init__(self, section, name, default, doc=doc, switcher=syllabus_switcher)
+        EPClass = SyllabusExtensionPoint if syllabus_switcher else ExtensionPoint
+        self.xtnpt = EPClass(interface)
         self.include_missing = include_missing
 
     def __get__(self, instance, owner):
         if instance is None:
             return self
         order = ListOption.__get__(self, instance, owner)
+        if self.switcher:
+            def get_syllabus_components(syllabus_id):
+                if syllabus_id is None:
+                    o = order.common()
+                else:
+                    o = order.syllabus(syllabus_id)
+                return self._get_components(instance, o, syllabus_id)
+            return get_syllabus_components
+        else:
+            return self._get_components(instance, order)
+
+    def _get_components(self, component, order, syllabus=None):
         components = []
-        for impl in self.xtnpt.extensions(instance):
+        exts = self.xtnpt.extensions(component)
+        if syllabus is not None:
+            exts = exts(syllabus)
+        for impl in exts:
             if self.include_missing or impl.__class__.__name__ in order:
                 components.append(impl)
-
         def compare(x, y):
             x, y = x.__class__.__name__, y.__class__.__name__
             if x not in order:

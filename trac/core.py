@@ -17,7 +17,7 @@
 #         Christopher Lenz <cmlenz@gmx.de>
 
 __all__ = ['Component', 'ExtensionPoint', 'implements', 'Interface',
-           'TracError']
+           'TracError', 'canonical_component_name']
 
 
 def N_(string):
@@ -247,3 +247,11 @@ class ComponentManager(object):
         be available.
         """
         return True
+
+
+
+def canonical_component_name(name_or_class):
+    name = name_or_class
+    if not isinstance(name_or_class, basestring):
+        name = name_or_class.__module__ + '.' + name_or_class.__name__
+    return name.lower()

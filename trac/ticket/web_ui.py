@@ -24,7 +24,7 @@ from genshi.core import Markup
 from genshi.builder import tag
 
 from trac.attachment import AttachmentModule
-from trac.config import BoolOption, Option, IntOption
+from trac.config import BoolOption, Option, IntOption, SyllabusExtensionPoint
 from trac.core import *
 from trac.mimeview.api import Mimeview, IContentConverter, Context
 from trac.resource import Resource, ResourceNotFound, get_resource_url, \
@@ -63,7 +63,7 @@ class TicketModule(Component):
     implements(IContentConverter, INavigationContributor, IRequestHandler,
                ISearchSource, ITemplateProvider, ITimelineEventProvider)
 
-    ticket_manipulators = ExtensionPoint(ITicketManipulator)
+    ticket_manipulators = SyllabusExtensionPoint(ITicketManipulator)
 
     timeline_details = BoolOption('timeline', 'ticket_show_details', 'false',
         """Enable the display of all ticket changes in the timeline, not only
@@ -372,7 +372,8 @@ class TicketModule(Component):
 
     def _get_action_controllers(self, req, ticket, action):
         """Generator yielding the controllers handling the given `action`"""
-        for controller in TicketSystem(self.env).action_controllers:
+        sid = self.pm.get_project_syllabus(ticket.pid)
+        for controller in TicketSystem(self.env).action_controllers(sid):
             actions = [a for w, a in
                        controller.get_ticket_actions(req, ticket) or []]
             if action in actions:
@@ -547,7 +548,10 @@ class TicketModule(Component):
             # information any and all problems.  But it's only valid if it
             # validates and there were no problems with the workflow side of
             # things.
-            valid = self._validate_ticket(req, ticket, action, not valid) and valid
+            from trac.ticket.default_workflow import ConfigurableTicketWorkflow
+            action_obj = ConfigurableTicketWorkflow(self.env
+                            ).get_actions(ticket=ticket, req=req)[action]
+            valid = self._validate_ticket(req, ticket, action_obj, not valid) and valid
             if 'preview' not in req.args:
                 if valid:
                     # redirected if successful
@@ -1192,7 +1196,8 @@ class TicketModule(Component):
             raise InvalidTicket(_("Invalid comment threading identifier"))
 
         # Custom validation rules
-        for manipulator in self.ticket_manipulators:
+        sid = self.pm.get_project_syllabus(ticket.pid)
+        for manipulator in self.ticket_manipulators(sid):
             for field, message in manipulator.validate_ticket(req, ticket, action):
                 valid = False
                 if field:

@@ -25,7 +25,7 @@ from trac.cache import CacheManager
 from trac.config import *
 from trac.config import ConfigurationSwitcher
 from trac.core import Component, ComponentManager, implements, Interface, \
-                      ExtensionPoint, TracError
+                      ExtensionPoint, TracError, canonical_component_name
 from trac.db.api import DatabaseManager, get_read_db, with_transaction
 from trac.util import copytree, create_file, get_pkginfo, makedirs
 from trac.util.compat import any
@@ -221,6 +221,9 @@ class Environment(Component, ComponentManager):
             for setup_participant in self.setup_participants:
                 setup_participant.environment_created()
 
+        # cache
+        self._syllabus_rules = {}
+
     def get_systeminfo(self):
         """Return a list of `(name, version)` tuples describing the name and
         version information of external packages used by Trac and plugins.
@@ -252,26 +255,31 @@ class Environment(Component, ComponentManager):
         component.config = self.config
         component.configs = self.configs
         component.log = self.log
-
-    def _component_name(self, name_or_class):
-        name = name_or_class
-        if not isinstance(name_or_class, basestring):
-            name = name_or_class.__module__ + '.' + name_or_class.__name__
-        return name.lower()
+        component.cname = canonical_component_name(component.__class__)
 
     @property
     def _component_rules(self):
         try:
             return self._rules
         except AttributeError:
-            self._rules = {}
-            for name, value in self.config.options('components'):
-                if name.endswith('.*'):
-                    name = name[:-2]
-                self._rules[name.lower()] = value.lower() in ('enabled', 'on')
+            self._rules = self._get_rules(self.config)
             return self._rules
+
+    def _syllabus_component_rules(self, syllabus_id):
+        sid = int(syllabus_id)
+        if sid not in self._syllabus_rules:
+            self._syllabus_rules[sid] = self._get_rules(self.configs.syllabus(sid))
+        return self._syllabus_rules[sid]
         
-    def is_component_enabled(self, cls):
+    def _get_rules(self, config):
+        rules = {}
+        for name, value in config.options('components'):
+            if name.endswith('.*'):
+                name = name[:-2]
+            rules[name.lower()] = value.lower() in ('enabled', 'on')
+        return rules
+
+    def is_component_enabled(self, cls, syllabus=None):
         """Implemented to only allow activation of components that are not
         disabled in the configuration.
         
@@ -280,8 +288,9 @@ class Environment(Component, ComponentManager):
         does not get activated. If it returns `None`, the component only gets
         activated if it is located in the `plugins` directory of the
         enironment.
+        If syllabus is not None, reads syllabus-specific configuration.
         """
-        component_name = self._component_name(cls)
+        component_name = canonical_component_name(cls)
 
         # Disable the pre-0.11 WebAdmin plugin
         # Please note that there's no recommendation to uninstall the
@@ -294,8 +303,11 @@ class Environment(Component, ComponentManager):
                           'administration interface will be used '
                           'instead.')
             return False
-        
-        rules = self._component_rules
+
+        if syllabus is None:
+            rules = self._component_rules
+        else:
+            rules = self._syllabus_component_rules(syllabus)
         cname = component_name
         while cname:
             enabled = rules.get(cname)
@@ -311,7 +323,7 @@ class Environment(Component, ComponentManager):
 
     def enable_component(self, cls):
         """Enable a component or module."""
-        self._component_rules[self._component_name(cls)] = True
+        self._component_rules[canonical_component_name(cls)] = True
 
     def verify(self):
         """Verify that the provided path points to a valid Trac environment

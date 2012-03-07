@@ -990,8 +990,11 @@ class Chrome(Component):
     def _filter_stream(self, req, method, filename, stream, data):
         def inner(stream, ctxt=None):
             for filter in self.stream_filters:
-                stream = filter.filter_stream(req, method, filename, stream,
-                                              data)
+                try:
+                    stream = filter.filter_stream(req, method, filename, stream,
+                                                  data)
+                except ComponentDisabled:
+                    pass
             return stream
         return inner
 
