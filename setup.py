@@ -16,7 +16,7 @@ import sys
 
 from setuptools import setup, find_packages
 
-min_python = (2, 4)
+min_python = (2, 7)
 if sys.version_info < min_python:
     print "Trac requires Python %d.%d or later" % min_python
     sys.exit(1)
@@ -98,6 +98,7 @@ facilities.
     install_requires = [
         'setuptools>=0.6b1',
         'Genshi>=0.6,<0.7dev',
+        'SQLAlchemy>=0.7',
     ],
     extras_require = {
         'Babel': ['Babel>=0.9.5'],

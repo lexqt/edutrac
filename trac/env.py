@@ -216,6 +216,7 @@ class Environment(Component, ComponentManager):
         else:
             self.verify()
             self.setup_config()
+            self.setup_db()
 
         if create:
             for setup_participant in self.setup_participants:
@@ -354,6 +355,14 @@ class Environment(Component, ComponentManager):
         See `trac.db.api.get_read_db` for detailed documentation."""
         return get_read_db(self)
 
+    # TODO: move logic to trac.db.* or elsewhere
+
+    def get_sa_metadata(self):
+        return self.sa_metadata
+
+    def get_sa_connection(self, **kwargs):
+        return self.sa_engine.connect(**kwargs)
+
     def shutdown(self, tid=None):
         """Close the environment."""
         RepositoryManager(self).shutdown(tid)
@@ -444,6 +453,13 @@ class Environment(Component, ComponentManager):
         from trac.loader import load_components
         plugins_dir = self.shared_plugins_dir
         load_components(self, plugins_dir and (plugins_dir,))
+
+    def setup_db(self):
+        """Do some DB initialisation."""
+        from trac.db.sqlalchemy_integration import engine
+        self.sa_engine = engine(self)
+        from trac.db_sqlalchemy import metadata
+        self.sa_metadata = metadata
 
     def get_templates_dir(self):
         """Return absolute path to the templates directory."""
