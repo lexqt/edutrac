@@ -173,7 +173,7 @@ class DefaultPermissionStore(Component):
             subjects.update(provider.get_permission_groups(username) or [])
 
         actions = set([])
-        db = self.env.get_db_cnx()
+        db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute("SELECT username,action FROM permission")
         rows = cursor.fetchall()
@@ -214,7 +214,7 @@ class DefaultPermissionStore(Component):
 
         The permissions are returned as a list of (subject, action)
         formatted tuples."""
-        db = self.env.get_db_cnx()
+        db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute("SELECT username,action FROM permission")
         return [(row[0], row[1]) for row in cursor]
@@ -525,13 +525,13 @@ class PermissionCache(object):
             cache = {}
         self._cache = cache
 
-    def _normalize_resource(self, realm_or_resource, id, version):
+    def _normalize_resource(self, realm_or_resource, pid, id, version):
         if realm_or_resource:
-            return Resource(realm_or_resource, id, version)
+            return Resource(realm_or_resource, id, version, pid=pid)
         else:
             return self._resource
 
-    def __call__(self, realm_or_resource, id=False, version=False):
+    def __call__(self, realm_or_resource, id=False, version=False, pid=False):
         """Convenience function for using thus: 
             'WIKI_VIEW' in perm(context) 
         or 
@@ -540,7 +540,7 @@ class PermissionCache(object):
             'WIKI_VIEW' in perm(resource)
 
         """
-        resource = Resource(realm_or_resource, id, version)
+        resource = Resource(realm_or_resource, id, version, pid=pid)
         if resource and self._resource and resource == self._resource:
             return self
         else:
@@ -548,8 +548,8 @@ class PermissionCache(object):
                                    self._cache)
 
     def has_permission(self, action, realm_or_resource=None, id=False,
-                       version=False):
-        resource = self._normalize_resource(realm_or_resource, id, version)
+                       version=False, pid=False):
+        resource = self._normalize_resource(realm_or_resource, pid, id, version)
         return self._has_permission(action, resource)
 
     def _has_permission(self, action, resource):
@@ -570,8 +570,8 @@ class PermissionCache(object):
 
     __contains__ = has_permission
 
-    def require(self, action, realm_or_resource=None, id=False, version=False):
-        resource = self._normalize_resource(realm_or_resource, id, version)
+    def require(self, action, realm_or_resource=None, id=False, version=False, pid=False):
+        resource = self._normalize_resource(realm_or_resource, pid, id, version)
         if not self._has_permission(action, resource):
             raise PermissionError(action, resource, self.env)
     assert_permission = require
