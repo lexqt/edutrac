@@ -286,6 +286,11 @@ class Request(object):
         """Port number the server is bound to"""
         return int(self.environ['SERVER_PORT'])
 
+    @property
+    def is_ajax(self):
+        """Is AJAX request"""
+        return self.get_header('X-Requested-With') == 'XMLHttpRequest'
+
     def add_redirect_listener(self, listener):
         """Add a callable to be called prior to executing a redirect.
         
@@ -510,6 +515,10 @@ class Request(object):
             file_wrapper = self.environ.get('wsgi.file_wrapper', _FileWrapper)
             self._response = file_wrapper(fileobj, 4096)
         raise RequestDone
+
+    def send_ajax(self, content):
+        self.send_header('Content-Length', len(content))
+        self.write(content)
 
     def read(self, size=None):
         """Read the specified number of bytes from the request body."""
