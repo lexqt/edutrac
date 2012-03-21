@@ -19,6 +19,27 @@
 from trac.util.text import unicode_quote, unicode_urlencode
 
 
+class HrefPart(object):
+    '''Emulates Href object and can be used as argument in Href call.
+    '''
+
+    def __init__(self, *args, **kwargs):
+        self.args = list(args)
+        self.kwargs = kwargs
+
+    def __unicode__(self):
+        href = Href('')
+        return href(*self.args, **self.kwargs)
+
+    def __call__(self, *args, **kw):
+        self.args.extend(args)
+        self.kwargs.update(kw)
+        return self
+
+    def __getattr__(self, name):
+        self.args.append(name)
+        return self
+
 class Href(object):
     """Implements a callable that constructs URLs with the given base. The
     function can be called with any number of positional and keyword
@@ -161,8 +182,18 @@ class Href(object):
                 args = args[:-1]
 
         # build the path
+        args_ = []
+        for arg in args:
+            if isinstance(arg, HrefPart):
+                args_.extend(arg.args)
+                # is it desirable to overwrite
+#                kw.update(arg.kwargs)
+                for k, v in arg.kwargs.items():
+                    add_param(k.endswith('_') and k[:-1] or k, v)
+            else:
+                args_.append(arg)
         path = '/'.join(unicode_quote(unicode(arg).strip('/'), self.path_safe)
-                        for arg in args if arg is not None)
+                        for arg in args_ if arg is not None)
         if path:
             href += '/' + path
         elif not href:
