@@ -41,6 +41,8 @@ from trac.wiki.formatter import format_to_html, format_to_oneliner
 from trac.versioncontrol.api import NoSuchChangeset, RepositoryManager
 from trac.versioncontrol.web_ui.util import *
 
+from trac.project.api import ProjectManagement
+
 
 CHUNK_SIZE = 4096
 
@@ -243,6 +245,9 @@ class BrowserModule(Component):
         the repository browser.
         (''since 0.9'')""")
 
+    def __init__(self):
+        self.pm = ProjectManagement(self.env)
+
     # public methods
 
     def get_custom_colorizer(self):
@@ -291,7 +296,8 @@ class BrowserModule(Component):
 
     def get_navigation_items(self, req):
         rm = RepositoryManager(self.env)
-        if 'BROWSER_VIEW' in req.perm and rm.get_real_repositories():
+        pid = self.pm.get_current_project(req)
+        if 'BROWSER_VIEW' in req.perm and rm.get_real_repositories(project_id=pid):
             yield ('mainnav', 'browser',
                    tag.a(_('Browse Source'), href=req.href.browser()))
 
@@ -328,6 +334,8 @@ class BrowserModule(Component):
         if presel and (presel + '/').startswith(req.href.browser() + '/'):
             req.redirect(presel)
 
+        pid = self.pm.get_session_project(req)
+
         path = req.args.get('path', '/')
         rev = req.args.get('rev', '')
         if rev in ('', 'HEAD'):
@@ -337,8 +345,8 @@ class BrowserModule(Component):
         xhr = req.get_header('X-Requested-With') == 'XMLHttpRequest'
         
         rm = RepositoryManager(self.env)
-        all_repositories = rm.get_all_repositories()
-        reponame, repos, path = rm.get_repository_by_path(path)
+        all_repositories = rm.get_all_repositories(project_id=pid)
+        reponame, repos, path = rm.get_repository_by_path(path, project_id=pid)
 
         # Repository index
         show_index = not reponame and path == '/'
@@ -356,7 +364,11 @@ class BrowserModule(Component):
             req.redirect(req.href.browser(repos.reponame or None, path)
                          + (qs and '?' + qs or ''))
         reponame = repos and repos.reponame or None
-        
+
+        if repos:
+            pid = repos.pid
+            self.pm.check_session_project(req, pid, allow_multi=True)
+
         # Find node for the requested path/rev
         context = Context.from_request(req)
         node = None
@@ -378,7 +390,7 @@ class BrowserModule(Component):
             display_rev = repos.display_rev
 
         # Prepare template data
-        path_links = get_path_links(req.href, reponame, path, rev,
+        path_links = get_path_links(req.project_href, reponame, path, rev,
                                     order, desc)
 
         repo_data = dir_data = file_data = None

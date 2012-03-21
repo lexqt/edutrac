@@ -51,6 +51,8 @@ from trac.web.chrome import Chrome, INavigationContributor, \
 from trac.wiki import IWikiSyntaxProvider, WikiParser
 from trac.wiki.formatter import format_to
 
+from trac.project.api import ProjectManagement
+
 
 class IPropertyDiffRenderer(Interface):
     """Render node properties in TracBrowser and TracChangeset views."""
@@ -248,6 +250,10 @@ class ChangesetModule(Component):
             else:
                 raise TracError(_("No repository specified and no default "
                                   "repository configured."))
+
+        pm = ProjectManagement(self.env)
+        pid = repos.pid
+        pm.check_session_project(req, pid, allow_multi=True)
 
         # -- normalize and check for special case
         try:
@@ -864,8 +870,10 @@ class ChangesetModule(Component):
             # Non-'hidden' repositories will be listed as additional
             # repository filters, unless there is only a single repository.
             filters = []
+            pm = ProjectManagement(self.env)
+            pid = pm.get_current_project(req)
             rm = RepositoryManager(self.env)
-            repositories = rm.get_real_repositories()
+            repositories = rm.get_real_repositories(project_id=pid)
             if len(repositories) > 1:
                 filters = [
                     ('repo-' + repos.reponame,
@@ -927,7 +935,7 @@ class ChangesetModule(Component):
                                 show_location, show_files))
 
             rm = RepositoryManager(self.env)
-            for repos in sorted(rm.get_real_repositories(),
+            for repos in sorted(rm.get_real_repositories(project_id=pid),
                                 key=lambda repos: repos.reponame):
                 if all_repos or ('repo-' + repos.reponame) in repo_filters:
                     try:
@@ -1141,13 +1149,15 @@ class ChangesetModule(Component):
         if not 'changeset' in filters:
             return
         rm = RepositoryManager(self.env)
+        pid = self.pm.get_current_project(req)
         repositories = dict((repos.params['id'], repos)
-                            for repos in rm.get_real_repositories())
+                            for repos in rm.get_real_repositories(project_id=pid))
         db = self.env.get_db_cnx()
         sql, args = search_to_sql(db, ['rev', 'message', 'author'], terms)
         cursor = db.cursor()
         cursor.execute("SELECT repos,rev,time,author,message "
-                       "FROM revision WHERE " + sql, args)
+                       "FROM revision WHERE repos IN %s AND " + sql,
+                       (repositories.keys(),) + args)
         for id, rev, ts, author, log in cursor:
             try:
                 rev = int(rev)
@@ -1174,6 +1184,8 @@ class AnyDiffModule(Component):
 
     def process_request(self, req):
         rm = RepositoryManager(self.env)
+        pm = ProjectManagement(self.env)
+        pid = pm.get_session_project(req)
 
         if req.get_header('X-Requested-With') == 'XMLHttpRequest':
             dirname, prefix = posixpath.split(req.args.get('q'))
@@ -1185,13 +1197,15 @@ class AnyDiffModule(Component):
 
             entries = []
             if repos:
+                pid = repos.pid
+                pm.check_session_project(req, pid, allow_multi=True)
                 entries.extend((e.isdir, e.name, 
                                 '/' + pathjoin(repos.reponame, e.path))
                                for e in repos.get_node(path).get_entries()
                                if e.can_view(req.perm))
             if not reponame:
                 entries.extend((True, repos.reponame, '/' + repos.reponame)
-                               for repos in rm.get_real_repositories()
+                               for repos in rm.get_real_repositories(project_id=pid)
                                if repos.can_view(req.perm))
 
             elem = tag.ul(

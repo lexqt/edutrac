@@ -98,6 +98,15 @@ ticket_change = Table('ticket_change', metadata,
 )
 
 
+# Repository system
+
+repository = Table('repository', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('name', Text, primary_key=True),
+    Column('value', Text),
+)
+
+
 # Views
 
 project_info = Table('project_info', metadata,

@@ -60,7 +60,7 @@ class IRepositoryConnector(Interface):
 class IRepositoryProvider(Interface):
     """Provide known named instances of Repository."""
 
-    def get_repositories():
+    def get_repositories(project_id=None, syllabus_id=None):
         """Generate repository information for known repositories.
         
         Repository information is a key,value pair, where the value is 
@@ -71,6 +71,7 @@ class IRepositoryProvider(Interface):
                     a "real" repository.
          - `'alias'`: the name of another repository. This defines an alias to
                       another (real) repository.
+         - `'project_id'`: the project ID of the repository.
         Optional entries:
          - `'type'`: the type of the repository (if not given, the default
                      repository type will be used).
@@ -103,25 +104,44 @@ class DbRepositoryProvider(Component):
     implements(IRepositoryProvider, IAdminCommandProvider)
 
     repository_attrs = ('alias', 'description', 'dir', 'hidden', 'name',
-                        'type', 'url')
+                        'project_id', 'type', 'url')
     
     # IRepositoryProvider methods
 
-    def get_repositories(self):
+    def get_repositories(self, project_id=None, syllabus_id=None):
         """Retrieve repositories specified in the repository DB table."""
-        db = self.env.get_db_cnx()
-        cursor = db.cursor()
-        cursor.execute("SELECT id,name,value FROM repository "
-                       "WHERE name IN (%s)" % ",".join(
-                           "'%s'" % each for each in self.repository_attrs))
+        tabs = self.env.get_sa_metadata().tables
+        conn = self.env.get_sa_connection()
+
+        rfrom = rtab = tabs['repository']
+        if project_id is not None or syllabus_id is not None:
+            rpid = tabs['repository'].alias('repos_project')
+            rfrom = rtab.join(rpid, (rtab.c.id==rpid.c.id) &
+                                (rpid.c.name=='project_id')
+                          )
+        if syllabus_id is not None:
+            from sqlalchemy.sql import cast
+            from sqlalchemy import Integer
+            pinfo = tabs['project_info']
+            pidcol = cast(rpid.c.value, Integer)
+            rfrom = rfrom.join(pinfo, (pinfo.c.project_id==pidcol))
+
+        q = rfrom.select().with_only_columns([rtab.c.id, rtab.c.name, rtab.c.value]).\
+                where(rtab.c.name.in_(self.repository_attrs))
+        if project_id is not None:
+            q = q.where(rpid.c.value==str(project_id))
+        elif syllabus_id is not None:
+            q = q.where(pinfo.c.syllabus_id==syllabus_id)
+
+        res = conn.execute(q)
         repos = {}
-        for id, name, value in cursor:
+        for id_, name, value in res:
             if value is not None:
-                repos.setdefault(id, {})[name] = value
+                repos.setdefault(id_, {})[name] = value
         reponames = {}
-        for id, info in repos.iteritems():
+        for id_, info in repos.iteritems():
             if 'name' in info and ('dir' in info or 'alias' in info):
-                info['id'] = id
+                info['id'] = id_
                 reponames[info['name']] = info
         return reponames.iteritems()
 
@@ -276,7 +296,7 @@ class DbRepositoryProvider(Component):
 class RepositoryManager(Component):
     """Version control system manager."""
 
-    implements(IRequestFilter, IResourceManager, IRepositoryProvider)
+    implements(IRequestFilter, IResourceManager)
 
     connectors = ExtensionPoint(IRepositoryConnector)
     providers = ExtensionPoint(IRepositoryProvider)
@@ -315,6 +335,10 @@ class RepositoryManager(Component):
         self._cache = {}
         self._lock = threading.Lock()
         self._connectors = None
+        self._all_repo_cache = {
+            'project': {},
+            'syllabus': {}
+        }
         self._all_repositories = None
 
     # IRequestFilter methods
@@ -392,13 +416,13 @@ class RepositoryManager(Component):
     def get_resource_url(self, resource, href, **kwargs):
         if resource.realm == 'changeset':
             parent = resource.parent
-            return href.changeset(resource.id, parent and parent.id or None)
+            return href.changeset(resource.id, parent and parent.id or None, **kwargs)
         elif resource.realm == 'source':
             parent = resource.parent
             return href.browser(parent and parent.id or None, resource.id,
-                                rev=resource.version or None)
+                                rev=resource.version or None, **kwargs)
         elif resource.realm == 'repository':
-            return href.browser(resource.id or None)
+            return href.browser(resource.id or None, **kwargs)
 
     def resource_exists(self, resource):
         if resource.realm == 'repository':
@@ -460,8 +484,9 @@ class RepositoryManager(Component):
         if realm == 'repository':
             return 'id'
 
-    # IRepositoryProvider methods
+    # DISABLED IRepositoryProvider methods
 
+    # not used
     def get_repositories(self):
         """Retrieve repositories specified in TracIni.
         
@@ -578,7 +603,7 @@ class RepositoryManager(Component):
         finally:
             self._lock.release()
 
-    def get_repository_by_path(self, path):
+    def get_repository_by_path(self, path, project_id=None, syllabus_id=None):
         """Retrieve a matching Repository for the given path.
         
         :param path: the eventually scoped repository-scoped path
@@ -588,7 +613,7 @@ class RepositoryManager(Component):
         """
         matches = []
         path = path and path.strip('/') + '/' or '/'
-        for reponame in self.get_all_repositories().keys():
+        for reponame in self.get_all_repositories(project_id=project_id, syllabus_id=syllabus_id).keys():
             stripped_reponame = reponame.strip('/') + '/'
             if path.startswith(stripped_reponame):
                 matches.append((len(stripped_reponame), reponame))
@@ -612,12 +637,12 @@ class RepositoryManager(Component):
                 return context.resource.parent.id
             context = context.parent
 
-    def get_all_repositories(self):
+    def get_all_repositories(self, project_id=None, syllabus_id=None):
         """Return a dictionary of repository information, indexed by name."""
-        if not self._all_repositories:
+        if not self._get_all_repo_cache(project_id, syllabus_id):
             all_repositories = {}
             for provider in self.providers:
-                for reponame, info in provider.get_repositories() or []:
+                for reponame, info in provider.get_repositories(project_id, syllabus_id) or []:
                     if reponame in all_repositories:
                         self.log.warn("Discarding duplicate repository '%s'",
                                       reponame)
@@ -626,13 +651,13 @@ class RepositoryManager(Component):
                         if 'id' not in info:
                             info['id'] = self.get_repository_id(reponame)
                         all_repositories[reponame] = info
-            self._all_repositories = all_repositories
-        return self._all_repositories
+            self._set_all_repo_cache(all_repositories, project_id, syllabus_id)
+        return self._get_all_repo_cache(project_id, syllabus_id)
     
-    def get_real_repositories(self):
+    def get_real_repositories(self, project_id=None, syllabus_id=None):
         """Return a set of all real repositories (i.e. excluding aliases)."""
         repositories = set()
-        for reponame in self.get_all_repositories():
+        for reponame in self.get_all_repositories(project_id, syllabus_id):
             try:
                 repos = self.get_repository(reponame)
                 if repos is not None:
@@ -647,6 +672,7 @@ class RepositoryManager(Component):
         try:
             # FIXME: trac-admin doesn't reload the environment
             self._cache = {}
+            self._all_repo_cache = {'project':{}, 'syllabus': {}}
             self._all_repositories = None
         finally:
             self._lock.release()
@@ -667,6 +693,7 @@ class RepositoryManager(Component):
         repositories = []
         if repos:
             base = repos.get_base()
+            pid = repos.pid
         else:
             dir = os.path.abspath(reponame)
             repositories = self.get_repositories_by_dir(dir)
@@ -674,8 +701,9 @@ class RepositoryManager(Component):
                 base = None
             else:
                 base = reponame
+            pid = None
         if base:
-            repositories = [r for r in self.get_real_repositories()
+            repositories = [r for r in self.get_real_repositories(project_id=pid)
                             if r.get_base() == base]
         if not repositories:
             self.log.warn("Found no repositories matching '%s' base.",
@@ -708,6 +736,22 @@ class RepositoryManager(Component):
                 self._lock.release()
         
     # private methods
+
+    def _get_all_repo_cache(self, project_id=None, syllabus_id=None):
+        if project_id is not None:
+            return self._all_repo_cache['project'].get(project_id)
+        elif syllabus_id is not None:
+            return self._all_repo_cache['syllabus'].get(syllabus_id)
+        else:
+            return self._all_repositories
+
+    def _set_all_repo_cache(self, all_repositories, project_id=None, syllabus_id=None):
+        if project_id is not None:
+            self._all_repo_cache['project'][project_id] = all_repositories
+        elif syllabus_id is not None:
+            self._all_repo_cache['syllabus'][syllabus_id] = all_repositories
+        else:
+            self._all_repositories = all_repositories
 
     def _get_connector(self, rtype):
         """Retrieve the appropriate connector for the given repository type.
@@ -780,8 +824,9 @@ class Repository(object):
         self.params = params
         self.reponame = params['name']
         self.id = params['id']
+        self.pid = params['project_id']
         self.log = log
-        self.resource = Resource('repository', self.reponame)
+        self.resource = Resource('repository', self.reponame, pid=self.pid)
 
     def close(self):
         """Close the connection to the repository."""
