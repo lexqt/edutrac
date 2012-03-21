@@ -135,6 +135,7 @@ facilities.
         trac.user.admin = trac.user.admin
         trac.user.api = trac.user.api
         trac.user.env = trac.user.env
+        trac.user.sys = trac.user.sys
         trac.search = trac.search.web_ui
         trac.ticket.admin = trac.ticket.admin
         trac.ticket.query = trac.ticket.query

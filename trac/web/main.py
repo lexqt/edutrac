@@ -54,6 +54,8 @@ from trac.web.href import Href
 from trac.web.session import Session
 
 from trac.project.sys import ProjectSystem
+from trac.user.sys import UserSystem
+
 
 default_tracker = 'http://trac.edgewall.org'
 """This URL is used for semi-automatic bug reports (see
@@ -181,6 +183,7 @@ class RequestDispatcher(Component):
         self.log.debug('Dispatching %r', req)
         chrome = Chrome(self.env)
         ps = ProjectSystem(self.env)
+        us = UserSystem(self.env)
 
         # Setup request callbacks for lazily-evaluated properties
         req.callbacks.update({
@@ -201,7 +204,9 @@ class RequestDispatcher(Component):
                 # Select the component that should handle the request
                 chosen_handler = None
                 try:
+                    # TODO: interface for request init?
                     ps.init_request(req)
+                    us.init_request(req)
                     for handler in self.handlers:
                         try:
                             if handler.match_request(req):

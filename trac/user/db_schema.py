@@ -123,7 +123,10 @@ END;
 $$ LANGUAGE plpgsql;
 ''',
 '''
-
+CREATE OR REPLACE VIEW user_info AS
+SELECT u.id id, u.username username, un.value fullname
+FROM users u LEFT OUTER JOIN session_attribute un
+ON un.name='name' AND u.username=un.sid
 ''',
 '''
 

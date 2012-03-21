@@ -738,6 +738,9 @@ class Chrome(Component):
         def get_abs_url(resource, **kwargs):
             return get_resource_url(self.env, resource, abs_href, **kwargs)
 
+        from trac.user.api import UserManagement
+        user_management = UserManagement(self.env)
+
         d.update({
             'context': req and Context.from_request(req) or None,
             'Resource': Resource,
@@ -751,6 +754,7 @@ class Chrome(Component):
             'href': href,
             'perm': req and req.perm,
             'authname': req and req.authname or '<trac>',
+            'user_fullname': partial(user_management.get_user_fullname, req=req),
             'locale': req and req.locale,
             'show_email_addresses': show_email_addresses,
             'show_ip_addresses': self.show_ip_addresses,
