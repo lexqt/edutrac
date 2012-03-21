@@ -1,9 +1,7 @@
-import re
-
 from trac.core import Component, Interface, TracError
 
 from trac.project.model import ProjectNotSet, ResourceProjectMismatch
-from trac.user.api import UserManagement
+from trac.user.api import UserManagement, GroupLevel
 
 from trac.config import ComponentDisabled
 
@@ -12,16 +10,21 @@ class IProjectSwitchListener(Interface):
     some action after project was chosen at logon or switched.
     """
 
-    def project_switched(req, pid, old_pid):
+    def project_switched(self, req, pid, old_pid):
         """Perform some action on project switch.
         
         `old_pid` may be None if project was chosen at logon.
         """
+        raise NotImplementedError
 
 class ProjectManagement(Component):
     """
-    This class implements API to manage projects.
+    This class provides API to manage projects.
     """
+
+    def __init__(self):
+        self._proj_syl_cache = {}
+        self._meta_syl_cache = {}
 
     def get_user_roles(self, username):
         db = self.env.get_read_db()
@@ -93,13 +96,41 @@ class ProjectManagement(Component):
         projects = cursor.fetchall()
         return projects
 
-    def get_current_project(self, req, err_msg=None, fail_on_none=True):
-        pid = req.args.getint('pid')
+    def get_project_users(self, pid, role=UserManagement.USER_ROLE_DEVELOPER):
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+
+        if role == UserManagement.USER_ROLE_DEVELOPER:
+            table = 'developer_projects'
+        elif role == UserManagement.USER_ROLE_MANAGER:
+            table = 'manager_projects'
+        else:
+            return ()
+        q = '''
+            SELECT username
+            FROM {table}
+            WHERE project_id=%s
+        '''.format(table=table)
+
+        cursor.execute(q, (pid,))
+        users = cursor.fetchall()
+        if not users:
+            return ()
+        users = [u[0] for u in users]
+        users.sort()
+        return users
+
+    def get_current_project(self, req, err_msg=None, fail_on_none=True, _return_is_session=False):
+        pid = req.args.getint('__pid__')
+        is_session = False # is pid got from session
 
         if pid is None:
             msg = err_msg or 'Can not get neither request, nor session project variable'
             pid = self.get_session_project(req, err_msg=msg, fail_on_none=fail_on_none)
+            is_session = True
 
+        if _return_is_session:
+            return pid, is_session
         return pid
 
     def get_session_project(self, req, err_msg=None, fail_on_none=True):
@@ -121,18 +152,36 @@ class ProjectManagement(Component):
             raise ResourceProjectMismatch('You have not enough rights in project #%s.' % pid)
         return check
 
-    # optional req argument for per-request cache
-    # TODO: per-env cache?
-    def get_project_syllabus(self, pid, req=None, fail_on_none=True):
+    def get_and_check_current_project(self, req, err_msg_on_get=None, allow_multi=False):
+        pid, is_session = self.get_current_project(req, err_msg=err_msg_on_get, fail_on_none=True, _return_is_session=True)
+        if not is_session:
+            self.check_session_project(req, pid, allow_multi=allow_multi, fail_on_false=True)
+        return pid
+
+    def get_project_syllabus(self, pid, fail_on_none=True):
         pid = int(pid)
-        if req is None or pid not in req._proj_syl_cache:
-            s = self._get_syllabus(pid)
-            if req is None:
-                return s
-            req._proj_syl_cache[pid] = s
-        if fail_on_none and req._proj_syl_cache[pid] is None:
+        if pid not in self._proj_syl_cache:
+            s = self._get_syllabus(pid=pid)
+            self._proj_syl_cache[pid] = s
+        if fail_on_none and self._proj_syl_cache[pid] is None:
             raise TracError('Project #%s is not associated with any syllabus' % pid)
-        return req._proj_syl_cache[pid]
+        return self._proj_syl_cache[pid]
+
+    def get_group_syllabus(self, gid, fail_on_none=True):
+        meta_gid = UserManagement(self.env).get_parent_group(
+                            gid, group_lvl=GroupLevel.STUDGROUP, parent_lvl=GroupLevel.METAGROUP)
+        if fail_on_none and meta_gid is None:
+            raise TracError('Group #%s is not associated with any metagroup' % gid)
+        return self.get_metagroup_syllabus(meta_gid, fail_on_none)
+
+    def get_metagroup_syllabus(self, gid, fail_on_none=True):
+        gid = int(gid)
+        if gid not in self._meta_syl_cache:
+            s = self._get_syllabus(metagroup_id=gid)
+            self._meta_syl_cache[gid] = s
+        if fail_on_none and self._meta_syl_cache[gid] is None:
+            raise TracError('Metagroup #%s is not associated with any syllabus' % gid)
+        return self._meta_syl_cache[gid]
 
     def get_project_info(self, pid, fail_on_none=True):
         """Returns dict (active, team_id, studgroup_id, metagroup_id, syllabus_id)
@@ -171,15 +220,24 @@ class ProjectManagement(Component):
 
     # Internal methods
 
-    def _get_syllabus(self, pid):
+    def _get_syllabus(self, pid=None, metagroup_id=None):
+        if pid is not None:
+            query = '''
+                SELECT syllabus_id
+                FROM project_info
+                WHERE project_id=%s
+            '''
+            id_ = pid
+        elif metagroup_id is not None:
+            query = '''
+                SELECT syllabus_id
+                FROM metagroup_syllabus_rel
+                WHERE metagroup_id=%s
+            '''
+            id_ = metagroup_id
         db = self.env.get_read_db()
         cursor = db.cursor()
-        query = '''
-            SELECT syllabus_id
-            FROM project_info
-            WHERE project_id=%s
-        '''
-        cursor.execute(query, (pid,))
+        cursor.execute(query, (id_,))
         row = cursor.fetchone()
         return row and row[0]
 

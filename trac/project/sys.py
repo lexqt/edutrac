@@ -33,13 +33,21 @@ class ProjectSystem(Component):
 
     def init_request(self, req):
         self.extract_project_id(req)
-        req._proj_syl_cache = {} # project_id: syllabus_id
 
     def extract_project_id(self, req):
-        match = re.match(r'(.*)/project/(\d+)/?(.*)$', req.path_info)
+        '''Extracts project ID from URL.
+        To form such URL you need place '/project/<id>' in the beginning of URL.
+        '''
+        match = re.match(r'/project/(\d+)/?(.*)$', req.path_info)
         if match:
-            req.args['pid'] = int(match.group(2))
-            req.environ['PATH_INFO'] = str(match.group(1) + '/' + match.group(3)).rstrip('/')
+#            pre  = match.group(1)
+            post = match.group(2)
+            pid  = match.group(1)
+#            if pre and post:
+#                # 'project' in the middle
+#                return False
+            req.args['__pid__'] = int(pid)
+            req.environ['PATH_INFO'] = str('/' + post).rstrip('/')
             return True
         return False
 
