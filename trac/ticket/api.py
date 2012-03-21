@@ -55,10 +55,10 @@ class ITicketActionController(Interface):
 
         When in doubt, use a weight of 0."""
 
-    def get_all_status(pid):
+    def get_all_status(syllabus_id):
         """Returns an iterable of all the possible values for the ''status''
         field this action controller knows about.
-        ''pid'' indicates project id.
+        ''syllabus_id'' indicates syllabus id.
 
         This will be used to populate the query options and the like.
         It is assumed that the initial status of a ticket is 'new' and
@@ -162,24 +162,42 @@ class IMilestoneChangeListener(Interface):
 class TicketFieldsStore(object):
     """Project dependent store for ticket fields"""
 
-    _instances = {}
-    def __new__(cls, env, pid, *args, **kwargs):
-        assert pid is not None, '#PFNA'
-        pid = int(pid)
-        if pid not in cls._instances:
-            cls._instances[pid] = super(TicketFieldsStore, cls).__new__(cls, env, pid, *args, **kwargs)
-        return cls._instances[pid]
+    _proj_instances = {}
+    _syll_instances = {}
+    def __new__(cls, env, pid=None, syllabus_id=None, *args, **kwargs):
+        if pid is not None:
+            id_ = int(pid)
+            kwargs['pid'] = id_
+            stor = cls._proj_instances
+        elif syllabus_id is not None:
+            id_ = int(syllabus_id)
+            kwargs['syllabus_id'] = id_
+            stor = cls._syll_instances
+        else:
+            raise NotImplementedError('Global ticket fields store is not implemented.')
+        if id_ not in stor:
+            stor[id_] = super(TicketFieldsStore, cls).__new__(cls, env, *args, **kwargs)
+        return stor[id_]
 
     #TODO: change init arguments?
-    def __init__(self, env, pid, ticket_system=None):
+    def __init__(self, env, pid=None, syllabus_id=None, ticket_system=None):
         self.env = env
-        self.pid = pid
-        from trac.project.api import ProjectManagement
-        self.syllabus_id = ProjectManagement(self.env).get_project_syllabus(pid)
+        if pid is not None:
+            id_ = pid
+            self.pid = pid
+            from trac.project.api import ProjectManagement
+            self.syllabus_id = ProjectManagement(self.env).get_project_syllabus(pid)
+            fields_cache_level = 'pid'
+        elif syllabus_id is not None:
+            id_ = syllabus_id
+            self.pid = None
+            self.syllabus_id = syllabus_id
+            fields_cache_level = 'sid'
+        self.id_ = id_
         modname = TicketFieldsStore.__module__
         clsname = TicketFieldsStore.__name__
-        self._cache_fields        = '%s.%s.fields:pid.%s'        % (modname, clsname, self.pid)
-        self._cache_custom_fields = '%s.%s.custom_fields:pid.%s' % (modname, clsname, self.pid)
+        self._cache_fields        = '%s.%s.fields:%s.%s'         % (modname, clsname, fields_cache_level, self.id_)
+        self._cache_custom_fields = '%s.%s.custom_fields:sid.%s' % (modname, clsname, self.syllabus_id)
         if ticket_system is None:
             ticket_system = TicketSystem(self.env)
         self.ts = ticket_system
@@ -189,23 +207,12 @@ class TicketFieldsStore(object):
         """Return the list of fields available for tickets."""
         from trac.ticket import model
 
-#        cursor = db.cursor()
-#        cursor.execute("""
-#            SELECT name FROM projects WHERE id=%s
-#            """, (self.pid,))
-#        project_name = cursor.fetchone()[0]
-
         fields = []
 
         # Basic text fields
         fields.append({'name': 'project_id', 'type': 'id',
                        'label': N_('Project ID'),
-                       'notnull': True,
-                       'value': self.pid, 'skip': True})
-#        fields.append({'name': 'project_name', 'type': 'text',
-#                       'label': N_('Project name'),
-#                       'value': project_name, 'skip': True,
-#                       'virtual': True})
+                       'notnull': True, 'skip': True})
         fields.append({'name': 'summary', 'type': 'text',
                        'label': N_('Summary')})
         fields.append({'name': 'reporter', 'type': 'text',
@@ -213,43 +220,39 @@ class TicketFieldsStore(object):
 
         # Owner field, by default text but can be changed dynamically 
         # into a drop-down depending on configuration (restrict_owner=true)
-        field = {'name': 'owner', 'label': N_('Owner')}
-        field['type'] = 'text'
-        fields.append(field)
+        fields.append({'name': 'owner', 'type': 'text',
+                       'label': N_('Owner')})
 
         # Description
         fields.append({'name': 'description', 'type': 'textarea',
                        'label': N_('Description')})
 
         # Default select and radio fields
-        selects = [('type', N_('Type'), model.Type),
+        selects = [
                    ('status', N_('Status'), model.Status),
+                   ('resolution', N_('Resolution'), model.Resolution),
+                   ('type', N_('Type'), model.Type),
                    ('priority', N_('Priority'), model.Priority),
+                   ('severity', N_('Severity'), model.Severity),
+                   ]
+        id_kwargs = {}
+        if self.pid is not None:
+            selects.extend([
                    ('milestone', N_('Milestone'), model.Milestone),
                    ('component', N_('Component'), model.Component),
                    ('version', N_('Version'), model.Version),
-                   ('severity', N_('Severity'), model.Severity),
-                   ('resolution', N_('Resolution'), model.Resolution)]
-        for name, label, cls in selects:
-            options = [val.name for val in cls.select(self.env, pid=self.pid, db=db)]
-            if not options:
-                # Fields without possible values are treated as if they didn't
-                # exist
-                continue
-            field = {'name': name, 'type': 'select', 'label': label,
-                     'value': getattr(self.ts, 'default_' + name, ''),
-                     'options': options, 'pid': self.pid}
-            if name in ('status', 'resolution'):
-                field['type'] = 'radio'
-                field['optional'] = True
-            elif name in ('milestone', 'version'):
-                field['optional'] = True
-            fields.append(field)
+                ])
+            id_kwargs['pid'] = self.pid
+        else:
+            id_kwargs['syllabus_id'] = self.syllabus_id
+
+        fields.extend(self._prepare_selects_fields(selects, id_kwargs))
 
         # Advanced text fields
         fields.append({'name': 'keywords', 'type': 'text',
                        'label': N_('Keywords')})
-        fields.append({'name': 'cc', 'type': 'text', 'label': N_('Cc')})
+        fields.append({'name': 'cc', 'type': 'text',
+                       'label': N_('Cc')})
 
         # Date/time fields
         fields.append({'name': 'time', 'type': 'time',
@@ -257,21 +260,7 @@ class TicketFieldsStore(object):
         fields.append({'name': 'changetime', 'type': 'time',
                        'label': N_('Modified')})
 
-        for field in self.ts.get_custom_fields(self.pid):
-            if field['name'] in [f['name'] for f in fields]:
-                self.env.log.warning('Duplicate field name "%s" (ignoring)',
-                                 field['name'])
-                continue
-            if field['name'] in self.ts.reserved_field_names:
-                self.env.log.warning('Field name "%s" is a reserved name '
-                                 '(ignoring)', field['name'])
-                continue
-            if not re.match('^[a-zA-Z][a-zA-Z0-9_]+$', field['name']):
-                self.env.log.warning('Invalid name for custom field: "%s" '
-                                 '(ignoring)', field['name'])
-                continue
-            field['custom'] = True
-            fields.append(field)
+        fields.extend(self._prepare_custom_fields())
 
         from collections import OrderedDict
         fields_dict = OrderedDict()
@@ -282,7 +271,8 @@ class TicketFieldsStore(object):
 
     @cached('_cache_custom_fields')
     def custom_fields(self, db):
-        """Return the list of custom ticket fields available for tickets."""
+        """Return the list of custom ticket fields available for tickets.
+        Custom fields entirely defined on syllabus level."""
         fields = []
         config = self.ts.configs.syllabus(self.syllabus_id)['ticket-custom']
         for name in [option for option, value in config.options()
@@ -310,6 +300,45 @@ class TicketFieldsStore(object):
         fields.sort(lambda x, y: cmp((x['order'], x['name']),
                                      (y['order'], y['name'])))
         return fields
+
+    def _prepare_selects_fields(self, selects, id_kwargs):
+        fields = []
+        for name, label, cls in selects:
+            options = [val.name for val in cls.select(self.env, **id_kwargs)]
+            if not options:
+                # Fields without possible values are treated as if they didn't
+                # exist
+                continue
+            field = {'name': name, 'type': 'select', 'label': label,
+                     'value': getattr(self.ts, 'default_' + name, ''),
+                     'options': options, 'model_class': cls}
+            if name in ('status', 'resolution'):
+                field['type'] = 'radio'
+                field['optional'] = True
+            elif name in ('milestone', 'version'):
+                field['optional'] = True
+            fields.append(field)
+        return fields
+
+    def _prepare_custom_fields(self):
+        fields = []
+        for field in self.custom_fields:
+            if field['name'] in [f['name'] for f in fields]:
+                self.env.log.warning('Duplicate field name "%s" (ignoring)',
+                                 field['name'])
+                continue
+            if field['name'] in self.ts.reserved_field_names:
+                self.env.log.warning('Field name "%s" is a reserved name '
+                                 '(ignoring)', field['name'])
+                continue
+            if not re.match('^[a-zA-Z][a-zA-Z0-9_]+$', field['name']):
+                self.env.log.warning('Invalid name for custom field: "%s" '
+                                 '(ignoring)', field['name'])
+                continue
+            field['custom'] = True
+            fields.append(field)
+        return fields
+
 
 
 class TicketSystem(Component):
@@ -384,19 +413,20 @@ class TicketSystem(Component):
         """Returns a sorted list of available actions"""
         return self.workflow.get_available_actions(req, ticket)
 
-    def get_all_status(self, pid):
+    def get_all_status(self, pid=None, syllabus_id=None):
         """Returns a sorted list of all the states all of the action
         controllers know about."""
-        return self.workflow.get_available_statuses(pid)
+        return self.workflow.get_available_statuses(pid=pid, syllabus_id=syllabus_id)
 
-    def get_ticket_field_labels(self, pid):
+    def get_ticket_field_labels(self, pid=None, syllabus_id=None):
         """Produce a (name,label) mapping from `get_ticket_fields`."""
         labels = dict((n, f['label'])
-                      for n, f in TicketSystem(self.env).get_ticket_fields(pid).iteritems())
+                      for n, f in TicketSystem(self.env).get_ticket_fields(
+                                pid=pid, syllabus_id=syllabus_id).iteritems())
         labels['attachment'] = _("Attachment")
         return labels
 
-    def get_ticket_fields(self, pid):
+    def get_ticket_fields(self, pid=None, syllabus_id=None):
         """Returns list of fields available for tickets.
 
         Each field is a dict with at least the 'name', 'label' (localized)
@@ -404,24 +434,24 @@ class TicketSystem(Component):
         It may in addition contain the 'custom' key, the 'optional' and the
         'options' keys. When present 'custom' and 'optional' are always `True`.
         """
-        stor = TicketFieldsStore(self.env, pid)
+        stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id)
         fields = copy.deepcopy(stor.fields)
         label = 'label' # workaround gettext extraction bug
         for n, f in fields.iteritems():
             f[label] = gettext(f[label])
         return fields
 
-    def reset_ticket_fields(self, pid):
+    def reset_ticket_fields(self, pid=None, syllabus_id=None):
         """Invalidate ticket field cache."""
-        stor = TicketFieldsStore(self.env, pid)
+        stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id)
         del stor.fields
 
     reserved_field_names = ['report', 'order', 'desc', 'group', 'groupdesc',
                             'col', 'row', 'format', 'max', 'page', 'verbose',
                             'comment', 'or']
 
-    def get_custom_fields(self, pid):
-        stor = TicketFieldsStore(self.env, pid)
+    def get_custom_fields(self, pid=None, syllabus_id=None):
+        stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id)
         return copy.deepcopy(stor.custom_fields)
 
     def get_field_synonyms(self):

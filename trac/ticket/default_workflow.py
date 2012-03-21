@@ -187,7 +187,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                     allowed_actions.append((action_info['default'],
                                             action_name))
         if not (status in ['new', 'closed'] or \
-                    status in TicketSystem(self.env).get_all_status(ticket.pid)) \
+                    status in self.get_available_statuses(ticket.pid)) \
                 and 'TICKET_ADMIN' in ticket_perm:
             # State no longer exists - add a 'reset' action if admin.
             allowed_actions.append((0, '_reset'))
@@ -202,12 +202,12 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                 return False
         return True
 
-    def get_all_status(self, pid):
+    def get_all_status(self, syllabus_id):
         """Return a list of all states described by the configuration.
 
         """
         all_status = set()
-        for action_name, action_info in self.get_actions(pid=pid).items():
+        for action_name, action_info in self.get_actions(syllabus_id=syllabus_id).items():
             all_status.update(action_info['oldstates'])
             all_status.add(action_info['newstate'])
         all_status.discard('*')
@@ -453,18 +453,24 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                                 actions.items()]
         return [x[1] for x in sorted(all_weighted_actions, reverse=True)]
 
-    def get_available_statuses(self, pid):
+    def get_available_statuses(self, pid=None, syllabus_id=None):
         """Returns a sorted list of all the states all of the action
         controllers know about."""
         valid_states = set()
-        sid = self.pm.get_project_syllabus(pid)
+        if syllabus_id is not None:
+            sid = int(syllabus_id)
+        elif pid is not None:
+            sid = self.pm.get_project_syllabus(pid)
+        else:
+            raise NotImplementedError('Global ticket statuses are not implemented.')
         for controller in self.action_controllers(sid):
-            valid_states.update(controller.get_all_status(pid=pid) or [])
+            valid_states.update(controller.get_all_status(syllabus_id=sid) or [])
         return sorted(valid_states)
 
-    def get_actions(self, pid=None, sid=None, ticket=None, req=None):
-        # only one of pid, sid or ticket is required
+    def get_actions(self, pid=None, syllabus_id=None, ticket=None, req=None):
+        # only one of pid, syllabus_id or ticket is required
         # req is optional for cache
+        sid = syllabus_id
         if ticket is not None:
             pid = ticket.pid
         if pid is not None:

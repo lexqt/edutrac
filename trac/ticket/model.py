@@ -48,7 +48,7 @@ def _fixup_cc_list(cc_value):
 class Ticket(object):
 
     # Fields that must not be modified directly by the user
-    protected_fields = ('resolution', 'status', 'time', 'changetime', 'project_id')
+    protected_fields = ('resolution', 'status', 'time', 'changetime', 'project_id', 'reporter')
 
     @staticmethod
     def id_is_valid(num):
@@ -727,6 +727,7 @@ class AbstractEnum(object):
             self.value = self._old_value = None
             self.name = self._old_name = None
             self.pid = None
+        self.syllabus_id = None
 
     exists = property(lambda self: self._old_value is not None)
 
@@ -813,34 +814,58 @@ class AbstractEnum(object):
         self._old_value = self.value
 
     @classmethod
-    def select(cls, env, db=None, pid=None):
+    def select(cls, env, db=None, pid=None, syllabus_id=None):
         if not db:
             db = env.get_read_db()
-        cursor = db.cursor()
-        cursor.execute("""
-            SELECT name,value FROM enum WHERE project_id=%s AND type=%s 
+        id_, table, column = cls._prepare_syll_proj_values(pid, syllabus_id)
+        query = """
+            SELECT name,value FROM {table} WHERE {column}=%s AND type=%s 
             ORDER BY
-            """ + db.cast('value', 'int'), (pid, cls.type))
+            """ + db.cast('value', 'int')
+        query = query.format(table=table, column=column)
+        cursor = db.cursor()
+        cursor.execute(query, (id_, cls.type))
         for name, value in cursor:
             obj = cls(env)
             obj.pid = pid
+            obj.syllabus_id = syllabus_id
             obj.name = obj._old_name = name
             obj.value = obj._old_value = value
             yield obj
 
     @classmethod
-    def get_min_max(cls, env, db=None, pid=None):
+    def get_min_max(cls, env, db=None, pid=None, syllabus_id=None):
+        id_, table, column = cls._prepare_syll_proj_values(pid, syllabus_id)
+        query = """
+            SELECT MIN(int_val) min_value, MAX(int_val) max_value
+            FROM (SELECT CAST(value AS int) int_val
+            FROM {table}
+            WHERE {column}=%s AND type=%s) AS vals
+            """
+        query = query.format(table=table, column=column)
         if not db:
             db = env.get_read_db()
         cursor = db.cursor()
-        cursor.execute("""
-            SELECT MIN(int_val) min_value, MAX(int_val) max_value
-            FROM (SELECT CAST(value AS int) int_val
-            FROM enum
-            WHERE project_id=%s AND type=%s) AS vals
-            """, (pid, cls.type))
+        cursor.execute(query, (pid, cls.type))
         row = cursor.fetchone()
         return row
+
+    @classmethod
+    def _prepare_syll_proj_values(cls, pid=None, syllabus_id=None):
+        if pid is not None:
+            id_ = pid
+#            attr_name = 'pid'
+            table = 'enum'
+            column = 'project_id'
+        elif syllabus_id is not None:
+            id_ = syllabus_id
+#            attr_name = 'syllabus_id'
+            table = 'enum_syllabus'
+            column = 'syllabus_id'
+        else:
+            raise NotImplementedError('Global enum values are not implemented')
+        return id_, table, column
+
 
 
 class Type(AbstractEnum):
@@ -849,16 +874,18 @@ class Type(AbstractEnum):
 
 
 class Status(object):
-    def __init__(self, env, pid=None):
+    def __init__(self, env, pid=None, syllabus_id=None):
         self.env = env
         self.pid = pid
+        self.syllabus_id = syllabus_id
 
     @classmethod
-    def select(cls, env, db=None, pid=None):
-        for state in TicketSystem(env).get_all_status(pid=pid):
+    def select(cls, env, db=None, pid=None, syllabus_id=None):
+        for state in TicketSystem(env).get_all_status(pid=pid, syllabus_id=syllabus_id):
             status = cls(env)
             status.name = state
             status.pid = pid
+            status.syllabus_id = syllabus_id
             yield status
 
 

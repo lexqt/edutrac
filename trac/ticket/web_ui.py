@@ -394,8 +394,9 @@ class TicketModule(Component):
 
         self._populate(req, ticket, plain_fields)
         ticket.values['status'] = 'new'     # Force initial status
-        reporter_id = req.args.get(field_reporter) or \
-                      get_reporter_id(req, 'author')
+#        reporter_id = req.args.get(field_reporter) or \
+#                      get_reporter_id(req, 'author')
+        reporter_id = req.authname
         ticket.values['reporter'] = reporter_id
 
         valid = None
