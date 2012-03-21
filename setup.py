@@ -123,6 +123,11 @@ facilities.
         trac.db.mysql = trac.db.mysql_backend
         trac.db.postgres = trac.db.postgres_backend
         trac.db.sqlite = trac.db.sqlite_backend
+        trac.evaluation.admin = trac.evaluation.admin
+        trac.evaluation.api = trac.evaluation.api
+        trac.evaluation.components = trac.evaluation.components
+        trac.evaluation.milestone = trac.evaluation.milestone
+        trac.evaluation.web_ui = trac.evaluation.web_ui
         trac.mimeview.patch = trac.mimeview.patch
         trac.mimeview.pygments = trac.mimeview.pygments[Pygments]
         trac.mimeview.rst = trac.mimeview.rst[reST]

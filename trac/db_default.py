@@ -271,6 +271,30 @@ schema = [
         ForeignKey('author', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
+
+    # Evaluation system
+    Table('ticket_evaluation', key=('ticket_id',))[
+        Column('ticket_id', type='int', null=False),
+        Column('value', type='int', null=False, default='0'),
+        ForeignKey('ticket_id', 'ticket', 'id', on_delete='CASCADE')],
+    Table('team_milestone_evaluation', key=('username', 'project_id', 'milestone'))[
+        Column('username', type='varchar(255)'),
+        Column('project_id', type='int'),
+        Column('milestone', type='varchar(255)'),
+        Column('complete', type='bool', default='TRUE', null=False),
+        Column('completed_on', type='timestamp', default='CURRENT_TIMESTAMP', null=False),
+        ForeignKey('username', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+        ForeignKey(('milestone', 'project_id'), 'milestone', ('name', 'project_id'), on_delete='CASCADE', on_update='CASCADE'),],
+    Table('team_milestone_evaluation_results', key=('author', 'target', 'project_id', 'milestone'))[
+        Column('author', type='varchar(255)'),
+        Column('target', type='varchar(255)'),
+        Column('project_id', type='int'),
+        Column('milestone', type='varchar(255)'),
+        Column('value', type='int', null=False, default='0'),
+        Column('comment', type='text', default="''", null=False),
+        ForeignKey('author', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+        ForeignKey('target', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+        ForeignKey(('milestone', 'project_id'), 'milestone', ('name', 'project_id'), on_delete='CASCADE', on_update='CASCADE'),],
 ]
 
 

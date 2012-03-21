@@ -1,0 +1,96 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      py:with="
+        errors = value_of('errors', None);
+      ">
+  <xi:include href="layout.html" />
+  <head>
+    <title>Оценивание деятельности команды</title>
+  </head>
+
+  <body>
+    <div id="content">
+      <h1>Оценивание деятельности команды за этап разработки</h1>
+
+      <p py:if="not is_new">
+        Заполнено: ${format_datetime(completed_on)}
+      </p>
+
+      <py:choose test="edit">
+        <py:when test="True">
+          <div py:if="errors">
+            <p>Ошибки:</p>
+            <ul>
+              <li py:for="err in errors">$err</li>
+            </ul>
+          </div>
+          <p>
+            В соответствии с объемом и качеством выполненной каждым членом команды работы,
+            распределите сумму, равную <strong>$sum</strong>, между ними.
+            Обоснуйте свое решение в поле "Комментарий".
+          </p>
+          <form method="post">
+            <input type="hidden" name="action" value="teameval" />
+            <table class="wiki">
+              <thead>
+                <tr>
+                  <th>Член команды</th>
+                  <th>Заработанный балл</th>
+                  <th>Комментарий</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr py:for="idx, target in enumerate(targets)">
+                  <td>
+                    <input name="devs-${idx}.target" type="hidden" value="$target" />
+                    <strong>${user_fullname(target)}</strong>
+                  </td>
+                  <td>
+                    <input name="devs-${idx}.value" type="text" value="${req.args.get('devs-%i.value'%idx) or 0}" size="3" />
+                  </td>
+                  <td>
+                    <textarea name="devs-${idx}.comment" rows="2" cols="40" class="trac-resizable">${req.args.get('devs-%i.comment'%idx) or ''}</textarea>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="buttons">
+              <input type="submit" value="Сохранить" />
+            </div>
+          </form>
+        </py:when>
+        <py:otherwise>
+          <table class="wiki">
+            <thead>
+              <tr>
+                <th>Член команды</th>
+                <th>Заработанный балл</th>
+                <th>Комментарий</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr py:for="row in devs">
+                <td>${user_fullname(row['target'])}</td>
+                <td>${row['value']}</td>
+                <td>${row['comment']}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="buttons">
+            <form method="get" action="" id="editeval">
+              <div>
+                <input type="hidden" name="action" value="teameval" />
+                <input type="hidden" name="subaction" value="edit" />
+                <input type="submit" value="${_('Edit')}" />
+              </div>
+            </form>
+          </div>
+        </py:otherwise>
+      </py:choose>
+    </div>
+  </body>
+</html>

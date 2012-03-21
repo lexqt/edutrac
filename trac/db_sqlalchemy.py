@@ -97,6 +97,29 @@ ticket_change = Table('ticket_change', metadata,
     Column('newvalue', Text),
 )
 
+ticket_evaluation = Table('ticket_evaluation', metadata,
+    Column('ticket_id', Integer, ForeignKey('ticket.id', ondelete='CASCADE'), primary_key=True),
+    Column('value', Integer, nullable=False, server_default='0'),
+)
+
+team_milestone_evaluation = Table('team_milestone_evaluation', metadata,
+    Column('username', String(255), ForeignKey('users.username', ondelete='CASCADE', onupdate='CASCADE'), primary_key=True),
+    Column('project_id', Integer, primary_key=True),
+    Column('milestone', String(255), primary_key=True),
+    Column('complete', Boolean, server_default='TRUE', nullable=False),
+    Column('completed_on', UTCDateTime, server_default='CURRENT_TIMESTAMP', nullable=False),
+    ForeignKeyConstraint(['milestone', 'project_id'], ['milestone.name', 'milestone.project_id'], ondelete='CASCADE', onupdate='CASCADE'),
+)
+
+team_milestone_evaluation_results = Table('team_milestone_evaluation_results', metadata,
+    Column('author', String(255), ForeignKey('users.username', ondelete='CASCADE', onupdate='CASCADE'), primary_key=True),
+    Column('target', String(255), ForeignKey('users.username', ondelete='CASCADE', onupdate='CASCADE'), primary_key=True),
+    Column('project_id', Integer, primary_key=True),
+    Column('milestone', String(255), primary_key=True),
+    Column('value', Integer, nullable=False, server_default='0'),
+    Column('comment', Text, server_default='', nullable=False),
+    ForeignKeyConstraint(['milestone', 'project_id'], ['milestone.name', 'milestone.project_id'], ondelete='CASCADE', onupdate='CASCADE'),
+)
 
 # Repository system
 

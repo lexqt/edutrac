@@ -99,6 +99,7 @@
 
       <div py:if="'MILESTONE_MODIFY' in perm(milestone.resource) or
                   'MILESTONE_DELETE' in perm(milestone.resource) or
+                  'EVAL_TEAM_MILESTONE' in perm(milestone.resource) or
                   attachments.can_create"
            class="buttons">
         <form py:if="'MILESTONE_MODIFY' in perm(milestone.resource)" method="get" action="" id="editmilestone">
@@ -114,6 +115,12 @@
           </div>
         </form>
         <xi:include href="attach_file_form.html" py:with="alist = attachments"/>
+        <form py:if="'EVAL_TEAM_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalmilestone">
+          <div>
+            <input type="hidden" name="action" value="teameval" />
+            <input type="submit" value="${_('Evaluate team work')}" />
+          </div>
+        </form>
       </div>
 
       <div id="help" i18n:msg=""><strong>Note:</strong> See

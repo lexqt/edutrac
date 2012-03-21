@@ -629,6 +629,10 @@ class MilestoneModule(Component):
             milestone.name = milestone_id
             action = 'edit' # rather than 'new' so that it works for POST/save
 
+        if action == 'teameval':
+            from trac.evaluation.web_ui import EvaluationStatsModule
+            return EvaluationStatsModule(self.env).team_milestone_eval(req, milestone)
+
         if req.method == 'POST':
             if req.args.has_key('cancel'):
                 if milestone.exists:
