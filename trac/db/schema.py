@@ -70,11 +70,12 @@ class Constraint(object):
 class ForeignKey(Constraint):
     """Declare a foreign key table constraint for a database schema."""
 
-    def __init__(self, columns, ref_table, ref_columns=(), on_delete=None):
+    def __init__(self, columns, ref_table, ref_columns=(), on_delete=None, on_update=None):
         self.columns     = columns
         self.ref_table   = ref_table
         self.ref_columns = ref_columns
         self.on_delete   = on_delete
+        self.on_update   = on_update
         if isinstance(columns, basestring):
             self.columns = [columns]
         if isinstance(ref_columns, basestring):

@@ -61,55 +61,6 @@ schema = [
         Column('id'),
         Column('generation', type='int')],
 
-    # Attachments
-    Table('attachment', key=('type', 'id', 'filename'))[
-        Column('type'),
-        Column('id'),
-        Column('filename'),
-        Column('size', type='int'),
-        Column('time', type='int64'),
-        Column('description'),
-        Column('author'),
-        Column('ipnr')],
-
-    # Wiki system
-    Table('wiki', key=('name', 'version'))[
-        Column('name'),
-        Column('version', type='int'),
-        Column('time', type='int64'),
-        Column('author'),
-        Column('ipnr'),
-        Column('text'),
-        Column('comment'),
-        Column('readonly', type='int'),
-        Column('project_id', type='int', null=True),
-        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
-        Index(['time'])],
-
-    # Version control cache
-    Table('repository', key=('id', 'name'))[
-        Column('id', type='int'),
-        Column('name'),
-        Column('value'),
-        Column('project_id', type='int', null=True),
-        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
-    Table('revision', key=('repos', 'rev'))[
-        Column('repos', type='int'),
-        Column('rev', key_size=20),
-        Column('time', type='int64'),
-        Column('author'),
-        Column('message'),
-        Index(['repos', 'time'])],
-    Table('node_change', key=('repos', 'rev', 'path', 'change_type'))[
-        Column('repos', type='int'),
-        Column('rev', key_size=20),
-        Column('path', key_size=255),
-        Column('node_type', size=1),
-        Column('change_type', size=1, key_size=2),
-        Column('base_path'),
-        Column('base_rev'),
-        Index(['repos', 'rev'])],
-
     # User / group system
     Table('users', key=('id',))[
         Column('id', auto_increment=True),
@@ -131,20 +82,20 @@ schema = [
         Column('active', type='bool', default='TRUE', null=False),
     ],
     Table('team_members', key=('user_id', 'team_id'))[
-        Column('user_id', type='int'),
-        Column('team_id', type='int'),
+        Column('user_id', type='int', null=False),
+        Column('team_id', type='int', null=False),
         ForeignKey('user_id', 'users', 'id', on_delete='CASCADE'),
         ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
     ],
     Table('teamgroup_rel', key=('studgroup_id', 'team_id'))[
-        Column('studgroup_id', type='int'),
-        Column('team_id', type='int'),
+        Column('studgroup_id', type='int', null=False),
+        Column('team_id', type='int', null=False),
         ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
         ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
     ],
     Table('groupmeta_rel', key=('metagroup_id', 'studgroup_id'))[
-        Column('metagroup_id', type='int'),
-        Column('studgroup_id', type='int'),
+        Column('metagroup_id', type='int', null=False),
+        Column('studgroup_id', type='int', null=False),
         ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
         ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
     ],
@@ -160,17 +111,17 @@ schema = [
     Table('projects', key=('id',))[
         Column('id', auto_increment=True),
         Column('name', type='varchar (255)', null=False, unique=True),
-        Column('description', type='text', default=''),
+        Column('description', type='text', default="''"),
     ],
     Table('team_project_rel', key=('team_id',))[
-        Column('team_id', type='int'),
-        Column('project_id', type='int'),
+        Column('team_id', type='int', null=False),
+        Column('project_id', type='int', null=False),
         ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
     ],
     Table('project_managers', key=('user_id', 'project_id'))[
-        Column('user_id', type='int'),
-        Column('project_id', type='int'),
+        Column('user_id', type='int', null=False),
+        Column('project_id', type='int', null=False),
         ForeignKey('user_id', 'users', 'id', on_delete='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
     ],
@@ -179,13 +130,94 @@ schema = [
         Column('name', type='varchar (255)', null=False),
     ],
     Table('metagroup_syllabus_rel', key=('metagroup_id',))[
-        Column('metagroup_id', type='int'),
-        Column('syllabus_id', type='int'),
+        Column('metagroup_id', type='int', null=False),
+        Column('syllabus_id', type='int', null=False),
         ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
         ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
     ],
 
+    # Attachments
+    Table('attachment', key=('type', 'id', 'filename'))[
+        Column('type'),
+        Column('id'),
+        Column('project_id', type='int', null=True),
+        Column('filename'),
+        Column('size', type='int'),
+        Column('time', type='int64'),
+        Column('description'),
+        Column('author'),
+        Column('ipnr'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),],
+
+    # Wiki system
+    Table('wiki', key=('name', 'version'))[
+        Column('name'),
+        Column('version', type='int'),
+        Column('time', type='int64'),
+        Column('author'),
+        Column('ipnr'),
+        Column('text'),
+        Column('comment'),
+        Column('readonly', type='int'),
+        Column('project_id', type='int', null=True),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
+        Index(['time'])],
+
+    # Version control cache
+    Table('repository', key=('id', 'name'))[
+        Column('id', type='int'),
+        Column('name'),
+        Column('value')],
+    Table('revision', key=('repos', 'rev'))[
+        Column('repos', type='int'),
+        Column('rev', key_size=20),
+        Column('time', type='int64'),
+        Column('author'),
+        Column('message'),
+        Index(['repos', 'time'])],
+    Table('node_change', key=('repos', 'rev', 'path', 'change_type'))[
+        Column('repos', type='int'),
+        Column('rev', key_size=20),
+        Column('path', key_size=255),
+        Column('node_type', size=1),
+        Column('change_type', size=1, key_size=2),
+        Column('base_path'),
+        Column('base_rev'),
+        Index(['repos', 'rev'])],
+
     # Ticket system
+    Table('enum', key=('project_id', 'type', 'name'))[
+        Column('project_id', type='int', null=False),
+        Column('type'),
+        Column('name'),
+        Column('value'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
+    Table('enum_syllabus', key=('syllabus_id', 'type', 'name'))[
+        Column('syllabus_id', type='int', null=False),
+        Column('type'),
+        Column('name'),
+        Column('value'),
+        ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE')],
+    Table('component', key=('project_id', 'name'))[
+        Column('project_id', type='int', null=False),
+        Column('name'),
+        Column('owner'),
+        Column('description'),
+        ForeignKey('owner', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
+    Table('milestone', key=('project_id', 'name'))[
+        Column('project_id', type='int', null=False),
+        Column('name'),
+        Column('due', type='int64'),
+        Column('completed', type='int64'),
+        Column('description'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
+    Table('version', key=('project_id', 'name'))[
+        Column('project_id', type='int', null=False),
+        Column('name'),
+        Column('time', type='int64'),
+        Column('description'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
     Table('ticket', key='id')[
         Column('id', auto_increment=True),
         Column('project_id', type='int', null=False),
@@ -205,7 +237,10 @@ schema = [
         Column('summary'),
         Column('description'),
         Column('keywords'),
+        ForeignKey('owner', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+        ForeignKey('reporter', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
+#        ForeignKey(('milestone', 'project_id'), 'milestone', ('name', 'project_id'), on_update='CASCADE'),
         Index(['time']),
         Index(['status'])],    
     Table('ticket_change', key=('ticket', 'time', 'field'))[
@@ -215,43 +250,13 @@ schema = [
         Column('field'),
         Column('oldvalue'),
         Column('newvalue'),
+        ForeignKey('author', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         Index(['ticket']),
         Index(['time'])],
     Table('ticket_custom', key=('ticket', 'name'))[
         Column('ticket', type='int'),
         Column('name'),
         Column('value')],
-    Table('enum', key=('project_id', 'type', 'name'))[
-        Column('project_id', type='int', null=False),
-        Column('type'),
-        Column('name'),
-        Column('value'),
-        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
-    Table('enum_syllabus', key=('syllabus_id', 'type', 'name'))[
-        Column('syllabus_id', type='int', null=False),
-        Column('type'),
-        Column('name'),
-        Column('value'),
-        ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE')],
-    Table('component', key=('project_id', 'name'))[
-        Column('project_id', type='int', null=False),
-        Column('name'),
-        Column('owner'),
-        Column('description'),
-        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
-    Table('milestone', key=('project_id', 'name'))[
-        Column('project_id', type='int', null=False),
-        Column('name'),
-        Column('due', type='int64'),
-        Column('completed', type='int64'),
-        Column('description'),
-        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
-    Table('version', key=('project_id', 'name'))[
-        Column('project_id', type='int', null=False),
-        Column('name'),
-        Column('time', type='int64'),
-        Column('description'),
-        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
 
     # Report system
     Table('report', key='id')[
@@ -262,6 +267,7 @@ schema = [
         Column('description'),
         Column('syllabus_id', type='int', null=True),
         Column('project_id', type='int', null=True),
+        ForeignKey('author', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
 ]

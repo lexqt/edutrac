@@ -143,6 +143,8 @@ class PostgreSQLConnector(Component):
                 expr += u' ("{0}")'.format('", "'.join(fk.ref_columns))
             if fk.on_delete:
                 expr += u' ON DELETE {0}'.format(fk.on_delete.upper())
+            if fk.on_update:
+                expr += u' ON UPDATE {0}'.format(fk.on_update.upper())
             fk.name = name
             fk.expr = expr
 

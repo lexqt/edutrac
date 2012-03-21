@@ -1,8 +1,28 @@
 import datetime
 
-from sqlalchemy import Table, Column, Integer, BigInteger, String, Text, MetaData, ForeignKey, TypeDecorator
+from sqlalchemy import Table, Column, MetaData, TypeDecorator, ForeignKey, ForeignKeyConstraint,\
+    Integer, BigInteger, String, Text, Boolean, DateTime
 
-from trac.util.datefmt import from_utimestamp, to_utimestamp
+from trac.util.datefmt import from_utimestamp, to_utimestamp, utc
+
+
+
+class UTCDateTime(TypeDecorator):
+
+    impl = DateTime
+
+    def process_bind_param(self, value, engine):
+        if value is not None:
+            value = value.astimezone(utc)
+            return datetime.datetime(value.year, value.month, value.day,
+                            value.hour, value.minute, value.second,
+                            value.microsecond)
+
+    def process_result_value(self, value, engine):
+        if value is not None:
+            return datetime.datetime(value.year, value.month, value.day,
+                            value.hour, value.minute, value.second,
+                            value.microsecond, tzinfo=utc)
 
 
 
@@ -41,7 +61,7 @@ projects = Table('projects', metadata,
     Column('description', Text, server_default=''),
 )
 
-tickets = Table('ticket', metadata,
+ticket = Table('ticket', metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),
     Column('project_id', Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False),
     Column('type', Text),
@@ -62,4 +82,30 @@ tickets = Table('ticket', metadata,
     Column('keywords', Text),
 )
 
+ticket_custom = Table('ticket_custom', metadata,
+    Column('ticket', Integer, ForeignKey('ticket.id', ondelete='CASCADE'), primary_key=True),
+    Column('name', Text, primary_key=True),
+    Column('value', Text),
+)
+
+ticket_change = Table('ticket_change', metadata,
+    Column('ticket', Integer, ForeignKey('ticket.id', ondelete='CASCADE'), primary_key=True, index=True),
+    Column('time', IntegerUTimestamp, primary_key=True, index=True),
+    Column('author', Text),
+    Column('field', Text, primary_key=True),
+    Column('oldvalue', Text),
+    Column('newvalue', Text),
+)
+
+
+# Views
+
+project_info = Table('project_info', metadata,
+    Column('project_id', Integer, ForeignKey('projects.id'), primary_key=True),
+    Column('active', Boolean),
+    Column('team_id', Integer, ForeignKey('teams.id'), nullable=False),
+    Column('studgroup_id', Integer, ForeignKey('student_groups.id'), nullable=False),
+    Column('metagroup_id', Integer, ForeignKey('metagroups.id'), nullable=False),
+    Column('syllabus_id', Integer, ForeignKey('syllabuses.id'), nullable=False),
+)
 
