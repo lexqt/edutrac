@@ -929,11 +929,16 @@ class MilestoneModule(Component):
                        (resource.id,))
         return bool(cursor.fetchall())
 
-    def get_real_resource_from_url(self, rsc_url, args):
-        m = re.match(r'milestone/(?P<name>[^/]+)', rsc_url)
-        if m is None:
-            return None
-        return Milestone(self.env, args['pid'], m.group('name'))
+    def get_resource(self, realm, rsc_id, args):
+        if realm == 'milestone':
+            return Milestone(self.env, args['project_id'], rsc_id)
+
+    def get_realm_info(self):
+        return {
+            'milestone': {
+                'need_pid': True,
+            }
+        }
 
     def has_project_resources(self, realm):
         if realm == 'milestone':

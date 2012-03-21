@@ -18,7 +18,8 @@
 
 from trac.core import *
 from trac.util.translation import _
-from trac.web.href import Href
+from trac.util.text import unicode_unquote
+from trac.web.href import Href, HrefPart
 
 
 class ResourceNotFound(TracError):
@@ -81,6 +82,28 @@ class IResourceManager(Interface):
         (''since 0.11.8'')
         """
 
+    def get_resource(realm, rsc_id, args):
+        '''Return real resource.
+
+        :param realm: resource realm
+        :param rsc_id: string containing resource ID
+        :param args: dict with other arguments such as 'project_id' etc
+
+        If resource doesn't exist raise a `ResourceNotFound` exception.
+        '''
+
+    def get_realm_info():
+        """Return info dicts for realms in format:
+        {
+            '<realm>': {
+                'need_pid': <bool>,
+                #'has_project_resources': <bool>
+                #...
+            },
+            ...
+        }
+        """
+
     def has_project_resources(realm):
         """Return whether there are project dependent resources in the realm.
         None for slave realm.
@@ -125,6 +148,8 @@ class Resource(object):
     __slots__ = ('realm', 'pid', 'id', 'version', 'parent',
                  '_need_pid', '_realm_need_pid')
 
+    _realm_info = {} # filled by ResourceSystem on startup
+
     def __repr__(self):
         path = []
         r = self
@@ -163,14 +188,24 @@ class Resource(object):
     def _get_need_pid(self):
         if self._need_pid is not None:
             return self._need_pid
-        if self._realm_need_pid is not None:
-            return self._realm_need_pid
+        realm_info = self._realm_info.get(self.realm)
+        if realm_info is not None:
+            return realm_info['need_pid']
+        # can not do anything more (remember, that there is no env for Resource)
         return False
 
     def _set_need_pid(self, val):
         self._need_pid = val
 
     need_pid = property(_get_need_pid, _set_need_pid)
+    '''Does resource need pid for unique identification.
+    
+    Example.
+    Tickets have unique IDs. Also every ticket refers some project
+    but it doesn't need this project ID to be identified.
+    On the contrary milestone is identified by pair (project ID, name).
+    So it needs project ID to be created or fetched from DB.
+    '''
 
     # -- methods for creating other Resource identifiers
 
@@ -281,6 +316,7 @@ class ResourceSystem(Component):
 
     def __init__(self):
         self._resource_managers_map = None
+        self._create_realm_info_cache()
 
     # Public methods
 
@@ -327,16 +363,22 @@ class ResourceSystem(Component):
         RM = self.get_resource_manager(realm)
         return RM.get_realm_id(realm)
 
+    # Internal methods
+
+    def _create_realm_info_cache(self):
+        cache = Resource._realm_info
+        for man in self.resource_managers:
+            cache.update(man.get_realm_info())
 
 # -- Utilities for manipulating resources in a generic way
 
-def _get_realm_need_pid(resource, env):
-    # FIXME: get Resource class cache for realms _realm_need_pid
-    if resource._realm_need_pid is None:
-        rs = ResourceSystem(env)
-        # assumption
-        resource._realm_need_pid = bool(rs.has_project_resources(resource.realm))
-    return resource._realm_need_pid
+# FIXME: make Resource class cache for realms
+def has_realm_project_resources(realm, env):
+    rs = ResourceSystem(env)
+    return bool(rs.has_project_resources(realm))
+def has_realm_global_resources(realm, env):
+    rs = ResourceSystem(env)
+    return bool(rs.has_global_resources(realm))
 
 
 def get_resource_url(env, resource, href=None, **kwargs):
@@ -374,7 +416,7 @@ def get_resource_url(env, resource, href=None, **kwargs):
     
     """
     if href is None:
-        href = Href('')
+        href = HrefPart()
     manager = ResourceSystem(env).get_resource_manager(resource.realm)
     if manager and hasattr(manager, 'get_resource_url'):
         return manager.get_resource_url(resource, href, **kwargs)
@@ -386,7 +428,8 @@ def get_resource_url(env, resource, href=None, **kwargs):
             break
         else:
             res = res.parent
-    if res.pid is not None and (res.need_pid or _get_realm_need_pid(res, env)):
+    if res.pid is not None and res.need_pid:
+        # 'project' at first
         args0 = [u'project', res.pid] + args0
     args = {'version': resource.version}
     args.update(kwargs)
@@ -550,13 +593,25 @@ def resource_exists(env, resource):
         return False
 
 def get_real_resource_from_url(env, rsc_url, args={}):
-    parts = rsc_url.split('/', 1)
-    if len(parts) != 2:
+    '''Create real resource (such as Ticket, Milestone, etc) from url string.
+    args is basically for 'project' part fetched from url ('pid' arg).'''
+    rsc_url = unicode_unquote(rsc_url)
+    is_project_url = rsc_url.startswith('project/')
+    max_splits = 3 if is_project_url else 1
+    parts = rsc_url.split('/', max_splits)
+    if len(parts) != max_splits+1:
         raise ResourceNotFound('Invalid resource URL: %s' % rsc_url)
-    realm = parts[0]
-    manager = ResourceSystem(env).get_resource_manager(realm)
-    if manager and hasattr(manager, 'get_real_resource_from_url'):
-        return manager.get_real_resource_from_url(rsc_url, args)
+    if is_project_url:
+        pid = int(parts[1])
+        args['project_id'] = pid
+        realm  = parts[2]
+        rsc_id = parts[3]
     else:
-        # TODO: somehow parse URL
+        realm  = parts[0]
+        rsc_id = parts[1]
+    manager = ResourceSystem(env).get_resource_manager(realm)
+    if manager and hasattr(manager, 'get_resource'):
+        return manager.get_resource(realm, rsc_id, args)
+    else:
+        # TODO: somehow get rsc
         raise NotImplementedError

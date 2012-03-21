@@ -738,6 +738,9 @@ class Chrome(Component):
         def get_abs_url(resource, **kwargs):
             return get_resource_url(self.env, resource, abs_href, **kwargs)
 
+        def get_partial_url(resource, **kwargs):
+            return get_resource_url(self.env, resource, href=None, **kwargs)
+
         from trac.user.api import UserManagement
         user_management = UserManagement(self.env)
 
@@ -746,6 +749,7 @@ class Chrome(Component):
             'Resource': Resource,
             'url_of': get_rel_url,
             'abs_url_of': get_abs_url,
+            'partial_url': get_partial_url,
             'name_of': partial(get_resource_name, self.env),
             'shortname_of': partial(get_resource_shortname, self.env),
             'summary_of': partial(get_resource_summary, self.env),

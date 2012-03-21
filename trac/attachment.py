@@ -648,6 +648,13 @@ class AttachmentModule(Component):
         except ResourceNotFound:
             return False
 
+    def get_realm_info(self):
+        return {
+            'attachment': {
+                'need_pid': False,
+            }
+        }
+
     def has_project_resources(self, realm):
         if realm == 'attachment':
             return None

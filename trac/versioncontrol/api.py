@@ -423,6 +423,19 @@ class RepositoryManager(Component):
         elif resource.realm == 'repository':
             return True
 
+    def get_realm_info(self):
+        return {
+            'repository': {
+                'need_pid': False,
+            },
+            'changeset': {
+                'need_pid': False,
+            },
+            'source': {
+                'need_pid': False,
+            },
+        }
+
     def has_project_resources(self, realm):
         if realm == 'repository':
             return True

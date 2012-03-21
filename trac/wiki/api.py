@@ -464,6 +464,13 @@ class WikiSystem(Component):
                        (resource.id, resource.version))
         return bool(cursor.fetchall())
 
+    def get_realm_info(self):
+        return {
+            'wiki': {
+                'need_pid': False,
+            }
+        }
+
     def has_project_resources(self, realm):
         if realm == 'wiki':
             return True
