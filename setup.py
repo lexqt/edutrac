@@ -99,6 +99,7 @@ facilities.
         'setuptools>=0.6b1',
         'Genshi>=0.6,<0.7dev',
         'SQLAlchemy>=0.7',
+        'FormEncode>=1.2.4',
     ],
     extras_require = {
         'Babel': ['Babel>=0.9.5'],
