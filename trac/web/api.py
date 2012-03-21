@@ -206,7 +206,8 @@ class Request(object):
             'args': lambda req: arg_list_to_args(req.arg_list),
             'languages': Request._parse_languages,
             'incookie': Request._parse_cookies,
-            '_inheaders': Request._parse_headers
+            '_inheaders': Request._parse_headers,
+            'project_href': Request._project_href,
         }
         self.redirect_listeners = []
 
@@ -643,6 +644,11 @@ class Request(object):
         cookies = to_unicode(self.outcookie.output(header='')).encode('utf-8')
         for cookie in cookies.splitlines():
             self._outheaders.append(('Set-Cookie', cookie.strip()))
+
+    def _project_href(self):
+        if '__pid__' not in self.args:
+            return self.href
+        return Href(self.href+'/project/'+str(self.args['__pid__']))
 
 
 class IAuthenticator(Interface):
