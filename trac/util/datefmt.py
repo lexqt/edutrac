@@ -131,7 +131,11 @@ def format_datetime(t=None, format='%x %X', tzinfo=None):
     `tzinfo` will default to the local timezone if left to `None`.
     """
     tz = tzinfo or localtz
-    t = to_datetime(t, tzinfo).astimezone(tz)
+    t = to_datetime(t, tzinfo)
+    try:
+        t = t.astimezone(tz)
+    except ValueError:
+        t = utc.localize(t).astimezone(tz)
     normalize_Z = False
     if format.lower().startswith('iso8601'):
         if 'date' in format:
