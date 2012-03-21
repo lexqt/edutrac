@@ -97,6 +97,7 @@ facilities.
     ],
     install_requires = [
         'setuptools>=0.6b1',
+        'lazy>=1.0',
         'Genshi>=0.6,<0.7dev',
         'SQLAlchemy>=0.7',
         'FormEncode>=1.2.4',

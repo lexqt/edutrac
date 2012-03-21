@@ -113,9 +113,10 @@ class LoginModule(Component):
     def process_request(self, req):
         if req.path_info.startswith('/login'):
             self._do_login(req)
+            self._redirect_back(req)
         elif req.path_info.startswith('/logout'):
             self._do_logout(req)
-        self._redirect_back(req)
+            req.redirect(req.abs_href())
 
     # Internal methods
 

@@ -76,6 +76,13 @@ class IEnvironmentSetupParticipant(Interface):
         successful step.
         """
 
+#class IEnvironmentInstanceListener(Interface):
+#    """Extension point interface for components that need to make
+#    some actions just after new Environment instance created."""
+#
+#    def environment_instance_created():
+#        pass
+
 
 class Environment(Component, ComponentManager):
     """Trac environment manager.
@@ -93,6 +100,7 @@ class Environment(Component, ComponentManager):
     
     system_info_providers = ExtensionPoint(ISystemInfoProvider)
     setup_participants = ExtensionPoint(IEnvironmentSetupParticipant)
+#    instance_listeners = ExtensionPoint(IEnvironmentInstanceListener)
 
     shared_plugins_dir = PathOption('inherit', 'plugins_dir', '',
         """Path to the //shared plugins directory//.
@@ -221,6 +229,9 @@ class Environment(Component, ComponentManager):
         if create:
             for setup_participant in self.setup_participants:
                 setup_participant.environment_created()
+
+#        for listener in self.instance_listeners:
+#            listener.environment_instance_created()
 
         # cache
         self._syllabus_rules = {}

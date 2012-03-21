@@ -362,6 +362,7 @@ class Chrome(Component):
         'dgettext': translation.dgettext,
         'dngettext': translation.dngettext,
         'first_last': presentation.first_last,
+        'first_not_none': lambda a,b: a if a is not None else b,
         'get_reporter_id': get_reporter_id,
         'gettext': translation.gettext,
         'group': presentation.group,

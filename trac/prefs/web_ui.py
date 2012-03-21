@@ -42,18 +42,24 @@ class PreferencesModule(Component):
 
     _form_fields = ['newsid', 'name', 'email', 'tz', 'language', 'accesskeys']
 
+    NO_ANON = True
+
     # INavigationContributor methods
 
     def get_active_navigation_item(self, req):
         return 'prefs'
 
     def get_navigation_items(self, req):
+        if self.NO_ANON and not req.session.authenticated:
+            return
         yield ('metanav', 'prefs',
                tag.a(_('Preferences'), href=req.href.prefs()))
 
     # IRequestHandler methods
 
     def match_request(self, req):
+        if self.NO_ANON and not req.session.authenticated:
+            return
         match = re.match('/prefs(?:/([^/]+))?$', req.path_info)
         if match:
             req.args['panel_id'] = match.group(1)

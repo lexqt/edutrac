@@ -110,6 +110,11 @@ class _RequestArgs(dict):
             return None
         return int(self[name])
 
+    def getlistitem(self, listname, key):
+        """Return value or None
+        """
+        return self.get('{0}[{1}]'.format(listname, key))
+
 
 def parse_arg_list(query_string):
     """Parse a query string into a list of `(name, value)` tuples."""
