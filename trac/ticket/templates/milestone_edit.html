@@ -51,6 +51,9 @@
           <input type="hidden" name="action" value="edit" />
           <label>Name of the milestone:<br />
             <input type="text" id="name" name="name" size="32" value="${milestone.name or req.args.get('name')}" />
+          </label><br />
+          <label>Weight of the milestone:
+            <input type="text" id="weight" name="weight" size="6" value="${milestone.weight if milestone.weight is not None else req.args.get('weight')}" />
           </label>
         </div>
         <fieldset>

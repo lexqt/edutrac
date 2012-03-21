@@ -1,0 +1,28 @@
+<!--!
+Display a list of attachments.
+
+Arguments:
+ TODO: describe
+-->
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:i18n="http://genshi.edgewall.org/i18n"
+      py:with="current = value_of('current', 0);
+               total = value_of('total', 1);
+               cwidth = int(round(float(current)/total*100));
+               rwidth = 100 - cwidth;
+               show_percent = value_of('show_percent', False);
+               style = value_of('style', None);
+               " py:strip="">
+
+  <div
+    class="progress" style="$style"><div
+      class="progress_item current" style="${cwidth > 0 and 'width: %d%%' % cwidth or 'display: none'}"
+        title="$current / $total"><span></span></div><div
+      class="progress_item remain" style="${rwidth > 0 and 'width: %d%%' % rwidth or 'display: none'}"
+        title="$total"><span></span></div></div>
+
+  <span py:if="show_percent" class="percent">$cwidth%</span>
+
+</html>

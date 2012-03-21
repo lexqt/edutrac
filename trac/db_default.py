@@ -211,6 +211,7 @@ schema = [
         Column('due', type='int64'),
         Column('completed', type='int64'),
         Column('description'),
+        Column('weight', type='int', null=False, default='0'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
     Table('version', key=('project_id', 'name'))[
         Column('project_id', type='int', null=False),

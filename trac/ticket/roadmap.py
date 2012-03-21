@@ -23,7 +23,7 @@ from genshi.builder import tag
 
 from trac import __version__
 from trac.attachment import AttachmentModule
-from trac.config import ExtensionOption
+from trac.config import ExtensionOption, BoolOption
 from trac.core import *
 from trac.mimeview import Context
 from trac.perm import IPermissionRequestor
@@ -344,11 +344,12 @@ class RoadmapModule(Component):
         pm.check_session_project(req, pid, allow_multi=True)
 
         show = req.args.getlist('show')
-        if 'all' in show:
+        hide = req.args.getlist('hide')
+        if 'all' in show or 'completed' not in hide:
             show = ['completed']
 
-        db = self.env.get_db_cnx()
-        milestones = Milestone.select(self.env, pid, 'completed' in show, db)
+        db = self.env.get_read_db()
+        milestones = Milestone.select(self.env, pid, 'completed' not in hide, db)
         if 'noduedate' in show:
             milestones = [m for m in milestones
                           if m.due is not None or m.completed]
@@ -367,6 +368,8 @@ class RoadmapModule(Component):
                                               milestone))
             #milestone['tickets'] = tickets # for the iCalendar view
 
+        total_weight = Milestone.get_total_weight(self.env, pid)
+
         if req.args.get('format') == 'ics':
             self.render_ics(req, pid, db, milestones)
             return
@@ -382,8 +385,10 @@ class RoadmapModule(Component):
         data = {
             'milestones': milestones,
             'milestone_stats': stats,
+            'total_weight': total_weight,
             'queries': queries,
             'show': show,
+            'hide': hide,
         }
         add_stylesheet(req, 'common/css/roadmap.css')
         return 'roadmap.html', data, None
@@ -397,7 +402,7 @@ class RoadmapModule(Component):
 
         from trac.ticket import Priority
         priorities = {}
-        for priority in Priority.select(self.env):
+        for priority in Priority.select(self.env, pid=pid):
             priorities[priority.name] = float(priority.value)
         def get_priority(ticket):
             value = priorities.get(ticket['priority'])
@@ -451,7 +456,7 @@ class RoadmapModule(Component):
         write_prop('X-WR-CALNAME',
                    self.env.project_name + ' - ' + _('Roadmap'))
         for milestone in milestones:
-            uid = '<%s/milestone/%s@%s>' % (req.base_path, milestone.name,
+            uid = '<%s/milestone/%s/%s/%s@%s>' % (req.base_path, milestone.name, 'project', milestone.pid,
                                             host)
             if milestone.due:
                 write_prop('BEGIN', 'VEVENT')
@@ -460,7 +465,7 @@ class RoadmapModule(Component):
                 write_date('DTSTART', milestone.due)
                 write_prop('SUMMARY', _('Milestone %(name)s',
                                         name=milestone.name))
-                write_prop('URL', req.abs_href.milestone(milestone.name, 'project', milestone.pid))
+                write_prop('URL', get_resource_url(self.env, milestone.resource, req.abs_href))
                 if milestone.description:
                     write_prop('DESCRIPTION', milestone.description)
                 write_prop('END', 'VEVENT')
@@ -516,7 +521,8 @@ class MilestoneModule(Component):
         """Name of the component implementing `ITicketGroupStatsProvider`, 
         which is used to collect statistics on groups of tickets for display
         in the milestone views.""")
-    
+    force_milestone = BoolOption('ticket-workflow-config', 'force_milestone', default='true',
+                        doc="""Do not allow to have tickets without milestone""", switcher=True)
 
     # INavigationContributor methods
 
@@ -530,6 +536,7 @@ class MilestoneModule(Component):
 
     def get_permission_actions(self):
         actions = ['MILESTONE_CREATE', 'MILESTONE_DELETE', 'MILESTONE_MODIFY',
+                   'MILESTONE_MODIFY_WEIGHT', 'MILESTONE_MODIFY_CLOSED', 'MILESTONE_CLOSE',
                    'MILESTONE_VIEW']
         return actions + [('MILESTONE_ADMIN', actions)]
 
@@ -581,7 +588,7 @@ class MilestoneModule(Component):
     def render_timeline_event(self, context, field, event):
         milestone, description = event[3]
         if field == 'url':
-            return context.href.milestone(milestone.id, 'project', milestone.pid)
+            return get_resource_url(self.env, milestone, context.href)
         elif field == 'title':
             return tag_('Milestone %(name)s completed',
                         name=tag.em(milestone.id))
@@ -603,6 +610,7 @@ class MilestoneModule(Component):
         action = req.args.get('action', 'view')
 
         pm = ProjectManagement(self.env)
+        self.pm = pm
         pid = pm.get_current_project(req)
         pm.check_session_project(req, pid, allow_multi=True)
         milestone_pid = pid
@@ -648,7 +656,12 @@ class MilestoneModule(Component):
 
         retarget_to = None
         if req.args.has_key('retarget'):
-            retarget_to = req.args.get('target') or None
+            retarget_to = req.args.get('target')
+        if not retarget_to: # None or empty
+            syllabus_id = self.pm.get_project_syllabus(milestone.pid)
+            if self.force_milestone.syllabus(syllabus_id) and milestone.has_tickets():
+                raise TracError(_('Can not delete milestone %(milestone)s because there are some tickets associated with it'
+                                  ' and new target is not selected for them.', milestone=milestone.name))
         milestone.delete(retarget_to, req.authname)
         add_notice(req, _('The milestone "%(name)s" has been deleted.',
                           name=milestone.name))
@@ -657,6 +670,8 @@ class MilestoneModule(Component):
     def _do_save(self, req, db, milestone):
         if milestone.exists:
             req.perm(milestone.resource).require('MILESTONE_MODIFY')
+            if milestone.completed:
+                req.perm(milestone.resource).require('MILESTONE_MODIFY_CLOSED')
         else:
             req.perm(milestone.resource).require('MILESTONE_CREATE')
 
@@ -705,11 +720,23 @@ class MilestoneModule(Component):
         if 'completed' in req.args:
             completed = completed and parse_date(completed, req.tz,
                                                  'datetime') or None
+            if completed != milestone.completed:
+                req.perm(milestone.resource).require('MILESTONE_CLOSE')
             if completed and completed > datetime.now(utc):
                 warn(_('Completion date may not be in the future'))
         else:
             completed = None
         milestone.completed = completed
+
+        # -- check weight value
+        try:
+            weight = int(req.args.get('weight'))
+            if weight != milestone.weight:
+                req.perm(milestone.resource).require('MILESTONE_MODIFY_WEIGHT')
+        except ValueError:
+            warn(_('You mist provide a valid integer value for milestone weight.'))
+            weight = None
+        milestone.weight = weight
 
         if warnings:
             return self._render_editor(req, db, milestone)
@@ -719,20 +746,19 @@ class MilestoneModule(Component):
             milestone.update()
             # eventually retarget opened tickets associated with the milestone
             if 'retarget' in req.args and completed:
-                @self.env.with_transaction()
-                def retarget(db):
-                    cursor = db.cursor()
-                    cursor.execute("UPDATE ticket SET milestone=%s WHERE "
-                                   "project_id=%s AND milestone=%s AND status != 'closed'",
-                                   (milestone_pid, retarget_to, old_name))
-                self.env.log.info('Tickets associated with milestone %s '
-                                  'retargeted to %s' % (old_name, retarget_to))
+                # TODO: check ticket modify permissions
+                retarget_to = req.args.get('target')
+                if retarget_to is None:
+                    syllabus_id = self.pm.get_project_syllabus(milestone.pid)
+                    if self.force_milestone.syllabus(syllabus_id):
+                        raise TracError(_('Can not retarget tickets to empty milestone.'))
+                milestone.retarget_tickets(retarget_to, req.authname, comment=_(
+                                            'Milestone %(name)s set as completed', name=milestone.name))
         else:
             milestone.insert()
 
         add_notice(req, _('Your changes have been saved.'))
         req.redirect(get_resource_url(self.env, milestone.resource, req.href))
-#        req.redirect(req.href.milestone(milestone.name, 'project', milestone.pid))
 
     def _render_confirm(self, req, db, milestone):
         req.perm(milestone.resource).require('MILESTONE_DELETE')
@@ -802,10 +828,13 @@ class MilestoneModule(Component):
         tickets = apply_ticket_permissions(self.env, req, tickets)
         stat = get_ticket_stats(self.stats_provider, tickets, pid)
 
+        total_weight = Milestone.get_total_weight(self.env, pid)
+
         context = Context.from_request(req, milestone.resource)
         data = {
             'context': context,
             'milestone': milestone,
+            'total_weight': total_weight,
             'attachments': AttachmentModule(self.env).attachment_data(context),
             'available_groups': available_groups, 
             'grouped_by': by,
@@ -882,7 +911,8 @@ class MilestoneModule(Component):
         # Note: the above should really not be needed, `Milestone.exists`
         # should simply be false if the milestone doesn't exist in the db
         # (related to #4130)
-        href = context.href.milestone(name, 'project', pid)
+        rsc = Resource('milestone', name, pid=pid)
+        href = get_resource_url(self.env, rsc, context.href)
         if milestone and milestone.exists:
             if 'MILESTONE_VIEW' in context.perm(milestone.resource):
                 closed = milestone.is_completed and 'closed ' or ''
@@ -903,7 +933,7 @@ class MilestoneModule(Component):
 #        desc = '%s:project:%s' % (resource.id, resource.pid)
         desc = resource.id
         if format != 'compact':
-            desc =  _('Milestone %(name)s (project #%(pid)s', name=resource.id, pid=resource.pid)
+            desc =  _('Milestone %(name)s (project #%(pid)s)', name=resource.id, pid=resource.pid)
         if context:
             return self._render_link(context, resource.pid, resource.id, desc)
         else:

@@ -27,6 +27,11 @@ p.percent {
  margin: 0;
 }
 
+.progress .remain { background: #f5f5b5 }
+.progress .current { background: #bae0ba }
+.progress .progress_item { display: inline-block; margin: 0; padding: 0; height: 100%; }
+.progress .progress_item span { display: inline-block; }
+
 /* Styles for the roadmap view */
 .milestones { margin: 2em 0 0; padding: 0 }
 .milestone { margin-bottom: 4em }
@@ -52,6 +57,9 @@ p.percent {
  margin: 0 0 1em 0;
 }
 .milestone .info .progress { margin: 0 1em; width: 40em; max-width: 70% }
+.milestone .info .weight { margin: .5em 0 }
+.milestone .info .weight .percent { font-size: .7em; }
+.milestone .info .weight .progress { display: inline-block; margin: 0 .2em; width: 20em; max-width: 50%; line-height: 0.5em; border: 1px solid #d7d7d7; }
 .milestone .info dl {
  font-size: 10px;
  font-style: italic;

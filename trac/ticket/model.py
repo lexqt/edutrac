@@ -1022,6 +1022,7 @@ class Milestone(object):
             self.name = None
             self.due = self.completed = None
             self.description = ''
+            self.weight = None
             self._to_old()
 
     @property
@@ -1035,7 +1036,7 @@ class Milestone(object):
             db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute("""
-            SELECT project_id,name,due,completed,description 
+            SELECT project_id,name,due,completed,description,weight
             FROM milestone WHERE project_id=%s AND name=%s
             """, (pid, name))
         row = cursor.fetchone()
@@ -1050,32 +1051,37 @@ class Milestone(object):
                                     self.due < datetime.now(utc))
 
     def _from_database(self, row):
-        pid, name, due, completed, description = row
+        pid, name, due, completed, description, weight = row
         self.pid = pid
         self.name = name
         self.due = due and from_utimestamp(due) or None
         self.completed = completed and from_utimestamp(completed) or None
         self.description = description or ''
+        self.weight = weight
         self._to_old()
 
     def _to_old(self):
         self._old = {'pid': self.pid, 'name': self.name, 'due': self.due,
                      'completed': self.completed,
-                     'description': self.description}
+                     'description': self.description,
+                     'weight': self.weight}
 
-    def delete(self, retarget_to=None, author=None, db=None):
-        """Delete the milestone.
+    def has_tickets(self):
+        '''Return True if there are tickets associated with this milestone.'''
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT 1 FROM ticket WHERE project_id=%s AND milestone=%s LIMIT 1",
+                           (self.pid, self.name))
+        return bool(cursor.rowcount)
 
-        The `db` argument is deprecated in favor of `with_transaction()`.
-        """
-        assert self.pid is not None
+    def retarget_tickets(self, retarget_to, author=None, comment=None):
+        if retarget_to:
+            # check if retarget milestone exists
+            retarget_milestone = Milestone(self.env, self.pid, retarget_to)
 
-        @self.env.with_transaction(db)
-        def do_delete(db):
+        @self.env.with_transaction()
+        def do_retarget(db):
             cursor = db.cursor()
-            self.env.log.info('Deleting milestone %s in project #%s' % (self.name, self.pid))
-            cursor.execute("DELETE FROM milestone WHERE project_id=%s AND name=%s", (self.pid, self.name))
-
             # Retarget/reset tickets associated with this milestone
             now = datetime.now(utc)
             cursor.execute("SELECT id FROM ticket WHERE project_id=%s AND milestone=%s",
@@ -1084,8 +1090,24 @@ class Milestone(object):
             for tkt_id in tkt_ids:
                 ticket = Ticket(self.env, tkt_id, db)
                 ticket['milestone'] = retarget_to
-                ticket.save_changes(author, 'Milestone %s deleted' % self.name,
-                                    now)
+                comment_ = comment or 'Retarget from milestone %s' % self.name
+                ticket.save_changes(author, comment_, now)
+            self.env.log.info('Tickets associated with milestone %s retargeted to %s' % (self.name, retarget_to))
+
+    def delete(self, retarget_to=None, author=None, db=None):
+        """Delete the milestone.
+
+        The `db` argument is deprecated in favor of `with_transaction()`.
+        """
+        assert self.pid is not None
+
+        @self.env.with_transaction()
+        def do_delete(db):
+            self.retarget_tickets(retarget_to, author, comment=_('Milestone %(name)s deleted', name=self.name))
+
+            cursor = db.cursor()
+            self.env.log.info('Deleting milestone %s in project #%s' % (self.name, self.pid))
+            cursor.execute("DELETE FROM milestone WHERE project_id=%s AND name=%s", (self.pid, self.name))
             self._old['name'] = None
             TicketSystem(self.env).reset_ticket_fields(self.pid)
 
@@ -1107,10 +1129,10 @@ class Milestone(object):
             cursor = db.cursor()
             self.env.log.debug("Creating new milestone '%s' in project #%s" % (self.name, self.pid))
             cursor.execute("""
-                INSERT INTO milestone (project_id,name,due,completed,description) 
-                VALUES (%s,%s,%s,%s,%s)
+                INSERT INTO milestone (project_id,name,due,completed,description,weight) 
+                VALUES (%s,%s,%s,%s,%s,%s)
                 """, (self.pid, self.name, to_utimestamp(self.due),
-                      to_utimestamp(self.completed), self.description))
+                      to_utimestamp(self.completed), self.description, self.weight))
             self._to_old()
             TicketSystem(self.env).reset_ticket_fields(self.pid)
 
@@ -1134,10 +1156,10 @@ class Milestone(object):
             self.env.log.info('Updating milestone "%s"' % self.name)
             cursor.execute("""
                 UPDATE milestone
-                SET name=%s,due=%s,completed=%s,description=%s WHERE project_id=%s AND name=%s
+                SET name=%s,due=%s,completed=%s,description=%s,weight=%s WHERE project_id=%s AND name=%s
                 """, (self.name, to_utimestamp(self.due),
                       to_utimestamp(self.completed),
-                      self.description, self.pid, old_name))
+                      self.description, self.weight, self.pid, old_name))
 
             if self.name != old_name:
                 # Update milestone field in tickets
@@ -1162,7 +1184,7 @@ class Milestone(object):
     def select(cls, env, pid, include_completed=True, db=None):
         if not db:
             db = env.get_read_db()
-        sql = "SELECT project_id,name,due,completed,description FROM milestone WHERE project_id=%s"
+        sql = "SELECT project_id,name,due,completed,description,weight FROM milestone WHERE project_id=%s"
         if not include_completed:
             sql += " AND COALESCE(completed,0)=0 "
         cursor = db.cursor()
@@ -1177,6 +1199,15 @@ class Milestone(object):
                     m.due or utcmax,
                     embedded_numbers(m.name))
         return sorted(milestones, key=milestone_order)
+
+    @classmethod
+    def get_total_weight(cls, env, pid):
+        db = env.get_read_db()
+        q = 'SELECT SUM(weight) FROM milestone WHERE project_id=%s'
+        cursor = db.cursor()
+        cursor.execute(q, (pid,))
+        row = cursor.fetchone()
+        return row and row[0] or 0
 
 
 def group_milestones(milestones, include_completed):

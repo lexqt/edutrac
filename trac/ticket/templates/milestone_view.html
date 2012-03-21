@@ -9,7 +9,7 @@
   <head>
     <title>Milestone ${milestone.name}</title>
     <link py:if="'MILESTONE_MODIFY' in perm(milestone.resource)" rel="alternate" type="application/x-wiki"
-          title="Edit this milestone" href="${href.milestone(milestone.name, 'project', milestone.pid, action='edit')}" />
+          title="Edit this milestone" href="${url_of(milestone.resource, action='edit')}" />
     <script type="text/javascript">
       jQuery(document).ready(function($) {
         $("#content").find("h1,h2,h3,h4,h5,h6").addAnchor("Link to this section");
@@ -22,6 +22,12 @@
     <div id="content" class="milestone">
       <h1>Milestone ${milestone.name}</h1>
       <div class="info">
+        <div class="weight">
+            Weight: ${milestone.weight}
+            <py:if test="total_weight">
+              <xi:include href="simple_progress_bar.html" py:with="current=milestone.weight; total=total_weight; show_percent=True;"/>
+            </py:if>
+        </div>
         <py:choose>
           <p py:when="milestone.completed" class="date">
             <i18n:msg params="duration, date">

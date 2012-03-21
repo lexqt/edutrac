@@ -16,9 +16,9 @@
 
       <form id="prefs" method="get" action="">
         <div>
-          <input type="checkbox" id="showcompleted" name="show" value="completed"
-                 checked="${'completed' in show or None}" />
-          <label for="showcompleted">Show completed milestones</label>
+          <input type="checkbox" id="hidecompleted" name="hide" value="completed"
+                 checked="${'completed' in hide or None}" />
+          <label for="hidecompleted">Hide completed milestones</label>
         </div>
         <div>
           <input type="checkbox" id="hidenoduedate" name="show" value="noduedate"
@@ -34,9 +34,15 @@
         <div py:for="idx, milestone in enumerate(milestones)" class="milestone">
 
           <div class="info" py:with="mstats = milestone_stats[idx]">
-            <h2><a href="${href.milestone(milestone.name,'project',milestone.pid)}">
+            <h2><a href="${url_of(milestone.resource)}">
               Milestone: <em>${milestone.name}</em>
             </a></h2>
+            <py:if test="total_weight">
+              <div class="weight">
+                Weight:
+                <xi:include href="simple_progress_bar.html" py:with="current=milestone.weight; total=total_weight; show_percent=True;"/>
+              </div>
+            </py:if>
             <py:choose>
               <p py:when="milestone.completed" class="date">
                 <i18n:msg params="duration, date">
