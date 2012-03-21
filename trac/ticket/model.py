@@ -458,7 +458,7 @@ class Ticket(object):
         """
         @self.env.with_transaction(db)
         def do_delete(db):
-            Attachment.delete_all(self.env, 'ticket', self.id, db)
+            Attachment.delete_all(self.env, self.resource, db=db)
             cursor = db.cursor()
             cursor.execute("DELETE FROM ticket WHERE id=%s", (self.id,))
             cursor.execute("DELETE FROM ticket_change WHERE ticket=%s",
@@ -1171,8 +1171,8 @@ class Milestone(object):
                 TicketSystem(self.env).reset_ticket_fields(self.pid)
 
                 # Reparent attachments
-                Attachment.reparent_all(self.env, 'milestone', old_name,
-                                        'milestone', self.name)
+                Attachment.reparent_all(self.env, 'milestone', old_name, self.pid,
+                                        'milestone', self.name, self.pid)
 
         old_values = dict((k, v) for k, v in self._old.iteritems()
                           if getattr(self, k) != v)

@@ -63,7 +63,7 @@ class IAttachmentChangeListener(Interface):
     def attachment_deleted(attachment):
         """Called when an attachment is deleted."""
 
-    def attachment_reparented(attachment, old_parent_realm, old_parent_id):
+    def attachment_reparented(attachment, old_parent_realm, old_parent_id, old_parent_pid):
         """Called when an attachment is reparented."""
 
 
@@ -113,15 +113,22 @@ class ILegacyAttachmentPolicyDelegate(Interface):
 class Attachment(object):
 
     def __init__(self, env, parent_realm_or_attachment_resource,
-                 parent_id=None, filename=None, db=None):
+                 parent_id=None, filename=None, db=None, parent_pid=None):
         if isinstance(parent_realm_or_attachment_resource, Resource):
             self.resource = parent_realm_or_attachment_resource
         else:
-            self.resource = Resource(parent_realm_or_attachment_resource,
-                                     parent_id).child('attachment', filename)
+            parent_rsc = Resource(parent_realm_or_attachment_resource,
+                                  parent_id, pid=parent_pid)
+            if parent_rsc.need_pid and parent_pid is None:
+                raise TracError('Parent project ID is not set for attachment')
+            # else
+            # pid is None     -> attachment for global rsc
+            # pid is not None -> attachment for project rsc
+            self.resource = parent_rsc.child('attachment', filename)
         self.env = env
         self.parent_realm = self.resource.parent.realm
         self.parent_id = unicode(self.resource.parent.id)
+        self.parent_pid = self.resource.parent.pid
         if self.resource.id:
             self._fetch(self.resource.id, db)
         else:
@@ -139,13 +146,16 @@ class Attachment(object):
 
     def _fetch(self, filename, db=None):
         if not db:
-            db = self.env.get_db_cnx()
-        cursor = db.cursor()
-        cursor.execute("""
+            db = self.env.get_read_db()
+        q = """
             SELECT filename,description,size,time,author,ipnr FROM attachment
-            WHERE type=%s AND id=%s AND filename=%s
+            WHERE type=%s AND id=%s AND filename=%s {pid_cond}
             ORDER BY time
-            """, (self.parent_realm, unicode(self.parent_id), filename))
+            """
+        args = (self.parent_realm, unicode(self.parent_id), filename)
+        q, args = self._format_pid_cond_query(q, args, self.parent_pid)
+        cursor = db.cursor()
+        cursor.execute(q, args)
         row = cursor.fetchone()
         cursor.close()
         if not row:
@@ -160,30 +170,48 @@ class Attachment(object):
         self.author = row[4]
         self.ipnr = row[5]
 
-    def _get_path(self, parent_realm, parent_id, filename):
-        path = os.path.join(self.env.path, 'attachments', parent_realm,
-                            unicode_quote(parent_id))
+    @staticmethod
+    def _format_pid_cond_query(q, args, parent_pid=None):
+        q = q.format(pid_cond = ('AND project_id=%s' if parent_pid is not None else ''))
+        if parent_pid is not None:
+            args = list(args)
+            args.append(parent_pid)
+        return q, args
+
+    def _get_path(self, parent_realm, parent_id, parent_pid, filename):
+        args = ['attachments']
+        if parent_pid is not None:
+            args.extend(['project', str(parent_pid)])
+        args.extend([parent_realm, unicode_quote(parent_id)])
+        path = os.path.join(self.env.path, *args)
         if filename:
             path = os.path.join(path, unicode_quote(filename))
         return os.path.normpath(path)
     
     @property
     def path(self):
-        return self._get_path(self.parent_realm, self.parent_id, self.filename)
+        return self._get_path(self.parent_realm, self.parent_id, self.parent_pid, self.filename)
 
     @property
     def title(self):
-        return '%s:%s: %s' % (self.parent_realm, self.parent_id, self.filename)
+        if self.parent_pid is not None:
+            return 'P#%s:%s:%s: %s' % (self.parent_pid, self.parent_realm, self.parent_id, self.filename)
+        else:
+            return '%s:%s: %s' % (self.parent_realm, self.parent_id, self.filename)
 
     def delete(self, db=None):
         assert self.filename, 'Cannot delete non-existent attachment'
 
         @self.env.with_transaction(db)
         def do_delete(db):
+            q = '''
+                DELETE FROM attachment
+                WHERE type=%s AND id=%s AND filename=%s {pid_cond}
+            '''
+            args = (self.parent_realm, self.parent_id, self.filename)
+            q, args = self._format_pid_cond_query(q, args, self.parent_pid)
             cursor = db.cursor()
-            cursor.execute("DELETE FROM attachment WHERE type=%s AND id=%s "
-                           "AND filename=%s",
-                           (self.parent_realm, self.parent_id, self.filename))
+            cursor.execute(q, args)
             if os.path.isfile(self.path):
                 try:
                     os.unlink(self.path)
@@ -199,14 +227,14 @@ class Attachment(object):
         for listener in AttachmentModule(self.env).change_listeners:
             listener.attachment_deleted(self)
 
-    def reparent(self, new_realm, new_id):
+    def reparent(self, new_realm, new_id, new_pid=None):
         assert self.filename, 'Cannot reparent non-existent attachment'
         new_id = unicode(new_id)
         
         @self.env.with_transaction()
         def do_reparent(db):
             cursor = db.cursor()
-            new_path = self._get_path(new_realm, new_id, self.filename)
+            new_path = self._get_path(new_realm, new_id, new_pid, self.filename)
 
             # Make sure the path to the attachment is inside the environment
             # attachments directory
@@ -224,11 +252,13 @@ class Attachment(object):
                                   'it already exists in %(realm)s:%(id)s', 
                                   att=self.filename, realm=new_realm,
                                   id=new_id))
-            cursor.execute("""
+            q = """
                 UPDATE attachment SET type=%s, id=%s
-                WHERE type=%s AND id=%s AND filename=%s
-                """, (new_realm, new_id, self.parent_realm, self.parent_id,
-                      self.filename))
+                WHERE type=%s AND id=%s AND filename=%s {pid_cond}
+            """
+            args = (new_realm, new_id, self.parent_realm, self.parent_id, self.filename)
+            q, args = self._format_pid_cond_query(q, args, self.parent_pid)
+            cursor.execute(q, args)
             dirname = os.path.dirname(new_path)
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
@@ -242,16 +272,16 @@ class Attachment(object):
                     raise TracError(_('Could not reparent attachment %(name)s',
                                       name=self.filename))
 
-        old_realm, old_id = self.parent_realm, self.parent_id
-        self.parent_realm, self.parent_id = new_realm, new_id
-        self.resource = Resource(new_realm, new_id).child('attachment',
+        old_realm, old_id, old_pid = self.parent_realm, self.parent_id, self.parent_pid
+        self.parent_realm, self.parent_id, self.parent_pid = new_realm, new_id, new_pid
+        self.resource = Resource(new_realm, new_id, pid=new_pid).child('attachment',
                                                           self.filename)
         
         self.env.log.info('Attachment reparented: %s' % self.title)
 
         for listener in AttachmentModule(self.env).change_listeners:
             if hasattr(listener, 'attachment_reparented'):
-                listener.attachment_reparented(self, old_realm, old_id)
+                listener.attachment_reparented(self, old_realm, old_id, old_pid)
 
     def insert(self, filename, fileobj, size, t=None, db=None):
         self.filename = None
@@ -287,9 +317,9 @@ class Attachment(object):
             @self.env.with_transaction(db)
             def do_insert(db):
                 cursor = db.cursor()
-                cursor.execute("INSERT INTO attachment "
-                               "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                               (self.parent_realm, self.parent_id, filename,
+                cursor.execute("INSERT INTO attachment (type,id,project_id,filename,size,time,description,author,ipnr)"
+                               "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                               (self.parent_realm, self.parent_id, self.parent_pid, filename,
                                 self.size, to_utimestamp(t), self.description,
                                 self.author, self.ipnr))
                 shutil.copyfileobj(fileobj, targetfile)
@@ -305,15 +335,29 @@ class Attachment(object):
 
 
     @classmethod
-    def select(cls, env, parent_realm, parent_id, db=None):
+    def select(cls, env, parent_realm_or_resource, parent_id=None, parent_pid=None, db=None):
         if not db:
-            db = env.get_db_cnx()
+            db = env.get_read_db()
+        if isinstance(parent_realm_or_resource, Resource):
+            resource = parent_realm_or_resource
+        else:
+            resource = Resource(parent_realm_or_resource, parent_id, pid=parent_pid)
+        if resource.need_pid and resource.pid is None:
+            raise TracError('Parent project ID is not set for attachment')
+        parent_realm = resource.realm
+        parent_id    = resource.id
+        # if we don't need pid to select - do not use it
+        parent_pid   = resource.pid if resource.need_pid else None
+        q = '''
+            SELECT filename,description,size,time,author,ipnr
+            FROM attachment WHERE type=%s AND id=%s {pid_cond} ORDER BY time
+            '''
+        args = (parent_realm, unicode(parent_id))
+        q, args = cls._format_pid_cond_query(q, args, parent_pid)
         cursor = db.cursor()
-        cursor.execute("SELECT filename,description,size,time,author,ipnr "
-                       "FROM attachment WHERE type=%s AND id=%s ORDER BY time",
-                       (parent_realm, unicode(parent_id)))
+        cursor.execute(q, args)
         for filename, description, size, time, author, ipnr in cursor:
-            attachment = Attachment(env, parent_realm, parent_id)
+            attachment = Attachment(env, parent_realm, parent_id, parent_pid=parent_pid)
             attachment.filename = filename
             attachment.description = description
             attachment.size = size and int(size) or 0
@@ -323,12 +367,12 @@ class Attachment(object):
             yield attachment
 
     @classmethod
-    def delete_all(cls, env, parent_realm, parent_id, db=None):
+    def delete_all(cls, env, parent_realm_or_resource, parent_id, parent_pid=None, db=None):
         """Delete all attachments of a given resource."""
         attachment_dir = [None]
         @env.with_transaction(db)
         def do_delete(db):
-            for attachment in list(cls.select(env, parent_realm, parent_id,
+            for attachment in list(cls.select(env, parent_realm_or_resource, parent_id, parent_pid,
                                               db)):
                 attachment_dir[0] = os.path.dirname(attachment.path)
                 attachment.delete()
@@ -340,15 +384,15 @@ class Attachment(object):
                     attachment_dir[0], exception_to_unicode(e, traceback=True))
 
     @classmethod
-    def reparent_all(cls, env, parent_realm, parent_id, new_realm, new_id):
+    def reparent_all(cls, env, parent_realm, parent_id, parent_pid, new_realm, new_id, new_pid):
         """Reparent all attachments of a given resource to another resource."""
         attachment_dir = [None]
         @env.with_transaction()
         def do_reparent(db):
-            for attachment in list(cls.select(env, parent_realm, parent_id,
+            for attachment in list(cls.select(env, parent_realm, parent_id, parent_pid,
                                               db)):
                 attachment_dir = os.path.dirname(attachment.path)
-                attachment.reparent(new_realm, new_id)
+                attachment.reparent(new_realm, new_id, new_pid)
         if attachment_dir[0]:
             try:
                 os.rmdir(attachment_dir[0])
@@ -420,36 +464,43 @@ class AttachmentModule(Component):
     # IRequestHandler methods
 
     def match_request(self, req):
-        match = re.match(r'/(raw-)?attachment/([^/]+)(?:/(.*))?$',
+#        match = re.match(r'/(raw-)?attachment/([^/]+)(?:/(.*))?$',
+#                         req.path_info)
+        match = re.match(r'/(raw-)?attachment/(.*)$',
                          req.path_info)
         if match:
-            raw, realm, path = match.groups()
+            raw, path = match.groups()
             if raw:
                 req.args['format'] = 'raw'
-            req.args['realm'] = realm
             if path:
+#                if 'pid' in req.args:
+#                    path = 'project/{0}/{1}'.format(req.args['pid'], path)
                 req.args['path'] = path
             return True
 
     def process_request(self, req):
-        parent_id = None
-        parent_realm = req.args.get('realm')
+        parent_url = None
+#        parent_realm = req.args.get('realm')
+#        parent_pid = req.args.getint('pid')
         path = req.args.get('path')
         filename = None
         
-        if not parent_realm or not path:
+        if not path:
             raise HTTPBadRequest(_('Bad request'))
 
-        parent_realm = Resource(parent_realm)
+#        parent_realm = Resource(parent_realm)
         action = req.args.get('action', 'view')
         if action == 'new':
-            parent_id = path.rstrip('/')
+            parent_url = path.rstrip('/')
         else:
             segments = path.split('/')
-            parent_id = '/'.join(segments[:-1])
+            parent_url = '/'.join(segments[:-1])
             filename = len(segments) > 1 and segments[-1]
 
-        parent = parent_realm(id=parent_id)
+#        parent = parent_realm(id=parent_id, pid=parent_pid)
+#        url = '/'.join((parent_realm, parent_id))
+        real_rsc = get_real_resource_from_url(self.env, parent_url, req.args)
+        parent = real_rsc.resource
         
         # Link the attachment page to parent resource
         parent_name = get_resource_name(self.env, parent)
@@ -498,7 +549,7 @@ class AttachmentModule(Component):
         """
         parent = context.resource
         attachments = []
-        for attachment in Attachment.select(self.env, parent.realm, parent.id):
+        for attachment in Attachment.select(self.env, parent):
             if 'ATTACHMENT_VIEW' in context.perm(attachment.resource):
                 attachments.append(attachment)
         new_att = parent.child('attachment')
@@ -518,33 +569,41 @@ class AttachmentModule(Component):
         is_global = pid is None
         if is_global and not self.rs.has_global_resources(realm):
             return
-        if not is_global and not self.rs.has_project_resources(realm):
+        has_project = self.rs.has_project_resources(realm)
+        if not is_global and not has_project:
             return
+        need_pid = Resource(realm).need_pid
         # Traverse attachment directory
         db = self.env.get_read_db()
         cursor = db.cursor()
         query = '''
             SELECT {sel_pid} a.type, a.id, a.filename, a.time, a.description, a.author
             FROM attachment a
-            LEFT JOIN "{rsc_tab}" r ON r."{rsc_id}"=a.id
+            LEFT JOIN "{rsc_tab}" r ON CAST(r."{rsc_id}" AS varchar)=a.id
             WHERE a.time > %s AND a.time < %s AND a.type = %s {and_pid}
         '''
         rsc_tab = self.rs.get_realm_table(realm)
         rsc_id  = self.rs.get_realm_id(realm)
         sql_args = [to_utimestamp(start), to_utimestamp(stop), realm]
-        if is_global:
-            sel_pid = 'r.project_id,'
-            and_pid = ''
+        if has_project:
+            if is_global:
+                sel_pid = 'r.project_id,'
+                and_pid = ''
+            else:
+                sel_pid = ''
+                and_pid = 'AND r.project_id=%s'
+                sql_args.append(pid)
         else:
             sel_pid = ''
-            and_pid = 'AND r.project_id=%s'
-            sql_args.append(pid)
+            and_pid = ''
         query = query.format(sel_pid=sel_pid, rsc_tab=rsc_tab, rsc_id=rsc_id, and_pid=and_pid)
         cursor.execute(query, sql_args)
         if is_global:
-            for project_id, realm, id, filename, ts, description, author in cursor:
-                time = from_utimestamp(ts)
-                yield ('created', project_id, realm, id, filename, time, description, author)
+            raise NotImplementedError
+            if has_project:
+                for project_id, realm, id, filename, ts, description, author in cursor:
+                    time = from_utimestamp(ts)
+                    yield ('created', project_id, realm, id, filename, time, description, author)
         else:
             for realm, id, filename, ts, description, author in cursor:
                 time = from_utimestamp(ts)
@@ -617,8 +676,9 @@ class AttachmentModule(Component):
         if format == 'raw':
             kwargs.pop('format')
             prefix = 'raw-attachment'
-        parent_href = unicode_unquote(get_resource_url(self.env,
-                            resource.parent(version=None), Href('')))
+#        parent_href = unicode_unquote(get_resource_url(self.env,
+#                            resource.parent(version=None), Href('')))
+        parent_href = get_resource_url(self.env, resource.parent(version=None))
         if not resource.id: 
             # link to list of attachments, which must end with a trailing '/' 
             # (see process_request)
@@ -944,27 +1004,27 @@ class AttachmentAdmin(Component):
     # IAdminCommandProvider methods
     
     def get_admin_commands(self):
-        yield ('attachment list', '<realm:id>',
+        yield ('attachment list', '<[pid:]realm:id>',
                """List attachments of a resource
                
-               The resource is identified by its realm and identifier.""",
+               The resource is identified by its realm and identifier (and opt. project id).""",
                self._complete_list, self._do_list)
-        yield ('attachment add', '<realm:id> <path> [author] [description]',
+        yield ('attachment add', '<[pid:]realm:id> <path> [author] [description]',
                """Attach a file to a resource
                
-               The resource is identified by its realm and identifier. The
+               The resource is identified by its realm and identifier (and opt. project id). The
                attachment will be named according to the base name of the file.
                """,
                self._complete_add, self._do_add)
-        yield ('attachment remove', '<realm:id> <name>',
+        yield ('attachment remove', '<[pid:]realm:id> <name>',
                """Remove an attachment from a resource
                
-               The resource is identified by its realm and identifier.""",
+               The resource is identified by its realm and identifier (and opt. project id).""",
                self._complete_remove, self._do_remove)
-        yield ('attachment export', '<realm:id> <name> [destination]',
+        yield ('attachment export', '<[pid:]realm:id> <name> [destination]',
                """Export an attachment from a resource to a file or stdout
                
-               The resource is identified by its realm and identifier. If no
+               The resource is identified by its realm and identifier (and opt. project id). If no
                destination is specified, the attachment is output to stdout.
                """,
                self._complete_export, self._do_export)
@@ -975,14 +1035,16 @@ class AttachmentAdmin(Component):
     
     def split_resource(self, resource):
         result = resource.split(':', 1)
-        if len(result) != 2:
+        if not (2 <= len(result) <= 3):
             raise AdminCommandError(_("Invalid resource identifier '%(id)s'",
                                       id=resource))
+        if len(result) == 2:
+            result.insert(0, None)
         return result
     
     def get_attachment_list(self, resource):
-        (realm, id) = self.split_resource(resource)
-        return [a.filename for a in Attachment.select(self.env, realm, id)]
+        (pid, realm, id) = self.split_resource(resource)
+        return [a.filename for a in Attachment.select(self.env, realm, id, pid)]
     
     def _complete_list(self, args):
         if len(args) == 1:
@@ -1007,17 +1069,17 @@ class AttachmentAdmin(Component):
             return get_dir_list(args[2])
     
     def _do_list(self, resource):
-        (realm, id) = self.split_resource(resource)
+        (pid, realm, id) = self.split_resource(resource)
         print_table([(a.filename, pretty_size(a.size), a.author,
                       format_datetime(a.date, console_datetime_format),
                       a.description)
-                     for a in Attachment.select(self.env, realm, id)],
+                     for a in Attachment.select(self.env, realm, id, pid)],
                     [_('Name'), _('Size'), _('Author'), _('Date'),
                      _('Description')])
     
     def _do_add(self, resource, path, author='trac', description=''):
-        (realm, id) = self.split_resource(resource)
-        attachment = Attachment(self.env, realm, id)
+        (pid, realm, id) = self.split_resource(resource)
+        attachment = Attachment(self.env, realm, id, parent_pid=pid)
         attachment.author = author
         attachment.description = description
         f = open(path, 'rb')
@@ -1027,13 +1089,13 @@ class AttachmentAdmin(Component):
             f.close()
     
     def _do_remove(self, resource, name):
-        (realm, id) = self.split_resource(resource)
-        attachment = Attachment(self.env, realm, id, name)
+        (pid, realm, id) = self.split_resource(resource)
+        attachment = Attachment(self.env, realm, id, name, parent_pid=pid)
         attachment.delete()
     
     def _do_export(self, resource, name, destination=None):
-        (realm, id) = self.split_resource(resource)
-        attachment = Attachment(self.env, realm, id, name)
+        (pid, realm, id) = self.split_resource(resource)
+        attachment = Attachment(self.env, realm, id, name, parent_pid=pid)
         if destination is not None:
             if os.path.isdir(destination):
                 destination = os.path.join(destination, name)

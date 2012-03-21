@@ -335,7 +335,7 @@ class TicketModule(Component):
             # Attachments
             if 'ticket_details' in filters:
                 for event in AttachmentModule(self.env).get_timeline_events(
-                    req, ticket_realm, start, stop):
+                    req, ticket_realm, start, stop, pid):
                     yield event
 
     def render_timeline_event(self, context, field, event):
