@@ -43,11 +43,14 @@ def get_reporter_id(req, arg_name=None):
         r = req.args.get(arg_name)
         if r:
             return r
-    name = req.session.get('name', None)
-    email = req.session.get('email', None)
-    if name and email:
-        return '%s <%s>' % (name, email)
-    return name or email or req.authname # == 'anonymous'
+    return req.authname
+    # some tables changed to refer to 'users' table
+    # so we need real usernames
+#    name = req.session.get('name', None)
+#    email = req.session.get('email', None)
+#    if name and email:
+#        return '%s <%s>' % (name, email)
+#    return name or email or req.authname # == 'anonymous'
 
 if os.name == 'nt':
     from getpass import getuser

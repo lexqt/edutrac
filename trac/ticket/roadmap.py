@@ -814,7 +814,7 @@ class MilestoneModule(Component):
         # collect fields that can be used for grouping
         for name, field in ticket_fields.iteritems():
             if field['type'] == 'select' and name != 'milestone' \
-                    or name in ('owner', 'reporter'):
+                    or field['type'] == 'username':
                 available_groups.append({'name': name,
                                          'label': field['label']})
                 if name == 'component':

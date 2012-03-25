@@ -48,7 +48,7 @@ def _fixup_cc_list(cc_value):
 class Ticket(object):
 
     # Fields that must not be modified directly by the user
-    protected_fields = ('resolution', 'status', 'time', 'changetime', 'project_id', 'reporter')
+    protected_fields = ('resolution', 'status', 'time', 'changetime', 'project_id')
 
     @staticmethod
     def id_is_valid(num):
@@ -198,8 +198,10 @@ class Ticket(object):
             if isinstance(value, list):
                 raise TracError(_("Multi-values fields not supported yet"))
             field = self.fields.get(name)
-            if field and field.get('type') != 'textarea':
-                value = value.strip()
+            if field:
+                type_ = field.get('type')
+                if type_ != 'textarea' and isinstance(value, basestring):
+                    value = value.strip()
         self.values[name] = value
 
     def get_value_or_default(self, name):

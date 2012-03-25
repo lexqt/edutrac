@@ -49,9 +49,8 @@ from trac.web.chrome import add_link, add_notice, add_script, add_stylesheet, \
                             INavigationContributor, ITemplateProvider
 from trac.wiki.formatter import format_to, format_to_html, format_to_oneliner
 
-
-from trac.project.model import ProjectNotSet, ResourceProjectMismatch
 from trac.project.api import ProjectManagement
+from trac.user.api import UserManagement
 
 class InvalidTicket(TracError):
     """Exception raised when a ticket fails validation."""
@@ -167,6 +166,7 @@ class TicketModule(Component):
 
     def process_request(self, req):
         self.pm = ProjectManagement(self.env)
+        self.um = UserManagement(self.env)
         if 'id' in req.args:
             if req.path_info == '/newticket':
                 raise TracError(_("id can't be set for a new ticket request."))
@@ -394,9 +394,11 @@ class TicketModule(Component):
 
         self._populate(req, ticket, plain_fields)
         ticket.values['status'] = 'new'     # Force initial status
-#        reporter_id = req.args.get(field_reporter) or \
-#                      get_reporter_id(req, 'author')
-        reporter_id = req.authname
+        if 'TICKET_SET_REPORTER' in req.perm:
+            reporter_id = req.args.get(field_reporter) or \
+                          get_reporter_id(req, 'author')
+        else:
+            reporter_id = req.authname
         ticket.values['reporter'] = reporter_id
 
         valid = None
@@ -540,11 +542,11 @@ class TicketModule(Component):
                                  tracini=tag.tt('trac.ini')))
 
             # Apply changes made by the workflow
-            if field_changes is not None:
-                self._apply_ticket_changes(ticket, field_changes)
-            else:
-                # Special case - cancel all changes
-                ticket = Ticket(self.env, ticket.id)
+#            if field_changes is not None:
+            self._apply_ticket_changes(ticket, field_changes)
+#            else:
+#                # Special case - cancel all changes
+#                ticket = Ticket(self.env, ticket.id)
             # Unconditionally run the validation so that the user gets
             # information any and all problems.  But it's only valid if it
             # validates and there were no problems with the workflow side of
@@ -1151,24 +1153,44 @@ class TicketModule(Component):
         if not ticket['summary']:
             add_warning(req, _("Tickets must contain a summary."))
             valid = False
-            
-        # Always validate for known values
+
+        import formencode
+        from formencode import validators
         for name, field in ticket.fields.iteritems():
-            if 'options' not in field:
-                continue
             if name == 'status':
                 continue
-            if name in ticket.values and name in ticket._old:
-                value = ticket[name]
-                if value:
+            type_ = field['type']
+            value = ticket[name]
+            if value:
+                # Per-type validation
+                try:
+                    if type_ == 'username':
+                        if not self.um.user_exists(value):
+                            add_warning(req, _('User with username %(username)s does not exists',
+                                               username=value))
+                            valid = False
+                    elif type_ == 'int':
+                        value_ = validators.Int.to_python(value)
+                        # commented because it should be change everywhere
+                        # now e.g. it leads to detecting ticket changes
+                        # from str to int for modifier
+#                        ticket[name] = value = value_
+                except formencode.Invalid, e:
+                    add_warning(req, u'{0}: {1}'.format(
+                                    field['label'], e.msg))
+                    valid = False
+                # Validate for known values fields with options
+                if 'options' not in field:
+                    continue
+                if name in ticket.values and name in ticket._old:
                     if value not in field['options']:
                         add_warning(req, '"%s" is not a valid value for '
                                     'the %s field.' % (value, name))
                         valid = False
-                elif not field.get('optional', False):
-                    add_warning(req, _("field %(name)s must be set",
-                                       name=name))
-                    valid = False
+            elif not field.get('optional', False):
+                add_warning(req, _("field %(name)s must be set",
+                                   name=name))
+                valid = False
 
         # Validate description length
         if len(ticket['description'] or '') > self.max_description_size:
@@ -1303,9 +1325,9 @@ class TicketModule(Component):
             cname = controller.__class__.__name__
             action_changes = controller.get_ticket_changes(req, ticket,
                                                            selected_action)
-            # None is marker that all changes must be canceled
-            if action_changes is None:
-                return None, []
+#            # None is marker that all changes must be canceled
+#            if action_changes is None:
+#                return None, []
             for key in action_changes.keys():
                 old = ticket[key]
                 new = action_changes[key]
@@ -1571,9 +1593,10 @@ class TicketModule(Component):
 
         context = Context.from_request(req, ticket.resource)
 
-        # Display the owner and reporter links when not obfuscated
+        # Display username links when not obfuscated
+        username_fields = [field['name'] for field in fields if field['type']=='username']
         chrome = Chrome(self.env)
-        for user in 'reporter', 'owner':
+        for user in username_fields:
             if chrome.format_author(req, ticket[user]) == ticket[user]:
                 data['%s_link' % user] = self._query_link(req, user,
                                                             ticket[user])
@@ -1655,7 +1678,7 @@ class TicketModule(Component):
                                     len(remvd), items=separated(remvd, sep))
             if added or remvd:
                 rendered = tag(added, added and remvd and _("; "), remvd)
-        if field in ('reporter', 'owner'):
+        if type_ == 'username':
             if not (Chrome(self.env).show_email_addresses or 
                     'EMAIL_VIEW' in req.perm(resource_new or ticket.resource)):
                 old = obfuscate_email_address(old)

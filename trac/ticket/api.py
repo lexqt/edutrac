@@ -218,20 +218,25 @@ class TicketFieldsStore(object):
         # Basic text fields
         fields.append({'name': 'project_id', 'type': 'id',
                        'label': N_('Project ID'),
-                       'notnull': True, 'skip': True})
+                       'notnull': True, 'skip': True,
+                       'optional': False})
         fields.append({'name': 'summary', 'type': 'text',
-                       'label': N_('Summary')})
-        fields.append({'name': 'reporter', 'type': 'text',
-                       'label': N_('Reporter')})
+                       'label': N_('Summary'),
+                       'optional': False})
+        fields.append({'name': 'reporter', 'type': 'username',
+                       'label': N_('Reporter'),
+                       'optional': False})
 
         # Owner field, by default text but can be changed dynamically 
         # into a drop-down depending on configuration (restrict_owner=true)
-        fields.append({'name': 'owner', 'type': 'text',
-                       'label': N_('Owner')})
+        fields.append({'name': 'owner', 'type': 'username',
+                       'label': N_('Owner'),
+                       'optional': True})
 
         # Description
         fields.append({'name': 'description', 'type': 'textarea',
-                       'label': N_('Description')})
+                       'label': N_('Description'),
+                       'optional': True})
 
         # Default select and radio fields
         selects = [
@@ -256,15 +261,19 @@ class TicketFieldsStore(object):
 
         # Advanced text fields
         fields.append({'name': 'keywords', 'type': 'text',
-                       'label': N_('Keywords')})
+                       'label': N_('Keywords'),
+                       'optional': True})
         fields.append({'name': 'cc', 'type': 'text',
-                       'label': N_('Cc')})
+                       'label': N_('Cc'),
+                       'optional': True})
 
         # Date/time fields
         fields.append({'name': 'time', 'type': 'time',
-                       'label': N_('Created')})
+                       'label': N_('Created'),
+                       'optional': False})
         fields.append({'name': 'changetime', 'type': 'time',
-                       'label': N_('Modified')})
+                       'label': N_('Modified'),
+                       'optional': False})
 
         fields.extend(self._prepare_custom_fields())
 
@@ -288,13 +297,15 @@ class TicketFieldsStore(object):
                 'type': config.get(name),
                 'order': config.getint(name + '.order', 0),
                 'label': config.get(name + '.label') or name.capitalize(),
-                'value': config.get(name + '.value', '')
+                'value': config.get(name + '.value', ''),
+                'optional': config.get(name + '.optional', True),
             }
             if field['type'] == 'select' or field['type'] == 'radio':
                 field['options'] = config.getlist(name + '.options', sep='|')
                 if '' in field['options']:
-                    field['optional'] = True
                     field['options'].remove('')
+                else:
+                    field['optional'] = False
             elif field['type'] == 'text':
                 field['format'] = config.get(name + '.format', 'plain')
             elif field['type'] == 'textarea':
@@ -317,11 +328,13 @@ class TicketFieldsStore(object):
                 continue
             field = {'name': name, 'type': 'select', 'label': label,
                      'value': getattr(self.ts, 'default_' + name, ''),
-                     'options': options, 'model_class': cls}
+                     'options': options, 'model_class': cls,
+                       'optional': False}
             if name in ('status', 'resolution'):
                 field['type'] = 'radio'
-                field['optional'] = True
-            elif name in ('milestone', 'version'):
+                if name == 'resolution':
+                    field['optional'] = True
+            elif name in ('milestone', 'component', 'version'):
                 field['optional'] = True
             fields.append(field)
         return fields
@@ -408,6 +421,7 @@ class TicketSystem(Component):
     def __init__(self):
         from trac.ticket.default_workflow import ConfigurableTicketWorkflow
         self.workflow = ConfigurableTicketWorkflow(self.env)
+        self.pm = ProjectManagement(self.env)
 
     # Public API
 
@@ -483,12 +497,12 @@ class TicketSystem(Component):
     def get_permission_actions(self):
         return ['TICKET_APPEND', 'TICKET_CREATE', 'TICKET_CHGPROP',
                 'TICKET_VIEW', 'TICKET_EDIT_CC', 'TICKET_EDIT_DESCRIPTION',
-                'TICKET_EDIT_COMMENT',
+                'TICKET_EDIT_COMMENT', 'TICKET_SET_REPORTER',
                 ('TICKET_MODIFY', ['TICKET_APPEND', 'TICKET_CHGPROP']),
                 ('TICKET_ADMIN', ['TICKET_CREATE', 'TICKET_MODIFY',
                                   'TICKET_VIEW', 'TICKET_EDIT_CC',
                                   'TICKET_EDIT_DESCRIPTION',
-                                  'TICKET_EDIT_COMMENT'])]
+                                  'TICKET_EDIT_COMMENT', 'TICKET_SET_REPORTER'])]
 
     # IWikiSyntaxProvider methods
 

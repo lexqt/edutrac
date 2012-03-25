@@ -211,7 +211,7 @@ class TicketNotifyEmail(NotifyEmail):
             if not fname in tkt.values:
                 continue
             fval = tkt[fname] or ''
-            if fval.find('\n') != -1:
+            if isinstance(fval, basestring) and fval.find('\n') != -1:
                 continue
             if fname in ['owner', 'reporter']:
                 fval = self.obfuscate_email(fval)

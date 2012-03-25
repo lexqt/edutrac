@@ -48,6 +48,22 @@ class UserManagement(Component):
 
     VALID_PROJECT_USER_REALMS = ('team', 'manager')
 
+    def user_exists(self, username):
+        """
+        Returns whether the user exists.
+        """
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+
+        q = '''
+            SELECT 1
+            FROM users
+            WHERE username=%s
+            LIMIT 1
+        '''
+        cursor.execute(q, (username,))
+        return cursor.rowcount==1
+
     def group_exists(self, gid, group_lvl=GroupLevel.TEAM):
         """
         Returns whether the group exists.

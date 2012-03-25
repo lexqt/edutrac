@@ -141,7 +141,7 @@ class Field(TicketAttribute):
             table = tables['ticket_custom'].alias('tc_'+name)
             col = table.c.value.label(name)
             ftype = field['type']
-            if ftype == 'integer':
+            if ftype == 'int':
                 col = cast(col, Integer)
             on_expr = (table.c.ticket == tables['ticket'].c.id) &\
                       (table.c.name == name)
