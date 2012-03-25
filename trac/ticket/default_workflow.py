@@ -313,6 +313,8 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         else:
             if status != '*':
                 hints.append(_("Next status will be '%(name)s'", name=status))
+        if 'comment' in operations:
+            hints.append(_("Leave comment without any change to ticket"))
         return (this_action['name'], tag(*control), '. '.join(hints))
 
     def get_ticket_changes(self, req, ticket, action):
@@ -366,7 +368,13 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
 
     def validate_ticket(self, req, ticket, action):
         res = []
-        if action and 'set_owner' in action['operations']:
+        if not action:
+            return res
+        ops = action['operations']
+        if 'comment' in ops:
+            if ticket._old:
+                res.append((None, _('You can not change ticket fields for "comment" operation.')))
+        if 'set_owner' in ops:
             owners = self.get_valid_owners(req, ticket, action)
             if ticket['owner'] not in owners:
                 res.append(('owner', '"%s" is not valid owner for "%s" action'
