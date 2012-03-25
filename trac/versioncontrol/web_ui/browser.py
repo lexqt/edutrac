@@ -296,7 +296,7 @@ class BrowserModule(Component):
 
     def get_navigation_items(self, req):
         rm = RepositoryManager(self.env)
-        pid = self.pm.get_current_project(req)
+        pid = self.pm.get_current_project(req, fail_on_none=False)
         if 'BROWSER_VIEW' in req.perm and rm.get_real_repositories(project_id=pid):
             yield ('mainnav', 'browser',
                    tag.a(_('Browse Source'), href=req.href.browser()))
