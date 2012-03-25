@@ -48,6 +48,9 @@ from trac.web.href import Href
 from trac.wiki.api import IWikiSyntaxProvider
 from trac.wiki.formatter import format_to
 
+from trac.project.api import ProjectManagement
+
+
 
 class InvalidAttachment(TracError):
     """Exception raised when attachment validation fails."""
@@ -119,7 +122,7 @@ class Attachment(object):
         else:
             parent_rsc = Resource(parent_realm_or_attachment_resource,
                                   parent_id, pid=parent_pid)
-            if parent_rsc.need_pid and parent_pid is None:
+            if parent_rsc.need_pid and parent_rsc.pid is None:
                 raise TracError('Parent project ID is not set for attachment')
             # else
             # pid is None     -> attachment for global rsc
@@ -172,10 +175,9 @@ class Attachment(object):
 
     @staticmethod
     def _format_pid_cond_query(q, args, parent_pid=None):
-        q = q.format(pid_cond = ('AND project_id=%s' if parent_pid is not None else ''))
-        if parent_pid is not None:
-            args = list(args)
-            args.append(parent_pid)
+        q = q.format(pid_cond = 'AND project_id=%s')
+        args = list(args)
+        args.append(parent_pid if parent_pid is not None else GLOBAL_PID)
         return q, args
 
     def _get_path(self, parent_realm, parent_id, parent_pid, filename):
@@ -317,9 +319,10 @@ class Attachment(object):
             @self.env.with_transaction(db)
             def do_insert(db):
                 cursor = db.cursor()
+                pid = self.parent_pid if self.parent_pid is not None else GLOBAL_PID
                 cursor.execute("INSERT INTO attachment (type,id,project_id,filename,size,time,description,author,ipnr)"
                                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                               (self.parent_realm, self.parent_id, self.parent_pid, filename,
+                               (self.parent_realm, self.parent_id, pid, filename,
                                 self.size, to_utimestamp(t), self.description,
                                 self.author, self.ipnr))
                 shutil.copyfileobj(fileobj, targetfile)
@@ -367,7 +370,7 @@ class Attachment(object):
             yield attachment
 
     @classmethod
-    def delete_all(cls, env, parent_realm_or_resource, parent_id, parent_pid=None, db=None):
+    def delete_all(cls, env, parent_realm_or_resource, parent_id=None, parent_pid=None, db=None):
         """Delete all attachments of a given resource."""
         attachment_dir = [None]
         @env.with_transaction(db)

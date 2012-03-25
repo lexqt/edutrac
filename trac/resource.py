@@ -22,6 +22,10 @@ from trac.util.text import unicode_unquote
 from trac.web.href import Href, HrefPart
 
 
+
+GLOBAL_PID = 0
+'''Dummy project ID for global resource identification'''
+
 class ResourceNotFound(TracError):
     """Thrown when a non-existent resource is requested"""
 
@@ -245,6 +249,8 @@ class Resource(object):
         """
         realm = resource_or_realm
         need_pid = None
+        if pid == GLOBAL_PID:
+            pid = None
         if isinstance(resource_or_realm, Resource):
             if pid is False and id is False and version is False and parent is False:
                 return resource_or_realm

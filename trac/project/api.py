@@ -1,4 +1,5 @@
 from trac.core import Component, Interface, TracError
+from trac.resource import GLOBAL_PID
 
 from trac.project.model import ProjectNotSet, ResourceProjectMismatch
 from trac.user.api import UserManagement, GroupLevel
@@ -144,6 +145,8 @@ class ProjectManagement(Component):
 
     def check_session_project(self, req, pid, allow_multi=False, fail_on_false=True):
         pid = int(pid)
+        if pid == GLOBAL_PID:
+            return True
         if allow_multi and 'MULTIPROJECT_ACTION' in req.perm:
             check = pid in req.user_projects
         else:
