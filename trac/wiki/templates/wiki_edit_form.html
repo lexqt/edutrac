@@ -62,6 +62,12 @@ $page.text</textarea>
           Page is read-only
         </label>
       </div>
+      <div py:if="not page.version and 'WIKI_GLOBAL_ACTION' in perm(page.resource)" id="changeinfo3" class="options">
+        <label><input type="checkbox" name="globalpage" id="globalpage"
+                      checked="1" />
+          Page is global
+        </label>
+      </div>
     </fieldset>
     <div class="buttons" py:choose="action">
       <py:when test="'collision'">

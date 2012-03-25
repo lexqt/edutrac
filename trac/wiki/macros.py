@@ -89,6 +89,9 @@ class TitleIndexMacro(WikiMacroBase):
        only toplevel pages will be shown, if set to 1, only immediate
        children pages will be shown, etc. If not set, or set to -1,
        all pages in the hierarchy will be shown.
+    Parameter `area` defines the area of wiki pages to show:
+    - `area=global`: Default. Show only global wiki pages.
+    - `area=project`: Show wiki pages for current session project.
     """
 
     SPLIT_RE = re.compile(r"(/| )")
@@ -103,15 +106,21 @@ class TitleIndexMacro(WikiMacroBase):
         depth = int(kw.get('depth', -1))
         start = prefix and prefix.count('/') or 0
         format = kw.get('format', '')
+        area = kw.get('area', 'global')
 
         if hideprefix:
             omitprefix = lambda page: page[len(prefix):]
         else:
             omitprefix = lambda page: page
 
+        if area == 'global':
+            pid = None
+        else:
+            pid = formatter.session_pid
+
         wiki = formatter.wiki
 
-        pages = sorted(page for page in wiki.get_pages(prefix) \
+        pages = sorted(page for page in wiki.get_pages(prefix, pid=pid) \
                        if (depth < 0 or depth >= page.count('/') - start)
                        and 'WIKI_VIEW' in formatter.perm('wiki', page))
 
@@ -275,31 +284,42 @@ class RecentChangesMacro(WikiMacroBase):
     The second parameter is a number for limiting the number of pages returned.
     For example, specifying a limit of 5 will result in only the five most
     recently changed pages to be included in the list.
+
+    Optional keyword parameter `area` defines the area of wiki pages to show:
+    - `area=global`: Default. Show changes only for global wiki pages.
+    - `area=project`: Show changes only for wiki pages of current session project.
+
     """
 
     def expand_macro(self, formatter, name, content):
         prefix = limit = None
-        if content:
-            argv = [arg.strip() for arg in content.split(',')]
-            if len(argv) > 0:
-                prefix = argv[0]
-                if len(argv) > 1:
-                    limit = int(argv[1])
+        args, kw = parse_args(content)
+        if len(args) > 0:
+            prefix = args[0]
+            if len(args) > 1:
+                limit = int(args[1])
+        area = kw.get('area', 'global')
 
         cursor = formatter.db.cursor()
 
         sql = 'SELECT name, ' \
               '  max(version) AS max_version, ' \
               '  max(time) AS max_time ' \
-              'FROM wiki'
+              'FROM wiki WHERE project_id'
         args = []
+        if area == 'global':
+            sql += ' IS NULL'
+        else:
+            sql += '=%s'
+            args.append(formatter.session_pid)
         if prefix:
-            sql += ' WHERE name LIKE %s'
+            sql += ' AND name LIKE %s'
             args.append(prefix + '%')
         sql += ' GROUP BY name ORDER BY max_time DESC'
         if limit:
             sql += ' LIMIT %s'
             args.append(limit)
+
         cursor.execute(sql, args)
 
         entries_per_date = []

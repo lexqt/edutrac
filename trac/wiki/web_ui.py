@@ -18,6 +18,7 @@
 
 import pkg_resources
 import re
+from itertools import chain
 
 from genshi.builder import tag
 
@@ -41,7 +42,9 @@ from trac.web.api import IRequestHandler
 from trac.wiki.api import IWikiPageManipulator, WikiSystem, validate_page_name
 from trac.wiki.formatter import format_to, OneLinerFormatter
 from trac.wiki.model import WikiPage
- 
+
+from trac.project.api import ProjectManagement
+
 class InvalidWikiPage(TracError):
     """Exception raised when a Wiki page fails validation.
     
@@ -88,7 +91,7 @@ class WikiModule(Component):
 
     def get_permission_actions(self):
         actions = ['WIKI_CREATE', 'WIKI_DELETE', 'WIKI_MODIFY', 'WIKI_RENAME',
-                   'WIKI_VIEW']
+                   'WIKI_VIEW', 'WIKI_GLOBAL_ACTION']
         return actions + [('WIKI_ADMIN', actions)]
 
     # IRequestHandler methods
@@ -102,9 +105,18 @@ class WikiModule(Component):
 
     def process_request(self, req):
         action = req.args.get('action', 'view')
-        pagename = req.args.get('page', 'WikiStart')
+        pagename = req.args.get('page')
         version = req.args.get('version')
         old_version = req.args.get('old_version')
+
+        pm = ProjectManagement(self.env)
+        session_pid = pm.get_session_project(req, fail_on_none=False)
+
+        if not pagename and session_pid:
+            syllabus_id = pm.get_project_syllabus(session_pid)
+            pagename = self._get_syllabus_page(syllabus_id)
+        if not pagename:
+            pagename = 'WikiStart'
 
         if pagename.startswith('/') or pagename.endswith('/') or \
                 '//' in pagename:
@@ -127,6 +139,13 @@ class WikiModule(Component):
 
         add_stylesheet(req, 'common/css/wiki.css')
 
+        if versioned_page.exists:
+            if not versioned_page.pid:
+                if action in ('edit', 'delete', 'rename'):
+                    req.perm(versioned_page.resource).require('WIKI_GLOBAL_ACTION')
+            else:
+                pm.check_session_project(req, versioned_page.pid, allow_multi=True)
+
         if req.method == 'POST':
             if action == 'edit':
                 if 'cancel' in req.args:
@@ -140,7 +159,7 @@ class WikiModule(Component):
                 versioned_page.text = req.args.get('text')
                 valid = self._validate(req, versioned_page)
                 if action == 'edit' and not has_collision and valid:
-                    return self._do_save(req, versioned_page)
+                    return self._do_save(req, versioned_page, session_pid)
                 else:
                     return self._render_editor(req, page, action, has_collision)
             elif action == 'delete':
@@ -170,7 +189,7 @@ class WikiModule(Component):
                 Mimeview(self.env).send_converted(req, 'text/x-trac-wiki',
                                                   versioned_page.text,
                                                   format, versioned_page.name)
-            return self._render_view(req, versioned_page)
+            return self._render_view(req, versioned_page, session_pid)
 
     # ITemplateProvider methods
 
@@ -181,6 +200,16 @@ class WikiModule(Component):
         return [pkg_resources.resource_filename('trac.wiki', 'templates')]
 
     # Internal methods
+
+    def _get_syllabus_page(self, syllabus_id):
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+        cursor.execute('''
+            SELECT pagename
+            FROM syllabus_pages
+            WHERE syllabus_id=%s''', (syllabus_id,))
+        res = cursor.fetchone()
+        return res and res[0]
 
     def _validate(self, req, page):
         valid = True
@@ -318,11 +347,16 @@ class WikiModule(Component):
         
         req.redirect(req.href.wiki(redirect and old_name or new_name))
 
-    def _do_save(self, req, page):
+    def _do_save(self, req, page, pid):
         if page.readonly:
             req.perm(page.resource).require('WIKI_ADMIN')
         elif not page.exists:
-            req.perm(page.resource).require('WIKI_CREATE')
+            if req.args.get('globalpage'):
+                req.perm(page.resource).require('WIKI_GLOBAL_ACTION')
+                page.pid = GLOBAL_PID
+            else:
+                req.perm(page.resource).require('WIKI_CREATE')
+                page.pid = pid
         else:
             req.perm(page.resource).require('WIKI_MODIFY')
 
@@ -340,7 +374,7 @@ class WikiModule(Component):
                                           version=None))
         except TracError:
             add_warning(req, _("Page not modified, showing latest version."))
-            return self._render_view(req, page)
+            return self._render_view(req, page, pid)
 
     def _render_confirm_delete(self, req, page):
         if page.readonly:
@@ -556,7 +590,7 @@ class WikiModule(Component):
                            req.href.wiki(page.name))
         return 'history_view.html', data, None
 
-    def _render_view(self, req, page):
+    def _render_view(self, req, page, pid):
         version = page.resource.version
 
         # Add registered converters
@@ -587,19 +621,18 @@ class WikiModule(Component):
                 parts = page.name.split('/')
                 for i in range(len(parts) - 2, -1, -1):
                     name = '/'.join(parts[:i] + [parts[-1]])
-                    if not ws.has_page(name):
+                    if not ws.has_page(name, pid=pid):
                         higher.append(ws._format_link(formatter, 'wiki',
                                                     '/' + name, name, False))
             else:
                 name = page.name
             name = name.lower()
-            related = [each for each in ws.pages
-                       if name in each.lower()
-                          and 'WIKI_VIEW' in req.perm('wiki', each)]
-            related.sort()
+            filter_func = lambda p: name in p.lower() and 'WIKI_VIEW' in req.perm('wiki', p)
+            related_project = sorted(filter(filter_func, ws.pages(pid)))
+            related_global = sorted(filter(filter_func, ws.pages()))
             related = [ws._format_link(formatter, 'wiki', '/' + each, each,
                                        False)
-                       for each in related]
+                       for each in chain(related_project, related_global)]
 
         latest_page = WikiPage(self.env, page.name, version=None)
         req.perm(latest_page.resource).require('WIKI_VIEW')
@@ -686,27 +719,43 @@ class WikiModule(Component):
 
     def get_timeline_filters(self, req):
         if 'WIKI_VIEW' in req.perm:
-            yield ('wiki', _('Wiki changes'))
+            yield ('wiki_global', _('Wiki changes (global)'))
+            yield ('wiki_project', _('Wiki changes (project)'))
 
     def get_timeline_events(self, req, start, stop, filters, pid):
-        db = self.env.get_db_cnx()
-        if 'wiki' in filters:
-            wiki_realm = Resource('wiki')
-            cursor = db.cursor()
-            cursor.execute("SELECT time,name,comment,author,version "
-                           "FROM wiki WHERE time>=%s AND time<=%s",
-                           (to_utimestamp(start), to_utimestamp(stop)))
-            for ts, name, comment, author, version in cursor:
-                wiki_page = wiki_realm(id=name, version=version)
-                if 'WIKI_VIEW' not in req.perm(wiki_page):
-                    continue
-                yield ('wiki', from_utimestamp(ts), author,
-                       (wiki_page, comment))
+        db = self.env.get_read_db()
+        is_global = 'wiki_global' in filters
+        is_project = 'wiki_project' in filters
+        if not is_global and not is_project:
+            return
 
-            # Attachments
-            for event in AttachmentModule(self.env).get_timeline_events(
-                req, wiki_realm, start, stop, pid):
-                yield event
+        q = '''
+            SELECT time,name,comment,author,version
+            FROM wiki WHERE time>=%s AND time<=%s AND ({glob} {op} {proj})
+        '''
+        args = [to_utimestamp(start), to_utimestamp(stop)]
+        glob = is_global and 'project_id IS NULL' or ''
+        if is_project:
+            proj = 'project_id=%s'
+            args.append(pid)
+        else:
+            proj = ''
+        op = is_global and is_project and 'OR' or ''
+
+        wiki_realm = Resource('wiki')
+        cursor = db.cursor()
+        cursor.execute(q.format(glob=glob, op=op, proj=proj), args)
+        for ts, name, comment, author, version in cursor:
+            wiki_page = wiki_realm(id=name, version=version)
+            if 'WIKI_VIEW' not in req.perm(wiki_page):
+                continue
+            yield ('wiki', from_utimestamp(ts), author,
+                   (wiki_page, comment))
+
+        # Attachments
+        for event in AttachmentModule(self.env).get_timeline_events(
+            req, wiki_realm, start, stop, pid):
+            yield event
 
     def render_timeline_event(self, context, field, event):
         wiki_page, comment = event[3]

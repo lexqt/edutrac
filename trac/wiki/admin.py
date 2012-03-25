@@ -158,7 +158,7 @@ class WikiAdmin(Component):
                                (title, to_utimestamp(datetime.now(utc)), data,
                                 title))
             if not old:
-                del WikiSystem(self.env).pages
+                WikiSystem(self.env).reset_pages()
         return result[0]
 
     def load_pages(self, dir, ignore=[], create_only=[], replace=False):
@@ -225,7 +225,7 @@ class WikiAdmin(Component):
         @self.env.with_transaction()        
         def do_transaction(db):
             if name.endswith('*'):
-                pages = list(WikiSystem(self.env).get_pages(name.rstrip('*')
+                pages = list(WikiSystem(self.env).get_all_pages(name.rstrip('*')
                                                             or None))
                 for p in pages:
                     page = model.WikiPage(self.env, p, db=db)
@@ -244,7 +244,7 @@ class WikiAdmin(Component):
     def _do_dump(self, directory, *names):
         if not names:
             names = ['*']
-        pages = self.get_wiki_list()
+        pages = WikiSystem(self.env).get_all_pages()
         if not os.path.isdir(directory):
             if not os.path.exists(directory):
                 os.mkdir(directory)

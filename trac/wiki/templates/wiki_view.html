@@ -6,12 +6,13 @@
       xmlns:i18n="http://genshi.edgewall.org/i18n"
       xmlns:xi="http://www.w3.org/2001/XInclude"
       py:with="modify_perm = 'WIKI_MODIFY' in perm(page.resource);
-               admin_perm = 'WIKI_ADMIN' in perm(page.resource)">
+               admin_perm = 'WIKI_ADMIN' in perm(page.resource);
+               global_perm = 'WIKI_GLOBAL_ACTION in perm(page.resource)'">
   <xi:include href="layout.html" />
   <head>
     <title py:if="title">$title</title>
     <meta py:if="version or page.author == 'trac'" name="ROBOTS" content="NOINDEX, NOFOLLOW" />
-    <link py:if="admin_perm or (not page.readonly and modify_perm)" rel="alternate" type="application/x-wiki"
+    <link py:if="admin_perm or (not page.readonly and modify_perm and (page.pid or global_perm))" rel="alternate" type="application/x-wiki"
           title="Edit this page" href="${href.wiki(page.name, action='edit')}" />
     <script type="text/javascript">
       jQuery(document).ready(function($) {
@@ -83,7 +84,7 @@
                 <div>
                   <input type="hidden" name="action" value="edit" />
                   <py:choose>
-                    <py:when test="page.exists">
+                    <py:when test="page.exists and (page.pid or global_perm)">
                       <input type="submit" value="${_('Edit this page')}" accesskey="e" />
                     </py:when>
                     <py:otherwise>
@@ -105,13 +106,13 @@
                 <xi:include href="attach_file_form.html" py:with="alist = attachments"/>
               </py:if>
             </py:if>
-            <form method="get" action="${href.wiki(page.name)}" id="rename" py:if="page.exists and rename_perm">
+            <form method="get" action="${href.wiki(page.name)}" id="rename" py:if="page.exists and rename_perm and (page.pid or global_perm)">
               <div>
                 <input type="hidden" name="action" value="rename" />
                 <input type="submit" value="${_('Rename page')}" />
               </div>
             </form>
-            <py:if test="page.exists and delete_perm">
+            <py:if test="page.exists and delete_perm and (page.pid or global_perm)">
               <form method="get" action="${href.wiki(page.name)}">
                 <div id="delete">
                   <input type="hidden" name="action" value="delete" />

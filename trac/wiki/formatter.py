@@ -31,7 +31,7 @@ from genshi.util import plaintext
 from trac.core import *
 from trac.mimeview import *
 from trac.resource import get_relative_resource, get_resource_url
-from trac.wiki.api import WikiSystem, parse_args
+from trac.wiki.api import WikiSystem, parse_args, MacroRestrictedContent
 from trac.wiki.parser import WikiParser
 from trac.util import arity
 from trac.util.compat import all
@@ -39,6 +39,8 @@ from trac.util.text import exception_to_unicode, shorten_line, to_unicode, \
                            unicode_quote, unicode_quote_plus
 from trac.util.html import TracHTMLSanitizer
 from trac.util.translation import _
+
+from trac.project.api import ProjectManagement
 
 __all__ = ['wiki_to_html', 'wiki_to_oneliner', 'wiki_to_outline',
            'Formatter', 'format_to', 'format_to_html', 'format_to_oneliner',
@@ -283,12 +285,15 @@ class WikiProcessor(object):
     def _macro_processor(self, text):
         self.env.log.debug('Executing Wiki macro %s by provider %s'
                            % (self.name, self.macro_provider))
-        if arity(self.macro_provider.expand_macro) == 4:
-            return self.macro_provider.expand_macro(self.formatter, self.name,
-                                                    text, self.args)
-        else:
-            return self.macro_provider.expand_macro(self.formatter, self.name,
-                                                    text)
+        try:
+            if arity(self.macro_provider.expand_macro) == 4:
+                return self.macro_provider.expand_macro(self.formatter, self.name,
+                                                        text, self.args)
+            else:
+                return self.macro_provider.expand_macro(self.formatter, self.name,
+                                                        text)
+        except MacroRestrictedContent, e:
+            return tag.div(_('You are not allowed to see the content of this macro.'), class_='restricted-macro')
 
     def _mimeview_processor(self, text):
         return Mimeview(self.env).render(self.formatter.context,
@@ -360,6 +365,7 @@ class Formatter(object):
         self.db = self.env.get_db_cnx() # FIXME: remove
         self.wiki = WikiSystem(self.env)
         self.wikiparser = WikiParser(self.env)
+        self.projman = ProjectManagement(self.env)
         self._anchors = {}
         self._open_tags = []
         self._safe_schemes = None

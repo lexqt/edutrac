@@ -28,6 +28,15 @@ from trac.util.compat import all
 from trac.util.translation import _
 from trac.wiki.parser import WikiParser
 
+from trac.project.api import ProjectManagement
+
+
+
+class MacroRestrictedContent(Exception):
+    '''Thrown from expand_macro function to indicate
+    that user is not allowed to see macro content.'''
+
+
 
 class IWikiChangeListener(Interface):
     """Extension point interface for components that should get notified about
@@ -199,6 +208,35 @@ def validate_page_name(pagename):
            all(part not in ('', '.', '..') for part in pagename.split('/'))
 
 
+
+class WikiPagesStore(object):
+    """Project dependent store for wiki pages"""
+
+    def __init__(self, env, pid=None):
+        self.env = env
+        modname = WikiPagesStore.__module__
+        clsname = WikiPagesStore.__name__
+        if pid is not None:
+            pid = int(pid)
+            self._cache_project = '%s.%s.pages:pid.%s' % (modname, clsname, pid)
+            self.pid = pid
+        self._cache_global = '%s.%s.global_pages' % (modname, clsname)
+
+    @cached('_cache_project')
+    def pages(self, db):
+        """Return the names of wiki pages bounded to specific project."""
+        cursor = db.cursor()
+        cursor.execute("SELECT DISTINCT name FROM wiki WHERE project_id=%s", (self.pid,))
+        return set(row[0] for row in cursor)
+
+    @cached('_cache_global')
+    def global_pages(self, db):
+        """Return the names of global wiki pages."""
+        cursor = db.cursor()
+        cursor.execute("SELECT DISTINCT name FROM wiki WHERE project_id IS NULL")
+        return set(row[0] for row in cursor)
+
+
 class WikiSystem(Component):
     """Wiki system manager."""
 
@@ -230,28 +268,67 @@ class WikiSystem(Component):
         external links even if `[wiki] render_unsafe_content` is `false`.
         (''since 0.11.8'')""")
 
-    @cached
-    def pages(self, db):
-        """Return the names of all existing wiki pages."""
-        cursor = db.cursor()
-        cursor.execute("SELECT DISTINCT name FROM wiki")
-        return set(row[0] for row in cursor)
+    def __init__(self):
+        self.pm = ProjectManagement(self.env)
+
+    def pages(self, pid=None):
+        """Return the names of existing wiki pages."""
+        stor = WikiPagesStore(self.env, pid=pid)
+        if pid:
+            return stor.pages
+        else:
+            return stor.global_pages
+
+    def reset_pages(self, pid=None):
+        """Resets wiki page cache."""
+        stor = WikiPagesStore(self.env, pid=pid)
+        if pid:
+            del stor.pages
+        else:
+            del stor.global_pages
 
     # Public API
 
-    def get_pages(self, prefix=None):
+    def get_pages(self, prefix=None, pid=None):
         """Iterate over the names of existing Wiki pages.
 
         If the `prefix` parameter is given, only names that start with that
         prefix are included.
         """
-        for page in self.pages:
+        for page in self.pages(pid):
             if not prefix or page.startswith(prefix):
                 yield page
 
-    def has_page(self, pagename):
+    def get_all_pages(self, prefix=None):
+        """Iterate over the names of ALL existing Wiki pages.
+
+        `prefix` parameter - see `get_pages`
+        """
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+        q = "SELECT name FROM wiki"
+        args = []
+        if prefix:
+            q = q + " WHERE name LIKE %s ESCAPE '/'"
+            prefix = '%' + re.sub(r'([/%_])', r'/\1', prefix)
+            args.append(prefix)
+        cursor.execute(q, args)
+        for row in cursor:
+            yield row[0]
+
+    def has_page(self, pagename, pid=None, include_global=True, full_check=False):
         """Whether a page with the specified name exists."""
-        return pagename.rstrip('/') in self.pages
+        pagename = pagename.rstrip('/')
+        if full_check:
+            db = self.env.get_read_db()
+            cursor = db.cursor()
+            cursor.execute("SELECT 1 FROM wiki WHERE name=%s LIMIT 1", (pagename,))
+            return cursor.rowcount == 1
+        if pid:
+            return pagename in self.pages(pid) or \
+                (include_global and pagename in self.pages())
+        else:
+            return pagename in self.pages()
 
     # IWikiSyntaxProvider methods
 
@@ -350,6 +427,7 @@ class WikiSystem(Component):
             query = '&' + query[1:]
         pagename = pagename.rstrip('/') or 'WikiStart'
         referrer = ''
+        pid = self.pm.get_session_project(formatter.req, fail_on_none=False)
         if formatter.resource and formatter.resource.realm == 'wiki':
             referrer = formatter.resource.id
         if pagename.startswith('/'):
@@ -358,11 +436,11 @@ class WikiSystem(Component):
                                                 or pagename in ('.', '..'):
             pagename = self._resolve_relative_name(pagename, referrer)
         else:
-            pagename = self._resolve_scoped_name(pagename, referrer)
+            pagename = self._resolve_scoped_name(pagename, referrer, pid)
         if 'WIKI_VIEW' in formatter.perm('wiki', pagename, version):
             href = formatter.href.wiki(pagename, version=version) + query \
                    + fragment
-            if self.has_page(pagename):
+            if self.has_page(pagename, pid=pid):
                 return tag.a(label, href=href, class_='wiki')
             else:
                 if ignore_missing:
@@ -372,7 +450,7 @@ class WikiSystem(Component):
                                  href=href, rel='nofollow')
                 else:
                     return tag.a(label + '?', class_='missing wiki')
-        elif ignore_missing and not self.has_page(pagename):
+        elif ignore_missing and not self.has_page(pagename, pid=pid):
             return original_label or label
         else:
             return tag.a(label, class_='forbidden wiki',
@@ -390,16 +468,16 @@ class WikiSystem(Component):
                 break
         return '/'.join(base)
     
-    def _resolve_scoped_name(self, pagename, referrer):
+    def _resolve_scoped_name(self, pagename, referrer, pid):
         referrer = referrer.split('/')
         if len(referrer) == 1:           # Non-hierarchical referrer
             return pagename
         # Test for pages with same name, higher in the hierarchy
         for i in range(len(referrer) - 1, 0, -1):
             name = '/'.join(referrer[:i]) + '/' + pagename
-            if self.has_page(name):
+            if self.has_page(name, pid=pid):
                 return name
-        if self.has_page(pagename):
+        if self.has_page(pagename, pid=pid):
             return pagename
         # If we are on First/Second/Third, and pagename is Second/Other,
         # resolve to First/Second/Other instead of First/Second/Second/Other
@@ -409,7 +487,7 @@ class WikiSystem(Component):
             for (i, part) in enumerate(referrer):
                 if first == part:
                     anchor = '/'.join(referrer[:i + 1])
-                    if self.has_page(anchor):
+                    if self.has_page(anchor, pid=pid):
                         return anchor + '/' + rest
         # Assume the user wants a sibling of referrer
         return '/'.join(referrer[:-1]) + '/' + pagename
@@ -457,12 +535,18 @@ class WikiSystem(Component):
         True
         """
         if resource.version is None:
-            return resource.id in self.pages
+            return resource.id in self.pages(resource.pid)
         db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute("SELECT name FROM wiki WHERE name=%s AND version=%s",
                        (resource.id, resource.version))
         return bool(cursor.fetchall())
+
+    def get_resource(self, realm, rsc_id, args):
+        if realm == 'wiki':
+            from trac.wiki.model import WikiPage
+            version = args.get('version')
+            return WikiPage(self.env, rsc_id, version=version)
 
     def get_realm_info(self):
         return {

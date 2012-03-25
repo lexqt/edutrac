@@ -168,6 +168,11 @@ schema = [
         Column('project_id', type='int', null=True),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
         Index(['time'])],
+    Table('syllabus_pages', key=('syllabus_id', 'pagename'))[
+        Column('syllabus_id', type='int'),
+        Column('pagename'),
+        ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
+    ],
 
     # Version control cache
     Table('repository', key=('id', 'name'))[

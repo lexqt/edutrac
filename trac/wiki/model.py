@@ -19,7 +19,7 @@
 from datetime import datetime
 
 from trac.core import *
-from trac.resource import Resource
+from trac.resource import Resource, GLOBAL_PID
 from trac.util.datefmt import from_utimestamp, to_utimestamp, utc
 from trac.util.translation import _
 from trac.wiki.api import WikiSystem, validate_page_name
@@ -30,15 +30,18 @@ class WikiPage(object):
 
     realm = 'wiki'
 
-    def __init__(self, env, name=None, version=None, db=None):
+    def __init__(self, env, name=None, version=None, pid=None, db=None):
         self.env = env
         if isinstance(name, Resource):
             self.resource = name
             name = self.resource.id
+            pid  = self.resource.pid
         else:
             if version:
                 version = int(version) # must be a number or None
-            self.resource = Resource('wiki', name, version)
+            if pid:
+                pid = int(pid) # must be a number or None
+            self.resource = Resource('wiki', name, version, pid=pid)
         self.name = name
         if name:
             self._fetch(name, version, db)
@@ -47,6 +50,7 @@ class WikiPage(object):
             self.text = self.comment = self.author = ''
             self.time = None
             self.readonly = 0
+            self.pid = pid
         self.old_text = self.text
         self.old_readonly = self.readonly
 
@@ -55,29 +59,31 @@ class WikiPage(object):
             db = self.env.get_db_cnx()
         cursor = db.cursor()
         if version is not None:
-            cursor.execute("SELECT version,time,author,text,comment,readonly "
+            cursor.execute("SELECT version,time,author,text,comment,readonly,project_id "
                            "FROM wiki "
                            "WHERE name=%s AND version=%s",
                            (name, int(version)))
         else:
-            cursor.execute("SELECT version,time,author,text,comment,readonly "
+            cursor.execute("SELECT version,time,author,text,comment,readonly,project_id "
                            "FROM wiki "
                            "WHERE name=%s ORDER BY version DESC LIMIT 1",
                            (name,))
         row = cursor.fetchone()
         if row:
-            version, time, author, text, comment, readonly = row
+            version, time, author, text, comment, readonly, pid = row
             self.version = int(version)
             self.author = author
             self.time = from_utimestamp(time)
             self.text = text
             self.comment = comment
             self.readonly = readonly and int(readonly) or 0
+            self.pid = pid
         else:
             self.version = 0
             self.text = self.comment = self.author = ''
             self.time = None
             self.readonly = 0
+            self.pid = None
             
     exists = property(lambda self: self.version > 0)
 
@@ -103,7 +109,7 @@ class WikiPage(object):
 
             if not self.exists:
                 # Invalidate page name cache
-                del WikiSystem(self.env).pages
+                WikiSystem(self.env).reset_pages(self.pid)
                 # Delete orphaned attachments
                 from trac.attachment import Attachment
                 Attachment.delete_all(self.env, self.resource, db=db)
@@ -133,11 +139,11 @@ class WikiPage(object):
             if new_text:
                 cursor.execute("""
                     INSERT INTO wiki (name,version,time,author,ipnr,text,
-                                      comment,readonly)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                                      comment,readonly,project_id)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, (self.name, self.version + 1, to_utimestamp(t),
                           author, remote_addr, self.text, comment,
-                          self.readonly))
+                          self.readonly, self.pid != GLOBAL_PID and self.pid or None))
                 self.version += 1
                 self.resource = self.resource(version=self.version)
             else:
@@ -145,7 +151,7 @@ class WikiPage(object):
                                (self.readonly, self.name))
             if self.version == 1:
                 # Invalidate page name cache
-                del WikiSystem(self.env).pages
+                WikiSystem(self.env).reset_pages(self.pid)
         
         self.author = author
         self.comment = comment
@@ -183,8 +189,10 @@ class WikiPage(object):
 
             cursor.execute("UPDATE wiki SET name=%s WHERE name=%s",
                            (new_name, old_name))
+            cursor.execute("UPDATE syllabus_pages SET pagename=%s WHERE pagename=%s",
+                           (new_name, old_name))
             # Invalidate page name cache
-            del WikiSystem(self.env).pages
+            WikiSystem(self.env).reset_pages(self.pid)
             # Reparent attachments
             from trac.attachment import Attachment
             Attachment.reparent_all(self.env, 'wiki', old_name, None, 'wiki',
