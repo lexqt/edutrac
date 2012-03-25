@@ -16,6 +16,7 @@
 
 import copy
 import re
+import threading
 
 from genshi.builder import tag
 
@@ -29,7 +30,10 @@ from trac.util.text import shorten_line
 from trac.util.translation import _, N_, gettext
 from trac.wiki import IWikiSyntaxProvider, WikiParser
 
+from trac.project.api import ProjectManagement
 from trac.user.api import UserManagement
+
+
 
 class ITicketActionController(Interface):
     """Extension point interface for components willing to participate
@@ -160,36 +164,38 @@ class IMilestoneChangeListener(Interface):
 
 
 class TicketFieldsStore(object):
-    """Project dependent store for ticket fields"""
+    """Project/syllabus dependent store for ticket fields"""
 
-    _proj_instances = {}
-    _syll_instances = {}
-    def __new__(cls, env, pid=None, syllabus_id=None, *args, **kwargs):
-        if pid is not None:
-            id_ = int(pid)
-            kwargs['pid'] = id_
-            stor = cls._proj_instances
-        elif syllabus_id is not None:
-            id_ = int(syllabus_id)
-            kwargs['syllabus_id'] = id_
-            stor = cls._syll_instances
-        else:
-            raise NotImplementedError('Global ticket fields store is not implemented.')
-        if id_ not in stor:
-            stor[id_] = super(TicketFieldsStore, cls).__new__(cls, env, *args, **kwargs)
-        return stor[id_]
+#    _lock = threading.Lock()
+#    _proj_instances = {}
+#    _syll_instances = {}
+#    def __new__(cls, env, pid=None, syllabus_id=None, *args, **kwargs):
+#        if pid is not None:
+#            id_ = int(pid)
+#            kwargs['pid'] = id_
+#            stor = cls._proj_instances
+#        elif syllabus_id is not None:
+#            id_ = int(syllabus_id)
+#            kwargs['syllabus_id'] = id_
+#            stor = cls._syll_instances
+#        else:
+#            raise NotImplementedError('Global ticket fields store is not implemented.')
+#        with cls._lock:
+#            if id_ not in stor:
+#                stor[id_] = super(TicketFieldsStore, cls).__new__(cls, env, *args, **kwargs)
+#            return stor[id_]
 
-    #TODO: change init arguments?
-    def __init__(self, env, pid=None, syllabus_id=None, ticket_system=None):
+    def __init__(self, env, pid=None, syllabus_id=None, ts=None, pm=None):
         self.env = env
         if pid is not None:
-            id_ = pid
+            id_ = int(pid)
             self.pid = pid
-            from trac.project.api import ProjectManagement
-            self.syllabus_id = ProjectManagement(self.env).get_project_syllabus(pid)
+            if pm is None:
+                pm = ProjectManagement(self.env)
+            self.syllabus_id = pm.get_project_syllabus(pid)
             fields_cache_level = 'pid'
         elif syllabus_id is not None:
-            id_ = syllabus_id
+            id_ = int(syllabus_id)
             self.pid = None
             self.syllabus_id = syllabus_id
             fields_cache_level = 'sid'
@@ -198,9 +204,9 @@ class TicketFieldsStore(object):
         clsname = TicketFieldsStore.__name__
         self._cache_fields        = '%s.%s.fields:%s.%s'         % (modname, clsname, fields_cache_level, self.id_)
         self._cache_custom_fields = '%s.%s.custom_fields:sid.%s' % (modname, clsname, self.syllabus_id)
-        if ticket_system is None:
-            ticket_system = TicketSystem(self.env)
-        self.ts = ticket_system
+        if ts is None:
+            ts = TicketSystem(self.env)
+        self.ts = ts
 
     @cached('_cache_fields')
     def fields(self, db):
@@ -434,7 +440,7 @@ class TicketSystem(Component):
         It may in addition contain the 'custom' key, the 'optional' and the
         'options' keys. When present 'custom' and 'optional' are always `True`.
         """
-        stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id)
+        stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id, ts=self, pm=self.pm)
         fields = copy.deepcopy(stor.fields)
         label = 'label' # workaround gettext extraction bug
         for n, f in fields.iteritems():
@@ -443,7 +449,7 @@ class TicketSystem(Component):
 
     def reset_ticket_fields(self, pid=None, syllabus_id=None):
         """Invalidate ticket field cache."""
-        stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id)
+        stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id, ts=self, pm=self.pm)
         del stor.fields
 
     reserved_field_names = ['report', 'order', 'desc', 'group', 'groupdesc',
@@ -451,7 +457,7 @@ class TicketSystem(Component):
                             'comment', 'or']
 
     def get_custom_fields(self, pid=None, syllabus_id=None):
-        stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id)
+        stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id, ts=self, pm=self.pm)
         return copy.deepcopy(stor.custom_fields)
 
     def get_field_synonyms(self):

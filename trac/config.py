@@ -15,6 +15,7 @@
 from ConfigParser import ConfigParser
 from copy import deepcopy
 import os.path
+import threading
 
 from trac.admin import AdminCommandError, IAdminCommandProvider
 from trac.core import *
@@ -54,13 +55,15 @@ class Configuration(object):
     when the file has changed.
     """
 
+    _lock = threading.Lock()
     _instances = {}
 
     def __new__(cls, filename, *args, **kwargs):
-        is_new = filename not in cls._instances
-        if is_new:
-            cls._instances[filename] = super(Configuration, cls).__new__(cls, filename, *args, **kwargs)
-        conf = cls._instances[filename]
+        with cls._lock:
+            is_new = filename not in cls._instances
+            if is_new:
+                cls._instances[filename] = super(Configuration, cls).__new__(cls, filename, *args, **kwargs)
+            conf = cls._instances[filename]
         if not is_new:
             conf.parse_if_needed() # TODO: is it necessary to check?
         return conf
@@ -529,6 +532,7 @@ class Section(object):
 class ConfigurationSwitcher(object):
 
     def __init__(self, env):
+        self._switch_lock = threading.Lock()
         self.env = env
         self.common_config = env.config
 
@@ -555,11 +559,12 @@ class ConfigurationSwitcher(object):
             id = syllabus
         else:
             raise AttributeError
-        if id not in self.env.conf_switcher_cache[key]:
-            c = self.common()
-            filename = os.path.join(os.path.dirname(c.filename), key, 'id{0}.ini'.format(id))
-            self.env.conf_switcher_cache[key][id] = Configuration(filename)
-        return self.env.conf_switcher_cache[key][id]
+        with self._switch_lock:
+            if id not in self.env.conf_switcher_cache[key]:
+                c = self.common()
+                filename = os.path.join(os.path.dirname(c.filename), key, 'id{0}.ini'.format(id))
+                self.env.conf_switcher_cache[key][id] = Configuration(filename)
+            return self.env.conf_switcher_cache[key][id]
 
 class AccessorSwitcher(object):
 

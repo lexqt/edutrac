@@ -215,6 +215,8 @@ class Environment(Component, ComponentManager):
         """
         ComponentManager.__init__(self)
 
+        self._syl_rules_lock = threading.Lock()
+
         self.path = path
         self.systeminfo = []
         self._href = self._abs_href = None
@@ -279,9 +281,10 @@ class Environment(Component, ComponentManager):
 
     def _syllabus_component_rules(self, syllabus_id):
         sid = int(syllabus_id)
-        if sid not in self._syllabus_rules:
-            self._syllabus_rules[sid] = self._get_rules(self.configs.syllabus(sid))
-        return self._syllabus_rules[sid]
+        with self._syl_rules_lock:
+            if sid not in self._syllabus_rules:
+                self._syllabus_rules[sid] = self._get_rules(self.configs.syllabus(sid))
+            return self._syllabus_rules[sid]
         
     def _get_rules(self, config):
         rules = {}
@@ -316,19 +319,25 @@ class Environment(Component, ComponentManager):
                           'instead.')
             return False
 
-        if syllabus is None:
-            rules = self._component_rules
-        else:
+        def is_enabled(cname, rules):
+            while cname:
+                enabled = rules.get(cname)
+                if enabled is not None:
+                    return enabled
+                idx = cname.rfind('.')
+                if idx < 0:
+                    break
+                cname = cname[:idx]
+
+        res = None
+        if syllabus is not None:
             rules = self._syllabus_component_rules(syllabus)
-        cname = component_name
-        while cname:
-            enabled = rules.get(cname)
-            if enabled is not None:
-                return enabled
-            idx = cname.rfind('.')
-            if idx < 0:
-                break
-            cname = cname[:idx]
+            res = is_enabled(component_name, rules)
+
+        if res is None: # global or inherit for syllabus
+            res = is_enabled(component_name, self._component_rules)
+        if res is not None:
+            return res
 
         # By default, all components in the trac package are enabled
         return component_name.startswith('trac.') or None

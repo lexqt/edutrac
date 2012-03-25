@@ -20,11 +20,11 @@ __all__ = ["CacheManager", "cached"]
 class CachedProperty(object):
     """Cached property descriptor"""
     
-    def __init__(self, retriever, id_attr=None):
+    def __init__(self, retriever, id_attr=None, id_key=None):
         self.retriever = retriever
         self.__doc__ = retriever.__doc__
         self.id_attr = id_attr
-        self.id = None
+        self.id = id_key
         
     def __get__(self, instance, owner):
         if instance is None:

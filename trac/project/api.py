@@ -1,3 +1,5 @@
+import threading
+
 from trac.core import Component, Interface, TracError
 from trac.resource import GLOBAL_PID
 
@@ -23,7 +25,9 @@ class ProjectManagement(Component):
     This class provides API to manage projects.
     """
 
+
     def __init__(self):
+        self._syl_cache_lock = threading.Lock()
         self._proj_syl_cache = {}
         self._meta_syl_cache = {}
 
@@ -163,12 +167,15 @@ class ProjectManagement(Component):
 
     def get_project_syllabus(self, pid, fail_on_none=True):
         pid = int(pid)
-        if pid not in self._proj_syl_cache:
-            s = self._get_syllabus(pid=pid)
-            self._proj_syl_cache[pid] = s
-        if fail_on_none and self._proj_syl_cache[pid] is None:
+        db = self.env.get_read_db() # #4465
+        with self._syl_cache_lock:
+            if pid not in self._proj_syl_cache:
+                s = self._get_syllabus(pid=pid, db=db)
+                self._proj_syl_cache[pid] = s
+            s = self._proj_syl_cache[pid]
+        if fail_on_none and s is None:
             raise TracError('Project #%s is not associated with any syllabus' % pid)
-        return self._proj_syl_cache[pid]
+        return s
 
     def get_group_syllabus(self, gid, fail_on_none=True):
         meta_gid = UserManagement(self.env).get_parent_group(
@@ -179,12 +186,15 @@ class ProjectManagement(Component):
 
     def get_metagroup_syllabus(self, gid, fail_on_none=True):
         gid = int(gid)
-        if gid not in self._meta_syl_cache:
-            s = self._get_syllabus(metagroup_id=gid)
-            self._meta_syl_cache[gid] = s
-        if fail_on_none and self._meta_syl_cache[gid] is None:
+        db = self.env.get_read_db() # #4465
+        with self._syl_cache_lock:
+            if gid not in self._meta_syl_cache:
+                s = self._get_syllabus(metagroup_id=gid, db=db)
+                self._meta_syl_cache[gid] = s
+            s = self._meta_syl_cache[gid]
+        if fail_on_none and s is None:
             raise TracError('Metagroup #%s is not associated with any syllabus' % gid)
-        return self._meta_syl_cache[gid]
+        return s
 
     def get_project_info(self, pid, fail_on_none=True):
         """Returns dict (active, team_id, studgroup_id, metagroup_id, syllabus_id)
@@ -223,7 +233,7 @@ class ProjectManagement(Component):
 
     # Internal methods
 
-    def _get_syllabus(self, pid=None, metagroup_id=None):
+    def _get_syllabus(self, pid=None, metagroup_id=None, db=None):
         if pid is not None:
             query = '''
                 SELECT syllabus_id
@@ -238,7 +248,8 @@ class ProjectManagement(Component):
                 WHERE metagroup_id=%s
             '''
             id_ = metagroup_id
-        db = self.env.get_read_db()
+        if db is None:
+            db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute(query, (id_,))
         row = cursor.fetchone()
