@@ -840,7 +840,8 @@ class BrowserModule(Component):
         desc = as_bool(kwargs.get('desc', 0))
 
         rm = RepositoryManager(self.env)
-        all_repos = dict(rdata for rdata in rm.get_all_repositories().items()
+        all_repos = dict(rdata for rdata in rm.get_all_repositories(
+                         project_id=formatter.session_pid).items()
                          if fnmatchcase(rdata[0], glob))
 
         if format == 'table':

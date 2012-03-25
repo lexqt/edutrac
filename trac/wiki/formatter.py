@@ -23,6 +23,8 @@ import os
 
 from StringIO import StringIO
 
+from lazy import lazy
+
 from genshi.builder import tag, Element
 from genshi.core import Stream, Markup, escape
 from genshi.input import HTMLParser, ParseError
@@ -371,10 +373,29 @@ class Formatter(object):
         self._safe_schemes = None
         if not self.wiki.render_unsafe_content:
             self._safe_schemes = set(self.wiki.safe_schemes)
-            
+
+    @lazy
+    def session_pid(self):
+        return self.projman.get_session_project(self.req)
 
     def split_link(self, target):
         return split_url_into_path_query_fragment(target)
+
+    def extract_pid(self, link_parts):
+        '''Returns (is_ok, pid).'''
+        if len(link_parts) != 2:
+            return False, None
+        ok = True
+        name = link_parts[0]
+        pid = link_parts[1]
+        if name == 'project':
+            try:
+                pid = int(pid)
+            except ValueError:
+                ok = False
+        else:
+            ok = False
+        return ok, pid
 
     # -- Pre- IWikiSyntaxProvider rules (Font styles)
 

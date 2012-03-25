@@ -427,7 +427,7 @@ class WikiSystem(Component):
             query = '&' + query[1:]
         pagename = pagename.rstrip('/') or 'WikiStart'
         referrer = ''
-        pid = self.pm.get_session_project(formatter.req, fail_on_none=False)
+        pid = formatter.session_pid
         if formatter.resource and formatter.resource.realm == 'wiki':
             referrer = formatter.resource.id
         if pagename.startswith('/'):

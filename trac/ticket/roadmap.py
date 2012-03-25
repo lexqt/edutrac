@@ -903,7 +903,13 @@ class MilestoneModule(Component):
 
     def _format_link(self, formatter, ns, name, label):
         name, query, fragment = formatter.split_link(name)
-        pid  = formatter.req.args['pid']
+        parts = name.split(':')
+        pid_ready = False
+        if len(parts) == 3:
+            pid_ready, pid = formatter.extract_pid(parts[1:3])
+            name = parts[0]
+        if not pid_ready:
+            pid  = formatter.session_pid
         return self._render_link(formatter.context, pid, name, label,
                                  query + fragment)
 

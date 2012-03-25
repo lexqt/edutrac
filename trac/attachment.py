@@ -917,17 +917,28 @@ class AttachmentModule(Component):
 
     def _format_link(self, formatter, ns, target, label):
         link, params, fragment = formatter.split_link(target)
-        ids = link.split(':', 2)
+        ids = link.split(':', 4)
         attachment = None
+        ok = True
+        if len(ids) == 5:
+            ok, pid = formatter.extract_pid(ids[1:3])
+            if ok:
+                ids.pop(2)
+                ids.pop(1)
+        else:
+            pid = None
+        if not ok:
+            return tag.a(u'<bad formed Attachment link "{0}">'.format(link),
+                         class_='missing attachment')
         if len(ids) == 3:
             known_realms = ResourceSystem(self.env).get_known_realms()
             # new-style attachment: TracLinks (filename:realm:id)
             if ids[1] in known_realms:
-                attachment = Resource(ids[1], ids[2]).child('attachment',
+                attachment = Resource(ids[1], ids[2], pid=pid).child('attachment',
                                                             ids[0])
             else: # try old-style attachment: TracLinks (realm:id:filename)
                 if ids[0] in known_realms:
-                    attachment = Resource(ids[0], ids[1]).child('attachment',
+                    attachment = Resource(ids[0], ids[1], pid=pid).child('attachment',
                                                                 ids[2])
         else: # local attachment: TracLinks (filename)
             attachment = formatter.resource.child('attachment', link)

@@ -30,7 +30,7 @@ from trac.db import get_column_names
 from trac.mimeview.api import Mimeview, IContentConverter, Context
 from trac.resource import Resource
 from trac.ticket.api import TicketSystem
-from trac.util import Ranges, as_bool
+from trac.util import Ranges, as_bool, as_int
 from trac.util.datefmt import format_datetime, from_utimestamp, parse_date, \
                               to_timestamp, to_utimestamp, utc
 from trac.util.presentation import Paginator
@@ -171,6 +171,7 @@ class Query(object):
         kw_strs = ['order', 'group', 'page', 'max', 'format']
         kw_arys = ['rows']
         kw_bools = ['desc', 'groupdesc', 'verbose']
+        kw_ints = ['project', 'studgroup', 'syllabus']
         kw_synonyms = {'row': 'rows'}
         # i18n TODO - keys will be unicode
         synonyms = TicketSystem(env).get_field_synonyms()
@@ -211,6 +212,8 @@ class Query(object):
                 kw.setdefault(as_str(field), []).extend(processed_values)
             elif field in kw_bools:
                 kw[as_str(field)] = as_bool(processed_values[0])
+            elif field in kw_ints:
+                kw[as_str(field)] = as_int(processed_values[0], None)
             elif field == 'col':
                 cols.extend(synonyms.get(value, value)
                             for value in processed_values)
@@ -221,6 +224,8 @@ class Query(object):
                                            []).extend(processed_values)
         constraints = filter(None, constraints)
         report = kw.pop('report', report)
+        session_pid = kw.pop('session_pid', None)
+        kw.setdefault('project', session_pid)
         return cls(env, report, constraints=constraints, cols=cols, **kw)
 
     def get_columns(self):
@@ -433,7 +438,7 @@ class Query(object):
         extra = {'area': self.area}
         if self.area == 'project':
             extra['project'] = self.pid
-            constraints = filter(lambda p: p[0] != 'project', constraints)
+            constraints = filter(lambda p: p[0] != 'project' and p[0] != 'project_id', constraints)
 
         return href.query(constraints,
                           report=id,
@@ -1240,7 +1245,7 @@ class QueryModule(Component):
                          href=formatter.href.query() + query)
         else:
             try:
-                query = Query.from_string(self.env, query)
+                query = Query.from_string(self.env, query, session_pid=formatter.session_pid)
                 return tag.a(label,
                              href=query.get_href(formatter.context.href),
                              class_='query')
@@ -1350,14 +1355,12 @@ class TicketQueryMacro(WikiMacroBase):
     
     def expand_macro(self, formatter, name, content):
         req = formatter.req
-        pm = ProjectManagement(self.env)
-        pid = pm.get_session_project(req)
         query_string, kwargs, format = self.parse_args(content)
         if query_string:
             query_string += '&'
         query_string += '&'.join('%s=%s' % item
                                  for item in kwargs.iteritems())
-        query = Query.from_string(self.env, query_string)
+        query = Query.from_string(self.env, query_string, session_pid=formatter.session_pid)
 
         if format == 'count':
             cnt = query.count(req)
@@ -1393,7 +1396,7 @@ class TicketQueryMacro(WikiMacroBase):
         def ticket_groups():
             groups = []
             for v, g in groupby(tickets, lambda t: t[query.group]):
-                q = Query.from_string(self.env, query_string)
+                q = Query.from_string(self.env, query_string, session_pid=formatter.session_pid)
                 # produce the hint for the group
                 q.group = q.groupdesc = None
                 order = q.order
