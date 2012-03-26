@@ -1107,7 +1107,7 @@ class TicketModule(Component):
     # Ticket validation and changes
     
     def _validate_ticket(self, req, ticket, action=None, force_collision_check=False):
-        # `action` is None for new tickets
+        # `action` is workflow action dict or None for new tickets
         valid = True
         resource = ticket.resource
 

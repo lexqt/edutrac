@@ -249,7 +249,7 @@ class Resource(object):
         """
         realm = resource_or_realm
         need_pid = None
-        if pid == GLOBAL_PID:
+        if pid is not False and pid == GLOBAL_PID:
             pid = None
         if isinstance(resource_or_realm, Resource):
             if pid is False and id is False and version is False and parent is False:

@@ -260,7 +260,14 @@ class EnvironmentStub(Environment):
             self.path = os.path.join(os.getcwd(), self.path)
 
         # -- configuration
-        self.config = Configuration(None)
+        config = Configuration(None)
+#        sconfig = Configuration(None)
+#        sconfig.parents = []
+#        sconfig.parents.append(config)
+        self.config = config
+        self.conf_switcher_cache = {'syllabus': {}, 'project': {}} # for ConfigurationSwitcher
+        # TODO: make ConfigurationSwitcher stub
+        self.configs = ConfigurationSwitcher(self)
         # We have to have a ticket-workflow config for ''lots'' of things to
         # work.  So insert the basic-workflow config here.  There may be a
         # better solution than this.

@@ -376,7 +376,7 @@ class Formatter(object):
 
     @lazy
     def session_pid(self):
-        return self.projman.get_session_project(self.req)
+        return self.projman.get_session_project(self.req, fail_on_none=False)
 
     def split_link(self, target):
         return split_url_into_path_query_fragment(target)
