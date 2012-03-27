@@ -435,6 +435,35 @@ class Ticket(object):
             listener.ticket_changed(self, comment, author, old_values)
         return True
 
+    def get_from_changelog(self, field, old=None, new=None, limit=1):
+        '''Return last change (author, old, new) for specified field
+        or list with max length `limit` (for limit > 1) in backward history order
+        or None if there are no results.
+        `old` and `new` filter changelog results and can be either
+        single value (string) or multiple (iterable).
+        '''
+        conn = self.env.get_sa_connection()
+        tab = self.env.get_sa_metadata().tables['ticket_change']
+        q = tab.select().with_only_columns([tab.c.author, tab.c.oldvalue, tab.c.newvalue]).\
+            where(tab.field==field).order_by(tab.c.time.desc()).limit(limit)
+        for val, col in ((old, tab.c.oldvalue), (new, tab.c.newvalue)):
+            if val is not None:
+                if isinstance(val, basestring):
+                    expr = col == val
+                else:
+                    expr = col.in_(tuple(val))
+                q = q.where(expr)
+        res = conn.execute(q)
+        f = self.fields.get(field)
+        if f:
+            conv = lambda v: convert_type_value(f['type'], v)
+        else:
+            conv = lambda v: v
+        rows = [( r[0], conv(r[1]), conv(r[2]) ) for r in res.fetchall()]
+        if limit == 1:
+            return rows and rows[0]
+        return rows
+
     def get_changelog(self, when=None, db=None):
         """Return the changelog as a list of tuples of the form
         (time, author, field, oldvalue, newvalue, permanent).
