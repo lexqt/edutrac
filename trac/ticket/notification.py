@@ -118,8 +118,8 @@ class TicketNotifyEmail(NotifyEmail):
                     })
                 link += '#comment:%s' % str(change.get('cnum', ''))
                 for field, values in change['fields'].iteritems():
-                    old = values['old']
-                    new = values['new']
+                    old = unicode(values['old'])
+                    new = unicode(values['new'])
                     newv = ''
                     if field == 'description':
                         new_descr = wrap(new, self.COLS, ' ', ' ', '\n',
@@ -175,7 +175,7 @@ class TicketNotifyEmail(NotifyEmail):
                     if newv:
                         change_data[field] = {'oldvalue': old, 'newvalue': new}
         
-        ticket_values = ticket.values.copy()
+        ticket_values = {k: unicode(v) for k, v in ticket.values.iteritems()}
         ticket_values['id'] = ticket.id
         ticket_values['description'] = wrap(
             ticket_values.get('description', ''), self.COLS,
@@ -204,14 +204,19 @@ class TicketNotifyEmail(NotifyEmail):
                   if n not in ('summary', 'cc', 'time', 'changetime')]
         width = [0, 0, 0, 0]
         i = 0
+
+        def get_value(tkt, name):
+            fval = tkt[fname]
+            return fval is not None and unicode(fval) or u''
+
         for f in fields:
             if f['type'] == 'textarea':
                 continue
             fname = f['name']
             if not fname in tkt.values:
                 continue
-            fval = tkt[fname] or ''
-            if isinstance(fval, basestring) and fval.find('\n') != -1:
+            fval = get_value(tkt, fname)
+            if fval.find('\n') != -1:
                 continue
             if fname in ['owner', 'reporter']:
                 fval = self.obfuscate_email(fval)
@@ -243,15 +248,15 @@ class TicketNotifyEmail(NotifyEmail):
             fname = f['name']
             if not tkt.values.has_key(fname):
                 continue
-            fval = tkt[fname] or ''
+            fval = get_value(tkt, fname)
             if fname in ['owner', 'reporter']:
                 fval = self.obfuscate_email(fval)
-            if f['type'] == 'textarea' or '\n' in unicode(fval):
+            if f['type'] == 'textarea' or '\n' in fval:
                 big.append((f['label'], '\n'.join(fval.splitlines())))
             else:
                 # Note: f['label'] is a Babel's LazyObject, make sure its
                 # __str__ method won't be called.
-                str_tmp = u'%s:  %s' % (f['label'], unicode(fval))
+                str_tmp = u'%s:  %s' % (f['label'], fval)
                 idx = i % 2
                 cell_tmp[idx] += wrap(str_tmp, width_lr[idx] - 2 + 2 * idx,
                                       (width[2 * idx]

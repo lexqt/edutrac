@@ -186,7 +186,8 @@
         if (property.type == "select") {
           focusElement = createSelect(propertyName, property.options, true);
         } else if ((property.type == "text") || (property.type == "id")
-                   || (property.type == "textarea")) {
+                   || (property.type == "textarea") || (property.type == "username")
+                   || (property.type == "float") || (property.type == "int") ) {
           focusElement = createText(propertyName, 42);
         }
         td.append(focusElement).appendTo(tr);

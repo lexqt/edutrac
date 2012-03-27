@@ -1044,21 +1044,21 @@ class TicketModule(Component):
     def export_csv(self, req, ticket, sep=',', mimetype='text/plain'):
         # FIXME: consider dumping history of changes here as well
         #        as one row of output doesn't seem to be terribly useful...
-        fields = [f for n, f in ticket.fields.iteritems()
-                  if n not in ('time', 'changetime')]
+        fields = ticket.fields
         content = StringIO()
         writer = csv.writer(content, delimiter=sep, quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(['id'] + [unicode(f['name']) for f in fields])
+        writer.writerow(['id'] + [unicode(f) for f in fields])
 
         context = Context.from_request(req, ticket.resource)
         cols = [unicode(ticket.id)]
-        for f in fields:
-            name = f['name']
+        for name, f in fields.iteritems():
             value = ticket.values.get(name, '')
             if name in ('cc', 'reporter'):
                 value = Chrome(self.env).format_emails(context, value, ' ')
-            elif name in ticket.time_fields:
+            elif f['type'] == 'time':
                 value = format_datetime(value, tzinfo=req.tz)
+            else:
+                value = unicode(value)
             cols.append(value.encode('utf-8'))
         writer.writerow(cols)
         return (content.getvalue(), '%s;charset=utf-8' % mimetype)
@@ -1154,10 +1154,11 @@ class TicketModule(Component):
             add_warning(req, _("Tickets must contain a summary."))
             valid = False
 
+        # Misc field validation, type checks and conversions
         import formencode
         from formencode import validators
         for name, field in ticket.fields.iteritems():
-            if name == 'status':
+            if name == 'status' or field.get('auto'):
                 continue
             type_ = field['type']
             value = ticket[name]
@@ -1169,12 +1170,10 @@ class TicketModule(Component):
                             add_warning(req, _('User with username %(username)s does not exists',
                                                username=value))
                             valid = False
-                    elif type_ == 'int':
-                        value_ = validators.Int.to_python(value)
-                        # commented because it should be change everywhere
-                        # now e.g. it leads to detecting ticket changes
-                        # from str to int for modifier
-#                        ticket[name] = value = value_
+                    elif type_ in ('int', 'id'):
+                        ticket[name] = value = validators.Int.to_python(value)
+                    elif type_ == 'float':
+                        ticket[name] = value = validators.Number.to_python(value)
                 except formencode.Invalid, e:
                     add_warning(req, u'{0}: {1}'.format(
                                     field['label'], e.msg))

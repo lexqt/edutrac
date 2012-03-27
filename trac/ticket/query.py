@@ -30,6 +30,7 @@ from trac.db import get_column_names
 from trac.mimeview.api import Mimeview, IContentConverter, Context
 from trac.resource import Resource
 from trac.ticket.api import TicketSystem
+from trac.ticket.model import convert_field_value
 from trac.util import Ranges, as_bool, as_int
 from trac.util.datefmt import format_datetime, from_utimestamp, parse_date, \
                               to_timestamp, to_utimestamp, utc
@@ -85,7 +86,7 @@ class Query(object):
         constraints = constraints or []
         if isinstance(constraints, dict):
             constraints = [constraints]
-        self.constraints = constraints
+        self.constraints = constraints or [{}]
         synonyms = TicketSystem(self.env).get_field_synonyms()
         self.order = synonyms.get(order, order)     # 0.11 compatibility
         self.desc = desc
@@ -136,6 +137,7 @@ class Query(object):
 
         if self.area == 'project':
             fields = TicketSystem(self.env).get_ticket_fields(self.pid)
+            self.all_fields = fields.copy()
             del fields['project_id']
             self.fields = fields
 
@@ -168,7 +170,7 @@ class Query(object):
     
     @classmethod
     def from_string(cls, env, string, **kw):
-        kw_strs = ['order', 'group', 'page', 'max', 'format']
+        kw_strs = ['order', 'group', 'page', 'max', 'format', 'area']
         kw_arys = ['rows']
         kw_bools = ['desc', 'groupdesc', 'verbose']
         kw_ints = ['project', 'studgroup', 'syllabus']
@@ -193,9 +195,12 @@ class Query(object):
             field, values = filter_
             # from last chars of `field`, get the mode of comparison
             mode = ''
-            if field and field[-1] in ('~', '^', '$') \
+            if field and field[-1] in ('~', '^', '$', '>', '<') \
                                 and not field in cls.substitutions:
                 mode = field[-1]
+                field = field[:-1]
+            if mode == '~' and field and field[-1] in ('<', '>'):
+                mode = field[-1] + mode # >~, <~
                 field = field[:-1]
             if field and field[-1] == '!':
                 mode = '!' + mode
@@ -273,7 +278,7 @@ class Query(object):
             constraints = self.constraint_cols[col]
             for constraint in constraints:
                 if not (len(constraint) == 1 and constraint[0]
-                        and not constraint[0][0] in '!~^$' and col in cols
+                        and not constraint[0][0] in '!~^$<>' and col in cols
                         and col not in self.time_fields):
                     break
             else:
@@ -368,15 +373,8 @@ class Query(object):
                     val = int(val)
                     if href is not None:
                         result['href'] = href.ticket(val)
-                elif name in self.time_fields:
-                    val = from_utimestamp(val)
-                elif field and field['type'] == 'checkbox':
-                    try:
-                        val = bool(int(val))
-                    except (TypeError, ValueError):
-                        val = False
-                elif val is None:
-                    val = ''
+                else:
+                    val = convert_field_value(field, val)
                 result[name] = val
             results.append(result)
         cursor.close()
@@ -521,18 +519,34 @@ class Query(object):
                     errors.append(unicode(e))
             return None
 
+        _map_compare_not = {
+            '>': '<~',
+            '<': '>~',
+            '>~': '<',
+            '<~': '>'
+        }
+        _map_compare_op = {
+            '>': '>',
+            '<': '<',
+            '>~': '>=',
+            '<~': '<='
+        }
+
         def get_constraint_sql(name, value, mode, neg):
             if name not in custom_fields:
                 col = 't.' + name
             else:
                 col = '%s.value' % db.quote(name)
             value = value[len(mode) + neg:]
+            field = self.all_fields[name]
+            type_ = field['type']
+            default = field.get('value')
 
-            if name == 'project_id':
+            if type_ == 'id':
                 return ("%s%s=%%s" % (col, neg and '!' or ''),
                         (int(value), ))
 
-            if name in self.time_fields:
+            if type_ == 'time':
                 if '..' in value:
                     (start, end) = [each.strip() for each in 
                                     value.split('..', 1)]
@@ -572,9 +586,25 @@ class Query(object):
                 return ((neg and 'NOT ' or '')
                         + '(' + ' AND '.join(clauses) + ')', args)
 
+            op = None
+            if type_ in ('int', 'float'):
+                if type_ == 'int':
+                    cast = 'INTEGER'
+                else:
+                    cast = 'NUMERIC'
+                col = 'CAST(%s AS %s)' % (col, cast)
+                if mode in _map_compare_op:
+                    if neg:
+                        neg = False
+                        mode = _map_compare_not[mode]
+                    op = _map_compare_op[mode]
+                mode = ''
+
             if mode == '':
-                return ("COALESCE(%s,'')%s=%%s" % (col, neg and '!' or ''),
-                        (value, ))
+                if not op:
+                    op = (neg and '!' or '') + '='
+                return ("COALESCE(%s,%%s)%s%%s" % (col, op),
+                        (default, value))
 
             if not value:
                 return None
@@ -599,8 +629,10 @@ class Query(object):
                 # starts-with, negation, etc.)
                 neg = v[0].startswith('!')
                 mode = ''
-                if len(v[0]) > neg and v[0][neg] in ('~', '^', '$'):
+                if len(v[0]) > neg and v[0][neg] in ('~', '^', '$', '<', '>'):
                     mode = v[0][neg]
+                    if mode in ('>', '<') and len(v[0]) > neg+1 and v[0][neg+1] == '~':
+                        mode += '~'
 
                 # Special case id ranges
                 if k == 'id':
@@ -730,6 +762,16 @@ class Query(object):
             {'name': _("is"), 'value': ""},
             {'name': _("is not"), 'value': "!"},
         ]
+        modes['int'] = [
+            {'name': _("equal"), 'value': ""},
+            {'name': _("not equal"), 'value': "!"},
+            {'name': _("greater"), 'value': ">"},
+            {'name': _("greater or equal"), 'value': ">~"},
+            {'name': _("less"), 'value': "<"},
+            {'name': _("less or equal"), 'value': "<~"},
+        ]
+        modes['float'] = modes['int']
+        modes['username'] = modes['id']
         return modes
 
     def template_data(self, context, tickets, orig_list=None, orig_time=None,
@@ -745,9 +787,10 @@ class Query(object):
                     if neg:
                         val = val[1:]
                     mode = ''
-                    if val[:1] in ('~', '^', '$') \
+                    if val[:1] in ('~', '^', '$', '<', '>') \
                                         and not val in self.substitutions:
-                        mode, val = val[:1], val[1:]
+                        idx = 2 if val[1:2] in ('~') else 1
+                        mode, val = val[:idx], val[idx:]
                     if req:
                         val = val.replace('$USER', req.authname)
                     constraint['mode'] = (neg and '!' or '') + mode

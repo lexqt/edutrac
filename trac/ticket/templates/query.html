@@ -113,7 +113,7 @@
                           <label for="_${n_field_name}_off" class="control">no</label>
                         </py:when>
 
-                        <py:when test="field.type in ('text', 'textarea', 'id')">
+                        <py:when test="field.type in ('text', 'textarea', 'id', 'username', 'int', 'float')">
                           <input type="text" name="${n_field_name}" value="$constraint_value" size="42" />
                         </py:when>
                         

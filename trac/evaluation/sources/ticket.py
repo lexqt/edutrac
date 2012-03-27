@@ -5,7 +5,7 @@ from operator import (
 #from inspect import currentframe
 from lazy import lazy
 
-from sqlalchemy import Integer
+from sqlalchemy import Integer, Numeric
 from sqlalchemy.sql import func, cast
 
 from trac.ticket.api import TicketSystem
@@ -143,6 +143,9 @@ class Field(TicketAttribute):
             ftype = field['type']
             if ftype == 'int':
                 col = cast(col, Integer)
+            elif ftype == 'float':
+                col = cast(col, Numeric)
+            col = func.coalesce(col, field.get('value'))
             on_expr = (table.c.ticket == tables['ticket'].c.id) &\
                       (table.c.name == name)
             params = {

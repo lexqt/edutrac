@@ -164,26 +164,32 @@ class IMilestoneChangeListener(Interface):
 
 
 class TicketFieldsStore(object):
-    """Project/syllabus dependent store for ticket fields"""
+    """Project/syllabus dependent store for ticket fields.
 
-#    _lock = threading.Lock()
-#    _proj_instances = {}
-#    _syll_instances = {}
-#    def __new__(cls, env, pid=None, syllabus_id=None, *args, **kwargs):
-#        if pid is not None:
-#            id_ = int(pid)
-#            kwargs['pid'] = id_
-#            stor = cls._proj_instances
-#        elif syllabus_id is not None:
-#            id_ = int(syllabus_id)
-#            kwargs['syllabus_id'] = id_
-#            stor = cls._syll_instances
-#        else:
-#            raise NotImplementedError('Global ticket fields store is not implemented.')
-#        with cls._lock:
-#            if id_ not in stor:
-#                stor[id_] = super(TicketFieldsStore, cls).__new__(cls, env, *args, **kwargs)
-#            return stor[id_]
+    Each field can has some parameters:
+    `name`: should be valid python identifier
+            and can not be one of reserved names (TicketSystem.reserved_field_names)
+    `type`: field type (id, int, float, text, textarea, username, time, checkbox, select, radio)
+    `label`: field label to render in templates
+    `optional`: is field optional
+    `auto` (base only): field is out of user control, its value automatically filled by the system
+    `skip`: field is not rendered in ticket templates
+            (may be changed before rendering, here it is only default value)
+    `value`: default value for field
+    `order` (custom only): field sort priority (defines field order in template)
+
+    Parameters for type=select and type=radio:
+    `model_class` (base only): python class corresponding to field
+    `options`: possible values for field
+
+    Parameters for type=text:
+    `format`: plain or wiki
+
+    Parameters for type=textarea:
+    `format`: plain or wiki
+    `width` (cols): 
+    `height` (rows): 
+    """
 
     def __init__(self, env, pid=None, syllabus_id=None, ts=None, pm=None):
         self.env = env
@@ -218,7 +224,7 @@ class TicketFieldsStore(object):
         # Basic text fields
         fields.append({'name': 'project_id', 'type': 'id',
                        'label': N_('Project ID'),
-                       'notnull': True, 'skip': True,
+                       'skip': True, 'auto': True,
                        'optional': False})
         fields.append({'name': 'summary', 'type': 'text',
                        'label': N_('Summary'),
@@ -270,10 +276,19 @@ class TicketFieldsStore(object):
         # Date/time fields
         fields.append({'name': 'time', 'type': 'time',
                        'label': N_('Created'),
+                       'auto': True,
                        'optional': False})
         fields.append({'name': 'changetime', 'type': 'time',
                        'label': N_('Modified'),
+                       'auto': True,
                        'optional': False})
+
+        # Apply syllabus config
+        config = self.ts.configs.syllabus(self.syllabus_id)['ticket-fields']
+        for field in fields:
+            name = field['name']
+            default = field['optional']
+            field['optional'] = config.getbool(name + '.optional', default)
 
         fields.extend(self._prepare_custom_fields())
 
@@ -292,13 +307,14 @@ class TicketFieldsStore(object):
         config = self.ts.configs.syllabus(self.syllabus_id)['ticket-custom']
         for name in [option for option, value in config.options()
                      if '.' not in option]:
+            type_ = config.get(name, 'text')
             field = {
                 'name': name,
-                'type': config.get(name),
+                'type': type_,
                 'order': config.getint(name + '.order', 0),
                 'label': config.get(name + '.label') or name.capitalize(),
-                'value': config.get(name + '.value', ''),
-                'optional': config.get(name + '.optional', True),
+                'value': self._get_type_value(config, type_, name),
+                'optional': config.getbool(name + '.optional', True),
             }
             if field['type'] == 'select' or field['type'] == 'radio':
                 field['options'] = config.getlist(name + '.options', sep='|')
@@ -318,6 +334,13 @@ class TicketFieldsStore(object):
                                      (y['order'], y['name'])))
         return fields
 
+    def _get_type_value(self, config, type_, name):
+        if type_ in ('int', 'id'):
+            func = config.getint
+        else:
+            func = config.get
+        return func(name + '.value', None)
+
     def _prepare_selects_fields(self, selects, id_kwargs):
         fields = []
         for name, label, cls in selects:
@@ -327,9 +350,9 @@ class TicketFieldsStore(object):
                 # exist
                 continue
             field = {'name': name, 'type': 'select', 'label': label,
-                     'value': getattr(self.ts, 'default_' + name, ''),
+                     'value': getattr(self.ts, 'default_' + name, None),
                      'options': options, 'model_class': cls,
-                       'optional': False}
+                     'optional': False}
             if name in ('status', 'resolution'):
                 field['type'] = 'radio'
                 if name == 'resolution':
@@ -381,7 +404,7 @@ class TicketSystem(Component):
         """Do not allow to set owner on new ticket creation.
         Manipulations with owner will be controlled by workflow.""", switcher=True)
 
-    default_version = Option('ticket', 'default_version', '',
+    default_version = Option('ticket', 'default_version', None,
         """Default version for newly created tickets.""")
 
     default_type = Option('ticket', 'default_type', 'task',
@@ -390,28 +413,28 @@ class TicketSystem(Component):
     default_priority = Option('ticket', 'default_priority', 'normal',
         """Default priority for newly created tickets.""")
 
-    default_milestone = Option('ticket', 'default_milestone', '',
+    default_milestone = Option('ticket', 'default_milestone', None,
         """Default milestone for newly created tickets.""")
 
-    default_component = Option('ticket', 'default_component', '',
+    default_component = Option('ticket', 'default_component', None,
         """Default component for newly created tickets.""")
 
     default_severity = Option('ticket', 'default_severity', 'normal',
         """Default severity for newly created tickets.""")
 
-    default_summary = Option('ticket', 'default_summary', '',
+    default_summary = Option('ticket', 'default_summary', None,
         """Default summary (title) for newly created tickets.""")
 
-    default_description = Option('ticket', 'default_description', '',
+    default_description = Option('ticket', 'default_description', None,
         """Default description for newly created tickets.""")
 
-    default_keywords = Option('ticket', 'default_keywords', '',
+    default_keywords = Option('ticket', 'default_keywords', None,
         """Default keywords for newly created tickets.""")
 
-    default_owner = Option('ticket', 'default_owner', '',
+    default_owner = Option('ticket', 'default_owner', None,
         """Default owner for newly created tickets.""")
 
-    default_cc = Option('ticket', 'default_cc', '',
+    default_cc = Option('ticket', 'default_cc', None,
         """Default cc: list for newly created tickets.""")
 
     default_resolution = Option('ticket', 'default_resolution', 'fixed',

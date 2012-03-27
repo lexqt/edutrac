@@ -45,6 +45,40 @@ def _fixup_cc_list(cc_value):
     return ', '.join(cclist)
 
 
+def convert_type_value(type_, value):
+    if value is None:
+        return value
+    if type_ in ('id', 'int'):
+        func = int
+    elif type_ == 'float':
+        func = float
+    elif type_ == 'time':
+        func = from_utimestamp
+    elif type_ == 'checkbox':
+        func = lambda v: bool(int(v))
+    else:
+        func = unicode
+    try:
+        value = func(value)
+        return value
+    except ValueError, TypeError:
+        return None
+
+def convert_field_value(type_or_field, value, default=None):
+    if not type_or_field:
+        return value
+    if isinstance(type_or_field, dict):
+        field = type_or_field
+        type_ = field['type']
+        default = field.get('value')
+    else:
+        type_ = type_or_field
+    val = convert_type_value(type_, value)
+    if val is None:
+        return default
+    return val
+
+
 class Ticket(object):
 
     # Fields that must not be modified directly by the user
@@ -70,8 +104,6 @@ class Ticket(object):
         self.resource.need_pid = False
 
         self.fields = TicketSystem(self.env).get_ticket_fields(self.pid)
-        self.time_fields = [n for n, f in self.fields.iteritems()
-                            if f['type'] == 'time']
         if tkt_id is not None:
             self._fetch_ticket(tkt_id, db)
         else:
@@ -96,7 +128,6 @@ class Ticket(object):
                                          id=tkt_id), _('Invalid ticket number'))
             pid = cursor.fetchone()[0]
         self.values['project_id'] = unicode(pid)
-        self._init_project_name()
 
     def _get_db(self, db):
         return db or self.env.get_read_db()
@@ -111,15 +142,6 @@ class Ticket(object):
         if pid == self.pid:
             return
         self.values['project_id'] = unicode(pid)
-        self._init_project_name()
-
-    def _init_project_name(self):
-        assert self.pid is not None
-        db = self.env.get_read_db()
-        cursor = db.cursor()
-        cursor.execute('SELECT name FROM projects WHERE id=%s', (self.pid,))
-        name = cursor.fetchone()[0]
-        self.values['project_name'] = name
 
     exists = property(lambda self: self.id is not None)
 
@@ -127,11 +149,12 @@ class Ticket(object):
         for name, field in self.fields.iteritems():
             default = None
             if field['name'] in self.protected_fields:
-                # Ignore for new - only change through workflow
+                # Ignore for new - only change through workflow etc
                 pass
             elif not field.get('custom'):
                 default = self.env.config.get('ticket',
                                               'default_' + field['name'])
+                default = convert_type_value(field['type'], default)
             else:
                 default = field.get('value')
                 options = field.get('options')
@@ -164,23 +187,15 @@ class Ticket(object):
         self.id = tkt_id
         for i, field in enumerate(std_fields):
             value = row[i]
-            if field in self.time_fields:
-                self.values[field] = from_utimestamp(value)
-            elif value is None:
-                self.values[field] = empty
-            else:
-                self.values[field] = unicode(value)
+            self.values[field] = convert_field_value(self.fields[field], value)
 
         # Fetch custom fields if available
-        custom_fields = [n for n, f in self.fields.iteritems() if f.get('custom')]
+        custom_fields = [n for n, f in self.fields.iteritems() if f.get('custom') and not f.get('virtual')]
         cursor.execute("SELECT name,value FROM ticket_custom WHERE ticket=%s",
                        (tkt_id,))
         for name, value in cursor:
             if name in custom_fields:
-                if value is None:
-                    self.values[name] = empty
-                else:
-                    self.values[name] = value
+                self.values[name] = convert_field_value(self.fields[name], value)
 
     def __getitem__(self, name):
         return self.values.get(name)
@@ -188,6 +203,8 @@ class Ticket(object):
     def __setitem__(self, name, value):
         """Log ticket modifications so the table ticket_change can be updated
         """
+        field = self.fields.get(name)
+        value = convert_field_value(field, value)
         if name in self.values and self.values[name] == value:
             return
         if name not in self._old: # Changed field
@@ -197,7 +214,6 @@ class Ticket(object):
         if value:
             if isinstance(value, list):
                 raise TracError(_("Multi-values fields not supported yet"))
-            field = self.fields.get(name)
             if field:
                 type_ = field.get('type')
                 if type_ != 'textarea' and isinstance(value, basestring):
@@ -209,11 +225,11 @@ class Ticket(object):
         """
         try:
             value = self.values[name]
-            if value is not empty:
+            if value is not None:
                 return value
             field = self.fields.get(name)
             if field:
-                return field.get('value', '')
+                return field.get('value')
         except KeyError:
             pass
 
@@ -221,13 +237,14 @@ class Ticket(object):
         """Populate the ticket with 'suitable' values from a dictionary"""
         field_names = self.fields.keys()
         for name in [name for name in values.keys() if name in field_names]:
-            self[name] = values.get(name, '')
+            value = values.get(name)
+            self[name] = convert_field_value(self.fields[name], value)
 
         # We have to do an extra trick to catch unchecked checkboxes
         for name in [name for name in values.keys() if name[9:] in field_names
                      and name.startswith('checkbox_')]:
             if name[9:] not in values:
-                self[name[9:]] = '0'
+                self[name[9:]] = False
 
     def insert(self, when=None, db=None):
         """Add ticket to database.
@@ -256,22 +273,24 @@ class Ticket(object):
 
         # Perform type conversions
         values = dict(self.values)
-        for field in self.time_fields:
-            if field in values:
-                values[field] = to_utimestamp(values[field])
-
-        # Insert ticket record
         std_fields = []
         custom_fields = []
-        for fname, f in self.fields.iteritems():
+        for name, f in self.fields.iteritems():
             if f.get('virtual'):
                 continue
-            if fname in self.values:
+            if name in values:
+                type_ = self.fields['type']
+                val = values[name]
+                if type_ == 'time':
+                    values[name] = to_utimestamp(val)
+                elif val is not None:
+                    values[name] = unicode(val)
                 if f.get('custom'):
-                    custom_fields.append(fname)
+                    custom_fields.append(name)
                 else:
-                    std_fields.append(fname)
+                    std_fields.append(name)
 
+        # Insert ticket record
         tkt_id = [None]
         @self.env.with_transaction(db)
         def do_insert(db):
@@ -286,7 +305,7 @@ class Ticket(object):
             if custom_fields:
                 cursor.executemany("""
                 INSERT INTO ticket_custom (ticket,name,value) VALUES (%s,%s,%s)
-                """, [(tkt_id[0], name, self[name]) for name in custom_fields])
+                """, [(tkt_id[0], name, values[name]) for name in custom_fields])
 
         self.id = tkt_id[0]
         self.resource = self.resource(id=tkt_id[0])
@@ -366,6 +385,12 @@ class Ticket(object):
             custom_fields = [n for n, f in self.fields.iteritems() if f.get('custom')]
 
             for name in self._old.keys():
+                val = self[name]
+                oldval = self._old[name]
+                if val is not None:
+                    val = unicode(val)
+                if oldval is not None:
+                    oldval = unicode(oldval)
                 if name in custom_fields:
                     cursor.execute("""
                         SELECT * FROM ticket_custom 
@@ -375,21 +400,20 @@ class Ticket(object):
                         cursor.execute("""
                             UPDATE ticket_custom SET value=%s
                             WHERE ticket=%s AND name=%s
-                            """, (self[name], self.id, name))
+                            """, (val, self.id, name))
                     else:
                         cursor.execute("""
                             INSERT INTO ticket_custom (ticket,name,value)
                             VALUES(%s,%s,%s)
-                            """, (self.id, name, self[name]))
+                            """, (self.id, name, val))
                 else:
                     cursor.execute("UPDATE ticket SET %s=%%s WHERE id=%%s" 
-                                   % name, (self[name], self.id))
+                                   % name, (val, self.id))
                 cursor.execute("""
                     INSERT INTO ticket_change
                         (ticket,time,author,field,oldvalue,newvalue)
                     VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (self.id, when_ts, author, name, self._old[name],
-                          self[name]))
+                    """, (self.id, when_ts, author, name, oldval, val))
 
             # always save comment, even if empty 
             # (numbering support for timeline)
@@ -449,8 +473,14 @@ class Ticket(object):
                 """, (self.id, sid, sid))
         log = []
         for t, author, field, oldvalue, newvalue, permanent in cursor:
+            f = self.fields.get(field)
+            if f:
+                conv = lambda v: convert_type_value(f['type'], v)
+            else:
+                conv = lambda v: v
+            old, new = map(conv, (oldvalue, newvalue))
             log.append((from_utimestamp(t), author, field,
-                        oldvalue or '', newvalue or '', permanent))
+                        old, new, permanent))
         return log
 
     def delete(self, db=None):
@@ -487,6 +517,12 @@ class Ticket(object):
             change = {'date': from_utimestamp(ts),
                       'author': author, 'fields': fields}
             for field, author, old, new in cursor:
+                f = self.fields.get(field)
+                if f:
+                    conv = lambda v: convert_type_value(f['type'], v)
+                else:
+                    conv = lambda v: v
+                old, new = map(conv, (old, new))
                 fields[field] = {'author': author, 'old': old, 'new': new}
             return change
 
