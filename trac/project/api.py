@@ -73,7 +73,7 @@ class ProjectManagement(Component):
 
         return roles
 
-    def get_user_projects(self, username, role=UserManagement.USER_ROLE_DEVELOPER):
+    def get_user_projects(self, username, role=UserManagement.USER_ROLE_DEVELOPER, pid_only=False):
         db = self.env.get_read_db()
         cursor = db.cursor()
 
@@ -99,7 +99,9 @@ class ProjectManagement(Component):
 
         cursor.execute(query, (username,))
         projects = cursor.fetchall()
-        return projects
+        if not pid_only:
+            return projects
+        return [r[0] for r in projects]
 
     def get_project_users(self, pid, role=UserManagement.USER_ROLE_DEVELOPER):
         db = self.env.get_read_db()

@@ -54,6 +54,9 @@ from trac.versioncontrol.web_ui.changeset import ChangesetModule
 from trac.wiki.formatter import format_to_html
 from trac.wiki.macros import WikiMacroBase
 
+from trac.project.api import ProjectManagement
+
+
 
 class CommitTicketUpdater(Component):
     """Update tickets based on commit messages.
@@ -118,24 +121,43 @@ class CommitTicketUpdater(Component):
         
         If set to the special value <ALL>, all tickets referenced by the
         message will get a reference to the changeset.""")
-    
+
+    close_status = Option('ticket', 'commit_ticket_update_commands.close.status',
+        'closed',
+        """Change ticket status to specified while performing close command.
+        If empty - do not change status.""", switcher=True)
+
+    close_resolution = Option('ticket', 'commit_ticket_update_commands.close.resolution',
+        'fixed',
+        """Change ticket resolution to specified while performing close command.
+        If empty - do not change resolution.""", switcher=True)
+
     check_perms = BoolOption('ticket', 'commit_ticket_update_check_perms',
         'true',
         """Check that the committer has permission to perform the requested
         operations on the referenced tickets.
         
         This requires that the user names be the same for Trac and repository
-        operations.""")
+        operations.""", switcher=True)
 
     notify = BoolOption('ticket', 'commit_ticket_update_notify', 'true',
-        """Send ticket change notification when updating a ticket.""")
-    
+        """Send ticket change notification when updating a ticket.""", switcher=True)
+
+    allow_commands = BoolOption('ticket', 'commit_ticket_allow_commands', 'true',
+        """Allow any command besides refs.""", switcher=True)
+
+    all_refs = BoolOption('ticket', 'commit_ticket_all_refs', 'true',
+        """If command is empty, unknown or disabled use refs instead.""", switcher=True)
+
     ticket_prefix = '(?:#|(?:ticket|issue|bug)[: ]?)'
     ticket_reference = ticket_prefix + '[0-9]+'
     ticket_command = (r'(?P<action>[A-Za-z]*)\s*.?\s*'
                       r'(?P<ticket>%s(?:(?:[, &]*|[ ]?and[ ]?)%s)*)' %
                       (ticket_reference, ticket_reference))
     
+    def __init__(self):
+        self.pm = ProjectManagement(self.env)
+
     @property
     def command_re(self):
         (begin, end) = (re.escape(self.envelope[0:1]),
@@ -185,11 +207,11 @@ class CommitTicketUpdater(Component):
         tickets = {}
         for cmd, tkts in cmd_groups:
             func = functions.get(cmd.lower())
-            if not func and self.commands_refs.strip() == '<ALL>':
-                func = self.cmd_refs
-            if func:
-                for tkt_id in self.ticket_re.findall(tkts):
-                    tickets.setdefault(int(tkt_id), []).append(func)
+#            if not func and self.commands_refs.strip() == '<ALL>':
+#                func = self.cmd_refs
+#            if func:
+            for tkt_id in self.ticket_re.findall(tkts):
+                tickets.setdefault(int(tkt_id), set()).add(func)
         return tickets
     
     def make_ticket_comment(self, repos, changeset):
@@ -198,7 +220,7 @@ class CommitTicketUpdater(Component):
         if repos.reponame:
             revstring += '/' + repos.reponame
         return """\
-In [changeset:%s]:
+In [[changeset:%s]]:
 {{{
 #!CommitTicketReference repository="%s" revision="%s"
 %s
@@ -206,6 +228,7 @@ In [changeset:%s]:
         
     def _update_tickets(self, tickets, changeset, comment, date):
         """Update the tickets with the given comment."""
+        pids = self.pm.get_user_projects(changeset.author, pid_only=True)
         perm = PermissionCache(self.env, changeset.author)
         for tkt_id, cmds in tickets.iteritems():
             try:
@@ -214,9 +237,32 @@ In [changeset:%s]:
                 @self.env.with_transaction()
                 def do_update(db):
                     ticket[0] = Ticket(self.env, tkt_id, db)
+                    pid = ticket[0].pid
+                    syllabus_id = self.pm.get_project_syllabus(pid)
+                    if pid not in pids:
+                        self.log.warn("Updating ticket #%d canceled: user %s is not a developer in project #%d" %
+                                       (tkt_id, changeset.author, pid))
+                        ticket[0] = None
+                        return
+                    refs_done = False
+                    allow_commands = self.allow_commands.syllabus(syllabus_id)
+                    all_refs = self.all_refs.syllabus(syllabus_id)
                     for cmd in cmds:
-                        cmd(ticket[0], changeset, perm(ticket[0].resource))
+                        if not cmd:
+                            if not all_refs:
+                                continue
+                            cmd = self.cmd_refs
+                        if cmd != self.cmd_refs and not allow_commands:
+                            cmd = self.cmd_refs
+                        if cmd == self.cmd_refs:
+                            if refs_done:
+                                continue
+                            else:
+                                refs_done = True
+                        cmd(ticket[0], changeset, perm(ticket[0].resource), syllabus_id)
                     ticket[0].save_changes(changeset.author, comment, date, db)
+                if not ticket[0]:
+                    continue
                 self._notify(ticket[0], date)
             except Exception, e:
                 self.log.error("Unexpected error while processing ticket "
@@ -224,7 +270,7 @@ In [changeset:%s]:
     
     def _notify(self, ticket, date):
         """Send a ticket update notification."""
-        if not self.notify:
+        if not self.notify.project(ticket.pid):
             return
         try:
             tn = TicketNotifyEmail(self.env)
@@ -245,14 +291,19 @@ In [changeset:%s]:
                 functions[cmd] = func
         return functions
     
-    def cmd_close(self, ticket, changeset, perm):
-        if not self.check_perms or 'TICKET_MODIFY' in perm:
-            ticket['status'] = 'closed'
-            ticket['resolution'] = 'fixed'
+    def cmd_close(self, ticket, changeset, perm, syllabus_id):
+        if not self.check_perms.syllabus(syllabus_id) or 'TICKET_MODIFY' in perm:
+            status = self.close_status.syllabus(syllabus_id)
+            resolution = self.close_resolution.syllabus(syllabus_id)
+            # TODO: check whether specified non-empty status and resilution defined
+            if status:
+                ticket['status'] = status
+            if resolution:
+                ticket['resolution'] = resolution
             if not ticket['owner']:
                 ticket['owner'] = changeset.author
 
-    def cmd_refs(self, ticket, changeset, perm):
+    def cmd_refs(self, ticket, changeset, perm, syllabus_id):
         pass
 
 
