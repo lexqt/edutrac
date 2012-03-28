@@ -220,7 +220,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
 
         this_action = self.get_actions(ticket=ticket, req=req)[action]
         status = this_action['newstate']
-        operations = this_action['operations']
+        operations = set(this_action['operations'])
         current_owner = ticket._old.get('owner', ticket['owner'] or '(none)')
         if not (Chrome(self.env).show_email_addresses
                 or 'EMAIL_VIEW' in req.perm(ticket.resource)):
@@ -275,12 +275,14 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
             hints.append(_("The owner will be changed from %(current_owner)s "
                            "to %(authname)s", current_owner=current_owner,
                            authname=req.authname))
+        if 'set_previous_owner' in operations:
+            new_owner = self.get_previous_owner(ticket) or '(none)'
+            hints.append(_("The owner will be changed from "
+                           "%(current_owner)s to %(selected_owner)s",
+                           current_owner=current_owner,
+                           selected_owner=new_owner))
         if 'set_resolution' in operations:
-            if this_action.has_key('set_resolution'):
-                resolutions = [x.strip() for x in
-                               this_action['set_resolution'].split(',')]
-            else:
-                resolutions = [val.name for val in Resolution.select(self.env, pid=ticket.pid)]
+            resolutions = self.get_valid_resolutions(this_action, ticket)
             if not resolutions:
                 raise TracError(_("Your workflow attempts to set a resolution "
                                   "but none is defined (configuration issue, "
@@ -347,6 +349,8 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                 updated['owner'] = newowner
             elif operation == 'set_owner_to_self':
                 updated['owner'] = req.authname
+            elif operation == 'set_previous_owner':
+                updated['owner'] = self.get_previous_owner(ticket)
             elif operation == 'del_resolution':
                 updated['resolution'] = ''
             elif operation == 'set_resolution':
@@ -379,6 +383,11 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
             if ticket['owner'] not in owners:
                 res.append(('owner', '"%s" is not valid owner for "%s" action'
                                     % (ticket['owner'], action['name'])))
+        if 'set_resolution' in ops:
+            resolutions = self.get_valid_resolutions(action, ticket)
+            if ticket['resolution'] not in resolutions:
+                res.append(('resolution', '"%s" is not valid resolution for "%s" action'
+                                    % (ticket['resolution'], action['name'])))
         return res
 
     # Internal methods
@@ -506,6 +515,20 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         else:
             owners = self.valid_owner_provider.get_owners(req, ticket, action)
         return owners
+
+    def get_valid_resolutions(self, action, ticket):
+        if action.has_key('set_resolution'):
+            resolutions = [x.strip() for x in
+                           action['set_resolution'].split(',')]
+        else:
+            resolutions = [val.name for val in Resolution.select(self.env, pid=ticket.pid)]
+        return resolutions
+
+    def get_previous_owner(self, ticket):
+        current_owner = ticket._old.get('owner', ticket['owner'])
+        res = ticket.get_from_changelog('owner', new=current_owner)
+        if res:
+            return res[1]
 
 
 class OwnerGroupProviderError(TracError):
