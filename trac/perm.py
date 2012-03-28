@@ -306,7 +306,7 @@ class PermissionSystem(Component):
 
     policies = OrderedExtensionsOption('trac', 'permission_policies',
         IPermissionPolicy,
-        'DefaultPermissionPolicy, LegacyAttachmentPolicy',
+        'VirtualTicketPermissionsPolicy, DefaultPermissionPolicy, LegacyAttachmentPolicy',
         False,
         """List of components implementing `IPermissionPolicy`, in the order in
         which they will be applied. These components manage fine-grained access
