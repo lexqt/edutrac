@@ -485,6 +485,7 @@ class Query(object):
         custom_fields = [n for n, f in self.fields.iteritems() if 'custom' in f]
 
         sql = []
+        args = []
         sql.append("SELECT " + ",".join(['t.%s AS %s' % (c, c) for c in cols
                                          if c not in custom_fields]))
         sql.append(",priority.value AS priority_value")
@@ -501,9 +502,10 @@ class Query(object):
         # Join with the enum table for proper sorting
         for col in [c for c in enum_columns
                     if c == self.order or c == self.group or c == 'priority']:
-            sql.append("\n  LEFT OUTER JOIN enum AS %s ON "
-                       "(%s.type='%s' AND %s.name=%s AND %s.project_id=t.project_id)"
+            sql.append("\n  LEFT OUTER JOIN enum_syllabus AS %s ON "
+                       "(%s.type='%s' AND %s.name=%s AND %s.syllabus_id=%%s)"
                        % (col, col, col, col, col, col))
+            args.append(self.syllabus_id)
 
         # Join with the version/milestone tables for proper sorting
         for col in [c for c in ['milestone', 'version']
@@ -684,7 +686,6 @@ class Query(object):
                         args.extend(item[1])
             return " AND ".join(clauses)
 
-        args = []
         errors = []
         clauses = filter(None, (get_clause_sql(c) for c in self.constraints))
         if clauses:
@@ -776,7 +777,6 @@ class Query(object):
 
     def template_data(self, context, tickets, orig_list=None, orig_time=None,
                       req=None):
-        pid = self.pid
         clauses = []
         for clause in self.constraints:
             constraints = {}
@@ -799,7 +799,7 @@ class Query(object):
             clauses.append(constraints)
 
         cols = self.get_columns()
-        labels = TicketSystem(self.env).get_ticket_field_labels(pid)
+        labels = TicketSystem(self.env).get_ticket_field_labels(pid=self.pid)
         wikify = set(n for n, f in self.fields.iteritems()
                      if f['type'] == 'text' and f.get('format') == 'wiki')
 
@@ -879,7 +879,7 @@ class Query(object):
                                 'title':None}
 
         from trac.ticket.model import Priority
-        pmin, pmax =  Priority.get_min_max(env=self.env, pid=pid)
+        pmin, pmax =  Priority.get_min_max(env=self.env, syllabus_id=self.syllabus_id)
         priorities = {'min': pmin, 'max': pmax}
 
         return {'query': self,

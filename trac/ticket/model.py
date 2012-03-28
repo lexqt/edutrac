@@ -78,6 +78,17 @@ def convert_field_value(type_or_field, value, default=None):
         return default
     return val
 
+def prepare_field_value(value, custom, type_):
+#    custom = field.get('custom')
+#    type_  = field['type']
+    if value is None:
+        return value
+    if custom:
+        return unicode(value)
+    elif type_ == 'time':
+        return to_utimestamp(value)
+    return value
+
 
 class Ticket(object):
 
@@ -279,13 +290,13 @@ class Ticket(object):
             if f.get('virtual'):
                 continue
             if name in values:
-                type_ = self.fields['type']
+                type_ = f['type']
+                custom = f.get('custom')
                 val = values[name]
-                if type_ == 'time':
-                    values[name] = to_utimestamp(val)
-                elif val is not None:
-                    values[name] = unicode(val)
-                if f.get('custom'):
+
+                values[name] = prepare_field_value(val, custom, type_)
+
+                if custom:
                     custom_fields.append(name)
                 else:
                     std_fields.append(name)
@@ -387,10 +398,10 @@ class Ticket(object):
             for name in self._old.keys():
                 val = self[name]
                 oldval = self._old[name]
-                if val is not None:
-                    val = unicode(val)
-                if oldval is not None:
-                    oldval = unicode(oldval)
+                custom = name in custom_fields
+                type_ = self.fields[name]['type']
+                val = prepare_field_value(val, custom, type_)
+                oldval = prepare_field_value(oldval, custom, type_)
                 if name in custom_fields:
                     cursor.execute("""
                         SELECT * FROM ticket_custom 
@@ -445,7 +456,7 @@ class Ticket(object):
         conn = self.env.get_sa_connection()
         tab = self.env.get_sa_metadata().tables['ticket_change']
         q = tab.select().with_only_columns([tab.c.author, tab.c.oldvalue, tab.c.newvalue]).\
-            where(tab.field==field).order_by(tab.c.time.desc()).limit(limit)
+            where(tab.c.field==field).order_by(tab.c.time.desc()).limit(limit)
         for val, col in ((old, tab.c.oldvalue), (new, tab.c.newvalue)):
             if val is not None:
                 if isinstance(val, basestring):
@@ -772,29 +783,37 @@ class AbstractEnum(object):
     type = None
     ticket_col = None
 
-    def __init__(self, env, name=None, db=None, pid=None):
+    def __init__(self, env, name=None, db=None, pid=None, syllabus_id=None):
         if not self.ticket_col:
             self.ticket_col = self.type
         self.env = env
-        if pid is not None and name:
-            pid = int(pid)
+        if name and (pid is not None or syllabus_id is not None):
+            if pid is not None:
+                pid = int(pid)
+                syllabus_id = None
+            if syllabus_id is not None:
+                syllabus_id = int(syllabus_id)
+                pid = None
+            id_, table, column = self._prepare_syll_proj_values(pid, syllabus_id)
             if not db:
                 db = self.env.get_read_db()
             cursor = db.cursor()
-            cursor.execute("SELECT value FROM enum WHERE project_id=%s AND type=%s AND name=%s",
-                           (pid, self.type, name))
+            cursor.execute("SELECT value FROM {table} WHERE {column}=%s AND type=%s AND name=%s".\
+                           format(table=table, column=column),
+                           (id_, self.type, name))
             row = cursor.fetchone()
             if not row:
-                raise ResourceNotFound(_('%(type)s %(name)s does not exist in project #%(pid)s.',
-                                         type=self.type, name=name, pid=pid))
+                raise ResourceNotFound(_('%(type)s %(name)s does not exist for %(column)s=%(id_)s.',
+                                         type=self.type, name=name, column=column, id_=id_))
             self.value = self._old_value = row[0]
             self.name = self._old_name = name
             self.pid = pid
+            self.syllabus_id = syllabus_id
         else:
             self.value = self._old_value = None
             self.name = self._old_name = None
             self.pid = None
-        self.syllabus_id = None
+            self.syllabus_id = None
 
     exists = property(lambda self: self._old_value is not None)
 
@@ -807,23 +826,26 @@ class AbstractEnum(object):
 
         @self.env.with_transaction(db)
         def do_delete(db):
+            id_, table, column = self._prepare_syll_proj_values(self.pid, self.syllabus_id)
             cursor = db.cursor()
-            self.env.log.info('Deleting %s %s in project #%s' % (self.type, self.name, self.pid))
-            cursor.execute("DELETE FROM enum WHERE project_id=%s AND type=%s AND value=%s",
-                           (self.pid, self.type, self._old_value))
+            self.env.log.info('Deleting %s %s for %s=%s' % (self.type, self.name, column, id_))
+            cursor.execute("DELETE FROM {table} WHERE {column}=%s AND type=%s AND value=%s".\
+                           format(table=table, column=column),
+                           (id_, self.type, self._old_value))
             # Re-order any enums that have higher value than deleted
             # (close gap)
-            for enum in list(self.select(self.env, db, pid=self.pid)):
+            for enum in list(self.select(self.env, db, pid=self.pid, syllabus_id=self.syllabus_id)):
                 try:
                     if int(enum.value) > int(self._old_value):
                         enum.value = unicode(int(enum.value) - 1)
                         enum.update()
                 except ValueError:
                     pass # Ignore cast error for this non-essential operation
-            TicketSystem(self.env).reset_ticket_fields(self.pid)
+            TicketSystem(self.env).reset_ticket_fields(pid=self.pid, syllabus_id=self.syllabus_id)
         self.value = self._old_value = None
         self.name = self._old_name = None
         self.pid = None
+        self.syllabus_id = None
 
     def insert(self, db=None):
         """Add a new enum value.
@@ -837,17 +859,19 @@ class AbstractEnum(object):
 
         @self.env.with_transaction(db)
         def do_insert(db):
+            id_, table, column = self._prepare_syll_proj_values(self.pid, self.syllabus_id)
             cursor = db.cursor()
-            self.env.log.debug("Creating new %s '%s' in project #%s" % (self.type, self.name, self.pid))
+            self.env.log.debug("Creating new %s '%s' for %s=%s" % (self.type, self.name, column, id_))
             if not self.value:
                 cursor.execute("""
-                    SELECT COALESCE(MAX(%s),0) FROM enum WHERE project_id=%%s AND type=%%s
-                """ % db.cast('value', 'int'), (self.pid, self.type))
+                    SELECT COALESCE(MAX(%s),0) FROM {table} WHERE {column}=%%s AND type=%%s
+                    """.format(table=table, column=column) % db.cast('value', 'int'),
+                    (id_, self.type))
                 self.value = int(float(cursor.fetchone()[0])) + 1
-            cursor.execute("INSERT INTO enum (project_id,type,name,value) "
-                           "VALUES (%s,%s,%s,%s)",
-                           (self.pid, self.type, self.name, self.value))
-            TicketSystem(self.env).reset_ticket_fields(self.pid)
+            cursor.execute("INSERT INTO {table} ({column},type,name,value) "
+                           "VALUES (%s,%s,%s,%s)".format(table=table, column=column),
+                           (id_, self.type, self.name, self.value))
+            TicketSystem(self.env).reset_ticket_fields(pid=self.pid, syllabus_id=self.syllabus_id)
 
         self._old_name = self.name
         self._old_value = self.value
@@ -864,18 +888,26 @@ class AbstractEnum(object):
 
         @self.env.with_transaction(db)
         def do_update(db):
+            id_, table, column = self._prepare_syll_proj_values(self.pid, self.syllabus_id)
             cursor = db.cursor()
-            self.env.log.info('Updating %s "%s" in project #%s' % (self.type, self.name, self.pid))
+            self.env.log.info('Updating %s "%s" for %s=%s' % (self.type, self.name, column, id_))
             cursor.execute("""
-                UPDATE enum SET name=%s,value=%s 
-                WHERE project_id=%s AND type=%s AND name=%s
-                """, (self.name, self.value, self.pid, self.type, self._old_name))
+                UPDATE {table} SET name=%s,value=%s 
+                WHERE {column}=%s AND type=%s AND name=%s
+                """.format(table=table, column=column),
+                (self.name, self.value, id_, self.type, self._old_name))
             if self.name != self._old_name:
                 # Update tickets
-                cursor.execute("UPDATE ticket SET %s=%%s WHERE project_id=%%s AND %s=%%s" %
-                               (self.ticket_col, self.ticket_col),
-                               (self.name, self.pid, self._old_name))
-            TicketSystem(self.env).reset_ticket_fields(self.pid)
+                q = "UPDATE ticket SET {tcol}=%s WHERE project_id {op} %s AND {tcol}=%s"
+                if self.pid is not None:
+                    arg = self.pid
+                    op = '='
+                else:
+                    arg = tuple(ProjectManagement(self.env).get_syllabus_projects(self.syllabus_id))
+                    op = 'IN'
+                q = q.format(tcol=self.ticket_col, op=op)
+                cursor.execute(q, (self.name, arg, self._old_name))
+            TicketSystem(self.env).reset_ticket_fields(pid=self.pid, syllabus_id=self.syllabus_id)
 
         self._old_name = self.name
         self._old_value = self.value
@@ -913,7 +945,7 @@ class AbstractEnum(object):
         if not db:
             db = env.get_read_db()
         cursor = db.cursor()
-        cursor.execute(query, (pid, cls.type))
+        cursor.execute(query, (id_, cls.type))
         row = cursor.fetchone()
         return row
 
@@ -935,36 +967,76 @@ class AbstractEnum(object):
 
 
 
-class Type(AbstractEnum):
+class SyllabusEnum(AbstractEnum):
+
+    def __init__(self, env, name=None, db=None, pid=None, syllabus_id=None):
+        if name and syllabus_id is None:
+            syllabus_id = self._get_syllabus(env, pid)
+        super(SyllabusEnum, self).__init__(env, name, syllabus_id=syllabus_id, db=db)
+
+    @classmethod
+    def _get_syllabus(cls, env, pid):
+        if pid is not None:
+            return ProjectManagement(env).get_project_syllabus(pid, fail_on_none=True)
+        else:
+            raise TracError('Can not create SyllabusEnum instance without syllabus or project id')
+
+    @classmethod
+    def _prepare_syll_proj_values(cls, pid=None, syllabus_id=None):
+        assert syllabus_id is not None
+        return syllabus_id, 'enum_syllabus', 'syllabus_id'
+
+    @classmethod
+    def select(cls, env, db=None, pid=None, syllabus_id=None):
+        if syllabus_id is None:
+            syllabus_id = cls._get_syllabus(env, pid)
+        return super(SyllabusEnum, cls).select(env, syllabus_id=syllabus_id, db=db)
+
+    @classmethod
+    def get_min_max(cls, env, db=None, pid=None, syllabus_id=None):
+        if syllabus_id is None:
+            syllabus_id = cls._get_syllabus(env, pid)
+        return super(SyllabusEnum, cls).get_min_max(env, syllabus_id=syllabus_id, db=db)
+
+
+# Not used now
+class ProjectEnum(AbstractEnum):
+
+    def __init__(self, env, name=None, db=None, pid=None, syllabus_id=None):
+        if name and pid is None:
+            raise TracError('Can not create ProjectEnum instance without project id')
+        super(ProjectEnum, self).__init__(env, name, pid=pid, db=db)
+
+
+
+class Type(SyllabusEnum):
     type = 'ticket_type'
     ticket_col = 'type'
 
 
 class Status(object):
-    def __init__(self, env, pid=None, syllabus_id=None):
+    def __init__(self, env, name=None, pid=None, syllabus_id=None):
         self.env = env
+        self.name = name
         self.pid = pid
         self.syllabus_id = syllabus_id
 
     @classmethod
     def select(cls, env, db=None, pid=None, syllabus_id=None):
         for state in TicketSystem(env).get_all_status(pid=pid, syllabus_id=syllabus_id):
-            status = cls(env)
-            status.name = state
-            status.pid = pid
-            status.syllabus_id = syllabus_id
+            status = cls(env, state, pid, syllabus_id)
             yield status
 
 
-class Resolution(AbstractEnum):
+class Resolution(SyllabusEnum):
     type = 'resolution'
 
 
-class Priority(AbstractEnum):
+class Priority(SyllabusEnum):
     type = 'priority'
 
 
-class Severity(AbstractEnum):
+class Severity(SyllabusEnum):
     type = 'severity'
 
 
@@ -1060,7 +1132,7 @@ class Component(object):
             TicketSystem(self.env).reset_ticket_fields(self.pid)
 
     @classmethod
-    def select(cls, env, db=None, pid=None):
+    def select(cls, env, db=None, pid=None, **kwargs):
         if not db:
             db = env.get_read_db()
         cursor = db.cursor()
@@ -1248,7 +1320,7 @@ class Milestone(object):
             listener.milestone_changed(self, old_values)
 
     @classmethod
-    def select(cls, env, pid, include_completed=True, db=None):
+    def select(cls, env, pid, include_completed=True, db=None, **kwargs):
         if not db:
             db = env.get_read_db()
         sql = "SELECT project_id,name,due,completed,description,weight FROM milestone WHERE project_id=%s"
@@ -1385,7 +1457,7 @@ class Version(object):
             TicketSystem(self.env).reset_ticket_fields(self.pid)
 
     @classmethod
-    def select(cls, env, db=None, pid=None):
+    def select(cls, env, db=None, pid=None, **kwargs):
         if not db:
             db = env.get_read_db()
         cursor = db.cursor()

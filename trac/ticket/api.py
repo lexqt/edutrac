@@ -252,7 +252,9 @@ class TicketFieldsStore(object):
                    ('priority', N_('Priority'), model.Priority),
                    ('severity', N_('Severity'), model.Severity),
                    ]
-        id_kwargs = {}
+        id_kwargs = {
+            'syllabus_id': self.syllabus_id
+        }
         if self.pid is not None:
             selects.extend([
                    ('milestone', N_('Milestone'), model.Milestone),
@@ -260,8 +262,6 @@ class TicketFieldsStore(object):
                    ('version', N_('Version'), model.Version),
                 ])
             id_kwargs['pid'] = self.pid
-        else:
-            id_kwargs['syllabus_id'] = self.syllabus_id
 
         fields.extend(self._prepare_selects_fields(selects, id_kwargs))
 

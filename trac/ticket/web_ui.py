@@ -476,8 +476,8 @@ class TicketModule(Component):
             if field:
                 text_fields = [field]
             else:
-                text_fields = [field['name'] for field in ticket.fields if
-                               field['type'] == 'textarea']
+                text_fields = [name for name, f in ticket.fields.iteritems() if
+                               f['type'] == 'textarea']
             if action == 'history':
                 return self._render_history(req, ticket, data, text_fields)
             elif action == 'diff':

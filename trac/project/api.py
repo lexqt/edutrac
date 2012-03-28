@@ -220,6 +220,19 @@ class ProjectManagement(Component):
         names  = get_column_names(cursor)
         return dict(zip(names, values))
 
+    def get_syllabus_projects(self, syllabus_id):
+        '''Return ids of all projects connected with specified syllabus'''
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+        query = '''
+            SELECT project_id
+            FROM project_info
+            WHERE syllabus_id=%s
+        '''
+        cursor.execute(query, (syllabus_id,))
+        rows = cursor.fetchall()
+        return [r[0] for r in rows]
+
     def check_component_enabled(self, component, pid=None, syllabus_id=None, raise_on_disabled=True):
         if pid is not None:
             syllabus_id = self.get_project_syllabus(pid)
