@@ -34,7 +34,7 @@
 # Also includes modifications from TimingAndEstimationPlugin
 # http://www.trac-hacks.org/wiki/TimingAndEstimationPlugin
 
-# EduTrac adoptation
+# EduTrac adaptation
 # (c) Aleksey A. Porfirov, 2012
 
 import threading
@@ -247,7 +247,7 @@ class TicketFieldFilters(Component):
 
         #query page                                                            
         elif template == "query.html":
-            syllabus_id = data['query']['syllabus_id']
+            syllabus_id = data['query'].syllabus_id
             dfields = self._denied_fields(req.perm, syllabus_id)
             #remove ticket fields user doesn't have access to
             for i in range(len(data["tickets"])):

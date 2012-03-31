@@ -19,7 +19,7 @@ Main features (WIP)
 
 Many things are not ready yet at all:
 
- * Admin modules adoptation.
+ * Admin modules adaptation.
  * Unit tests.
  * Search subsystem.
 

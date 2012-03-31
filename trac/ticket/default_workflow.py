@@ -61,6 +61,7 @@ def parse_workflow_config(rawactions):
         return [item for item in (x.strip() for x in value.split(',')) if item]
     
     for action, attributes in actions.items():
+        attributes['alias'] = action
         # Default the 'name' attribute to the name used in the ini file
         if 'name' not in attributes:
             attributes['name'] = action
