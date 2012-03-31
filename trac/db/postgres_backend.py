@@ -100,10 +100,12 @@ class PostgreSQLConnector(Component):
         if cnx.schema:
             cursor.execute('CREATE SCHEMA "%s"' % cnx.schema)
             cursor.execute('SET search_path TO %s', (cnx.schema,))
-        from trac.db_default import schema
+        from trac.db_default import schema, extra_statements
         for table in schema:
             for stmt in self.to_sql(table):
                 cursor.execute(stmt)
+        for sql in extra_statements:
+            cursor.execute(sql)
         cnx.commit()
 
     def to_sql(self, table):

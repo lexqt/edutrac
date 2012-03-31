@@ -308,6 +308,214 @@ schema = [
         ForeignKey(('milestone', 'project_id'), 'milestone', ('name', 'project_id'), on_delete='CASCADE', on_update='CASCADE'),],
 ]
 
+##
+## Extra SQL statements (views, types, default obligatory data, etc)
+##
+
+extra_statements = (
+
+# Project system
+'''
+INSERT INTO projects (id, name, description)
+VALUES (0, 'Global', 'Dummy global project record')
+''',
+'''
+CREATE OR REPLACE VIEW real_projects AS
+SELECT *
+FROM projects
+WHERE id != 0
+''',
+'''
+CREATE OR REPLACE VIEW project_info AS
+SELECT p.id project_id, mg.active active, msr.syllabus_id syllabus_id, tpr.team_id team_id, tgr.studgroup_id studgroup_id, gmr.metagroup_id metagroup_id
+FROM real_projects p JOIN
+team_project_rel tpr ON p.id=tpr.project_id
+JOIN teamgroup_rel tgr ON tgr.team_id=tpr.team_id
+JOIN groupmeta_rel gmr ON gmr.studgroup_id=tgr.studgroup_id
+JOIN metagroups mg ON mg.id=gmr.metagroup_id
+JOIN metagroup_syllabus_rel msr ON msr.metagroup_id=gmr.metagroup_id
+''',
+'''
+CREATE OR REPLACE VIEW developer_projects AS
+SELECT u.id user_id, u.username username,
+    t.id team_id, t.name team_name,
+    p.id project_id, p.name project_name
+FROM users u
+JOIN team_members tm ON tm.user_id=u.id
+JOIN teams t ON t.id=tm.team_id
+JOIN team_project_rel tpr ON tpr.team_id=t.id
+JOIN real_projects p ON p.id=tpr.project_id
+''',
+#'''
+#CREATE OR REPLACE VIEW manager_projects AS
+#SELECT u.id user_id, u.username username,
+#    t.id team_id, t.name team_name,
+#    p.id project_id, p.name project_name
+#FROM project_managers pm
+#JOIN users u ON u.id=pm.user_id
+#JOIN real_projects p ON p.id=pm.project_id
+#JOIN team_project_rel tpr ON tpr.project_id=p.id
+#JOIN teams t ON tpr.team_id=t.id
+#''',
+'''
+CREATE OR REPLACE VIEW manager_projects AS
+SELECT u.id user_id, u.username username,
+    t.id team_id, t.name team_name,
+    p.id project_id, p.name project_name
+FROM studgroup_managers sgm
+JOIN users u ON u.id=sgm.user_id
+JOIN teamgroup_rel tgr ON tgr.studgroup_id=sgm.studgroup_id
+JOIN team_project_rel tpr ON tpr.team_id=tgr.team_id
+JOIN teams t ON t.id=tpr.team_id
+JOIN real_projects p ON p.id=tpr.project_id
+''',
+
+# Ticket system
+
+'''
+CREATE OR REPLACE VIEW syllabus_reports AS
+SELECT id, author, title, query, description, syllabus_id
+FROM report
+WHERE syllabus_id IS NOT NULL
+''',
+'''
+CREATE OR REPLACE VIEW project_reports AS
+SELECT id, author, title, query, description, project_id
+FROM report
+WHERE project_id IS NOT NULL
+''',
+'''
+CREATE OR REPLACE VIEW global_reports AS
+SELECT id, author, title, query, description
+FROM report
+WHERE project_id IS NULL AND syllabus_id IS NULL
+''',
+
+# User / group system
+
+'''
+CREATE TYPE group_level AS ENUM ('team', 'stud', 'meta')
+''',
+'''
+CREATE OR REPLACE VIEW membership AS
+SELECT u.id user_id, u.username, t.id team_id, sg.id studgroup_id, mg.id metagroup_id,  mg.active meta_active
+FROM users u JOIN (
+    team_members tm
+    JOIN teams t ON t.id=tm.team_id
+    JOIN teamgroup_rel tr ON tr.team_id=t.id
+    JOIN student_groups sg ON sg.id=tr.studgroup_id
+    JOIN groupmeta_rel gr ON gr.studgroup_id=sg.id
+    JOIN metagroups mg ON mg.id=gr.metagroup_id
+    ) ON u.id=tm.user_id
+''',
+# optimized
+#SELECT u.id user_id, u.username, tm.team_id team_id, tr.studgroup_id studgroup_id, mg.id metagroup_id,  mg.active meta_active
+#FROM users u LEFT JOIN (
+#    team_members     tm
+#    JOIN teamgroup_rel tr ON tr.team_id=tm.team_id
+#    JOIN groupmeta_rel gr ON gr.studgroup_id=tr.studgroup_id
+#    JOIN metagroups mg ON mg.id=gr.metagroup_id
+#    ) ON u.id=tm.user_id
+'''
+CREATE OR REPLACE VIEW group_hierarchy AS
+SELECT mg.id metagroup_id, sg.id studgroup_id, t.id team_id
+FROM metagroups mg LEFT JOIN (
+    groupmeta_rel gr
+    JOIN student_groups sg ON gr.studgroup_id=sg.id
+    JOIN teamgroup_rel tr ON sg.id=tr.studgroup_id
+    JOIN teams t ON tr.team_id=t.id
+    ) ON mg.id=gr.metagroup_id
+''',
+'''
+CREATE OR REPLACE VIEW user_info AS
+SELECT u.id id, u.username username, un.value fullname
+FROM users u LEFT OUTER JOIN session_attribute un
+ON un.name='name' AND u.username=un.sid
+''',
+
+
+'''
+CREATE OR REPLACE FUNCTION get_group_table(lvl group_level) RETURNS varchar AS $$
+BEGIN
+    CASE lvl
+        WHEN 'team' THEN
+            RETURN 'teams';
+        WHEN 'stud' THEN
+            RETURN 'student_groups';
+        WHEN 'meta' THEN
+            RETURN 'metagroups';
+    END CASE;
+END;
+$$ LANGUAGE plpgsql;
+''',
+'''
+CREATE OR REPLACE FUNCTION get_group_column(lvl group_level) RETURNS varchar AS $$
+BEGIN
+    CASE lvl
+        WHEN 'team' THEN
+            RETURN 'team_id';
+        WHEN 'stud' THEN
+            RETURN 'studgroup_id';
+        WHEN 'meta' THEN
+            RETURN 'metagroup_id';
+    END CASE;
+END;
+$$ LANGUAGE plpgsql;
+''',
+'''
+CREATE OR REPLACE FUNCTION check_membership(username varchar, gid integer, lvl group_level) RETURNS bool AS $$
+DECLARE
+    colname varchar;
+    res integer;
+BEGIN
+    SELECT get_group_column(lvl) INTO colname;
+    EXECUTE 'SELECT 1 FROM membership
+        WHERE username=$1 AND ' || quote_ident(colname) || '=$2
+        LIMIT 1'
+        INTO res USING username, gid;
+    RETURN res IS NOT NULL;
+END;
+$$ LANGUAGE plpgsql;
+''',
+'''
+CREATE OR REPLACE FUNCTION check_group_exists(gid integer, lvl group_level) RETURNS bool AS $$
+DECLARE
+    tabname varchar;
+    res integer;
+BEGIN
+    SELECT get_group_table(lvl) INTO tabname;
+    EXECUTE 'SELECT 1 FROM ' || quote_ident(tabname) || '
+        WHERE id=$1
+        LIMIT 1'
+        INTO res USING gid;
+    RETURN res IS NOT NULL;
+END;
+$$ LANGUAGE plpgsql;
+''',
+'''
+CREATE OR REPLACE FUNCTION check_group_has_parent(ch_gid integer, ch_lvl group_level, par_gid integer, par_lvl group_level) RETURNS bool AS $$
+DECLARE
+    ch_colname  varchar;
+    par_colname varchar;
+    res integer;
+BEGIN
+    IF ch_lvl >= par_lvl THEN
+        RAISE 'Precondition ''Child lvl < Parent lvl'' failed: % >= %', ch_lvl, par_lvl
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    SELECT get_group_column(ch_lvl)  INTO ch_colname;
+    SELECT get_group_column(par_lvl) INTO par_colname;
+    EXECUTE 'SELECT 1 FROM group_hierarchy
+        WHERE ' || quote_ident(ch_colname) || '=$1 AND ' || quote_ident(par_colname) || '=$2
+        LIMIT 1'
+        INTO res USING ch_gid, par_gid;
+    RETURN res IS NOT NULL;
+END;
+$$ LANGUAGE plpgsql;
+''',
+
+
+)
 
 ##
 ## Default Reports

@@ -136,12 +136,10 @@ facilities.
         trac.prefs = trac.prefs.web_ui
         trac.project.admin = trac.project.admin
         trac.project.api = trac.project.api
-        trac.project.env = trac.project.env
         trac.project.sys = trac.project.sys
         trac.user.acct_mgr_integration = trac.user.acct_mgr_integration
         trac.user.admin = trac.user.admin
         trac.user.api = trac.user.api
-        trac.user.env = trac.user.env
         trac.user.sys = trac.user.sys
         trac.search = trac.search.web_ui
         trac.ticket.admin = trac.ticket.admin
