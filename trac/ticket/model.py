@@ -61,7 +61,7 @@ def convert_type_value(type_, value):
     try:
         value = func(value)
         return value
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 def convert_field_value(type_or_field, value, default=None):

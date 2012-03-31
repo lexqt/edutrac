@@ -94,8 +94,8 @@ class TimelineModule(Component):
         maxrows = int(req.args.get('max', format == 'rss' and 50 or 0))
 
         pm = ProjectManagement(self.env)
-        pid = pm.get_current_project(req)
-        pm.check_session_project(req, pid, allow_multi=True)
+        pid = pm.get_and_check_current_project(req, allow_multi=True)
+        syllabus_id = pm.get_project_syllabus(pid)
 
         # Parse the from date and adjust the timestamp to the last second of
         # the day
@@ -141,7 +141,8 @@ class TimelineModule(Component):
                                          tzinfo=req.tz),
                 'precisedate': precisedate, 'precision': precision,
                 'events': [], 'filters': [],
-                'abbreviated_messages': self.abbreviated_messages}
+                'abbreviated_messages': self.abbreviated_messages,
+                'syllabus_id': syllabus_id}
 
         available_filters = []
         for event_provider in self.event_providers:

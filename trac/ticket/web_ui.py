@@ -392,7 +392,7 @@ class TicketModule(Component):
             if 'field_owner' in req.args and 'TICKET_MODIFY' not in req.perm:
                 del req.args['field_owner']
 
-        self._populate(req, ticket, plain_fields)
+        form_fields = self._populate(req, ticket, plain_fields)
         ticket.values['status'] = 'new'     # Force initial status
         if 'TICKET_SET_REPORTER' in req.perm:
             reporter_id = req.args.get(field_reporter) or \
@@ -403,7 +403,7 @@ class TicketModule(Component):
 
         valid = None
         if req.method == 'POST' and not 'preview' in req.args:
-            valid = self._validate_ticket(req, ticket)
+            valid = self._validate_ticket(req, ticket, form_fields)
             if valid:
                 self._do_create(req, ticket) # (redirected if successful)
             # else fall through in a preview
@@ -411,7 +411,7 @@ class TicketModule(Component):
 
         # don't validate for new tickets and don't validate twice
         if valid is None and 'preview' in req.args:
-            valid = self._validate_ticket(req, ticket)
+            valid = self._validate_ticket(req, ticket, form_fields)
             
         # Preview a new ticket
         data = self._prepare_data(req, ticket)        
@@ -526,7 +526,7 @@ class TicketModule(Component):
             # the webpage includes both changes by the user and changes by the
             # workflow... so we aren't able to differentiate them clearly.
 
-            self._populate(req, ticket) # Apply changes made by the user
+            form_fields = self._populate(req, ticket) # Apply changes made by the user
             field_changes, problems = self.get_ticket_changes(req, ticket,
                                                               action)
             if problems:
@@ -554,7 +554,7 @@ class TicketModule(Component):
             from trac.ticket.default_workflow import ConfigurableTicketWorkflow
             action_obj = ConfigurableTicketWorkflow(self.env
                             ).get_actions(ticket=ticket, req=req)[action]
-            valid = self._validate_ticket(req, ticket, action_obj, not valid) and valid
+            valid = self._validate_ticket(req, ticket, form_fields, field_changes, action_obj, not valid) and valid
             if 'preview' not in req.args:
                 if valid:
                     # redirected if successful
@@ -714,6 +714,7 @@ class TicketModule(Component):
             elif cc_action == 'add':
                 cc_list.append(cc_entry)
             ticket['cc'] = ', '.join(cc_list)
+        return fields
 
     def _get_history(self, req, ticket):
         history = []
@@ -1106,10 +1107,14 @@ class TicketModule(Component):
 
     # Ticket validation and changes
     
-    def _validate_ticket(self, req, ticket, action=None, force_collision_check=False):
+    def _validate_ticket(self, req, ticket, form_fields, workflow_changes=None, action=None, force_collision_check=False):
+        # `form_fields` is a dict with original field values from html form
+        # `workflow_changes` is a dict with field changed made by workflow action (see get_ticket_changes)
         # `action` is workflow action dict or None for new tickets
         valid = True
         resource = ticket.resource
+        if workflow_changes is None:
+            workflow_changes = {}
 
         # If the ticket has been changed, check the proper permissions
         if ticket.exists and ticket._old:
@@ -1162,22 +1167,37 @@ class TicketModule(Component):
                 continue
             type_ = field['type']
             value = ticket[name]
-            if value:
-                # Per-type validation
+            if type_ in ('int', 'id', 'float'):
                 try:
-                    if type_ == 'username':
-                        if not self.um.user_exists(value):
-                            add_warning(req, _('User with username %(username)s does not exists',
-                                               username=value))
+                    if form_fields.get(name):
+                        if type_ in ('int', 'id'):
+                            func = validators.Int.to_python
+                        elif type_ == 'float':
+                            func = validators.Number.to_python
+
+                        if name in workflow_changes and workflow_changes[name]['by'] != 'user':
+                            used_value = workflow_changes[name]['old']
+                        else:
+                            used_value = value
+                        orig_value = form_fields[name]
+
+                        # try to convert
+                        value_ = func(orig_value)
+                        # compare converted and used
+                        if value_ != used_value:
+                            add_warning(req, _('%(field)s: Bad conversion "%(original)s" -> "%(used)s"',
+                                               field=field['label'], original=orig_value, used=used_value))
                             valid = False
-                    elif type_ in ('int', 'id'):
-                        ticket[name] = value = validators.Int.to_python(value)
-                    elif type_ == 'float':
-                        ticket[name] = value = validators.Number.to_python(value)
                 except formencode.Invalid, e:
                     add_warning(req, u'{0}: {1}'.format(
                                     field['label'], e.msg))
                     valid = False
+            if value:
+                if type_ == 'username':
+                    if not self.um.user_exists(value):
+                        add_warning(req, _('User with username %(username)s does not exists',
+                                           username=value))
+                        valid = False
                 # Validate for known values fields with options
                 if 'options' not in field:
                     continue

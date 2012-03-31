@@ -106,7 +106,7 @@ class _RequestArgs(dict):
     def getint(self, name):
         """Return int(value) or None
         """
-        if name not in self:
+        if not self.get(name):
             return None
         return int(self[name])
 
