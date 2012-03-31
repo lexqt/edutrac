@@ -8,33 +8,33 @@ courses.
 Main features (WIP)
 -------------------
 
- * Multi-project
- * User groups (3 levels: team, student group, metagroup)
- * Syllabuses (something like specific configuration for project set)
- * More flexible ticket workflow (new operations and parameters)
- * New ticket field types and parameters (+ conversion, validation, etc)
- * Enhanced ticket queries
- * Evaluation modules
- * Initial SQLAlchemy integration
+ * Multi-project.
+ * User groups (3 levels: team, student group, metagroup).
+ * Syllabuses (something like specific configuration for project set).
+ * More flexible ticket workflow (new operations and parameters).
+ * New ticket field types and parameters (+ conversion, validation, etc).
+ * Enhanced ticket queries.
+ * Evaluation modules.
+ * Initial SQLAlchemy integration.
 
 Many things are not ready yet at all:
 
- * Admin modules adoptation
- * Unit tests
- * Search subsystem
+ * Admin modules adoptation.
+ * Unit tests.
+ * Search subsystem.
 
 Dependencies
 ------------
 
-### TracAccountManage
+### Trac Account Manager Plugin integration
 
-1.  [Download](http://trac-hacks.org/wiki/AccountManagerPlugin) and Install right after EduTrac. Tested with plugin version 0.3.2.
+1.  [Download](http://trac-hacks.org/wiki/AccountManagerPlugin) and install right after EduTrac. Tested with version 0.3.2.
 
     You can do it with a command: `easy_install --user https://trac-hacks.org/svn/accountmanagerplugin/0.11`
 
 2.  Enable plugin.
 
-        _trac.ini_
+    _trac.ini_
 
         [components]
         acct_mgr.admin.accountmanageradminpages = enabled
@@ -44,9 +44,9 @@ Dependencies
         acct_mgr.web_ui.* = enabled
         trac.web.auth.loginmodule = disabled
 
-3.  Activate _AccountManagerIntegration_ as password_store.
+3.  Activate *AccountManagerIntegration* as *password_store*.
 
-        _trac.ini_
+    _trac.ini_
 
         [account-manager]
         password_store = AccountManagerIntegration
@@ -62,8 +62,8 @@ facilities.
 
 Trac is distributed using the modified BSD License.
 
- * For installation instructions, please see the INSTALL. *
- * If you are upgrading from a previous Trac version, please read UPGRADE. *
+ * For installation instructions, please see the INSTALL.
+ * If you are upgrading from a previous Trac version, please read UPGRADE.
 
 You might also want to take a look at the RELEASE and ChangeLog files for more
 information.
