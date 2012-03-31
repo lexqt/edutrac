@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright (C) 2003-2012 Edgewall Software
+# Copyright (C) 2012 Aleksey A. Porfirov
 # All rights reserved.
 #
 # This software is licensed as described in the file COPYING, which
@@ -11,6 +12,9 @@
 # This software consists of voluntary contributions made by many
 # individuals. For the exact contribution history, see the revision
 # history and logs, available at http://trac.edgewall.org/log/.
+#
+# EduTrac fork development history
+# https://github.com/lexqt/edutrac
 
 import sys
 
@@ -58,6 +62,7 @@ setup(
     version = '0.12.3',
     description = 'Integrated SCM, wiki, issue tracker and project environment',
     long_description = """
+EduTrac is a fork of Trac.
 Trac is a minimalistic web-based software project management and bug/issue
 tracking system. It provides an interface to the Subversion revision control
 systems, an integrated wiki, flexible issue tracking and convenient report
