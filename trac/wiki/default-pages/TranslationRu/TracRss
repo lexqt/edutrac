@@ -1,0 +1,46 @@
+[[TranslatedPages]]
+
+= Использование RSS в Trac =
+
+Некоторые из модулей Trac поддерживают агрегирование содержимого используя XML формат RSS (Really Simple Syndication). Используя возможность RSS каналов, вы легко можете следить за развитием проекта, множеством карточек или за изменениями определённого файла.
+
+Trac поддерживает RSS каналы в:
+
+ * [TracTimeline Хронологии] — Используйте RSS канал для '''подписки на события проекта'''.[[br]]Следите за общим развитием проекта в вашей любимой программе для чтения RSS.
+ * [TracTickets Карточках], [TracReports Отчётах] и [TracQuery Запросах] — Позволяет агрегировать отчеты и результаты запросов к системе карточек.[[br]]Получайте уведомления о важных и сопутствующих карточках. 
+ * [TracBrowser Браузере] и [TracRevisionLog Журнале ревизий] — Агрегирование изменений в файлах.[[br]]Оставайтесь в курсе изменений определенных файлов или каталогов.
+
+== Как получить доступ к RSS ==
+В Trac везде, где доступен RSS, вы можете найти небольшую оранжевую иконку '''XML''', обычно расположенную внизу страницы. Нажмите на неё для доступа к RSS каналу данной страницы.
+
+'''Замечание:''' Различные модули предоставляют различные данные в своих RSS каналах. Как правило, агрегированная информация соответствует текущей странице. Например, если вы нажмете на RSS ссылку на странице с отчётом, то канал будет основан на этом отчёте. Это можно объяснить тем, что RSS канал это ''иной способ просмотра информации отображаемой информации''.
+
+== Ссылки ==
+ * ''Спецификации:''
+   * http://blogs.law.harvard.edu/tech/rss — Спецификация RSS 2.0
+
+ * ''Кросс-платформенные клиенты RSS:''
+   * http://www.rssowl.org/ — Основанный на Eclipse клиент RSS с открытым исходным кодом, для Linux, Mac и Windows систем, который поддерживает https и каналы с аутентификацией.
+
+ * ''Linux/BSD/*n*x системы:''
+   * http://pim.kde.org/users.php — [http://kde.org KDE] Клиент RSS для Linux/BSD/*n*x систем
+   * http://liferea.sourceforge.net/ — GTK2 клиент RSS с открытым исходным кодом для Linux
+   * http://akregator.sourceforge.net/ — KDE клиент RSS с открытым исходным кодом (часть KDE-PIM)
+
+ * ''Mac OS X системы:''
+   * http://ranchero.com/netnewswire/ — Отличный клиент RSS для Mac OS X (есть бесплатная и платная версии)
+   * http://www.utsire.com/shrook/ — Клиент RSS для Max OS X, поддерживающий https (даже с самоподписанными сертификатами) и каналы с аутентификацией.
+   * http://vienna-rss.sourceforge.net/ — Клиент RSS с открытым исходным кодом для Mac OS X с умной поддержкой папок
+   * http://www.mesadynamics.com/Tickershock.html — Клиент RSS в стиле "новостная лента" для Mac OS X
+
+ * ''Windows системы:''
+   * http://www.rssreader.com/ — Бесплатный и функциональный клиент RSS для Windows
+   * http://www.sharpreader.net/ — Бесплатный клиент RSS написанный на .NET для Windows
+
+ * ''Firefox:''
+   * http://www.mozilla.org/products/firefox/ — Mozilla Firefox поддерживает [http://www.mozilla.org/products/firefox/live-bookmarks.html живые закладки] использующие RSS
+   * http://sage.mozdev.org — Sage агрегатор RSS и Atom каналов для Mozilla Firefox
+   * http://www.wizzrss.com/Welcome.php — WizzRSS клиент RSS для Firefox
+
+----
+Смотрите также: TracGuide, TracTimeline, TracReports, TracBrowser

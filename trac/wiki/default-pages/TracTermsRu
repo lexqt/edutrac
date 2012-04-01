@@ -1,0 +1,58 @@
+This is the '''Russian''' translation of some Trac Terms.[[BR]]
+
+||Action ||Действие ||
+||Admin ||Админка ||
+||Alias ||Псевдоним ||
+||Attach ||Прикреплять ||
+||Attachment ||Вложение ||
+||Browse Source ||Исходный код ||
+||Browser ||Браузер ||
+||Change History ||История изменений ||
+||Changeset ||Набор изменений ||
+||Comment ||Комментарий ||
+||Completion date ||Дата завершения ||
+||Custom Query ||Произвольный запрос ||
+||Directory ||Каталог ||
+||Download ||Скачать ||
+||Editing ||Редактирование ||
+||!Help/Guide ||!Справка/Руководство ||
+||Load ||Загрузить ||
+||Log file ||Файл журнала ||
+||Log level ||Уровень сообщений ||
+||Milestone ||Этап разработки ||
+||Owner ||Владелец ||
+||Permission ||Право ||
+||Plugin ||Плагин ||
+||Preferences ||Предпочтения ||
+||Preview ||Предварительный просмотр ||
+||Priority ||Приоритет ||
+||Privileges ||Полномочия ||
+||Query ||Запрос ||
+||Report ||Отчёт ||
+||Reporter ||Докладчик ||
+||Reporter: ||Сообщил: ||
+||Repository ||Репозиторий ||
+||Repository Index ||Индекс репозиториев ||
+||Resolution ||Решение ||
+||Revision ||Ревизия ||
+||Roadmap ||План работ ||
+||Root ||Корень ||
+||Session ||Сеанс ||
+||Severities ||Степени серьёзности ||
+||Severity ||Серьёзность ||
+||Side by side ||Бок о бок ||
+||Status ||Состояние ||
+||Submit changes ||Отправить изменения ||
+||Summary ||Краткое описание ||
+||Syntax Highlighting ||Подсветка синтаксиса ||
+||Ticket ||Карточка ||
+||Ticket Type ||Тип карточки ||
+||Timeline ||Хронология ||
+||Trac Environment ||Окружение Trac ||
+||Upload ||Загрузить ||
+||Version Control ||Контроль версий ||
+||Wiki ||Вики ||
+||Workflow ||Рабочий процесс ||
+
+Предложения и обсуждения — здесь: #5478.
+

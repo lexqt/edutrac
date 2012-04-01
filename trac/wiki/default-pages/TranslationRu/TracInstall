@@ -1,0 +1,77 @@
+[[TranslatedPages]]
+
+= Trac Installation Guide =
+
+Trac написан на языке программирования Python и требует базу данных [http://sqlite.org/ SQLite], [http://www.postgresql.org/ PostgreSQL] или [http://mysql.com/ MySQL]. Для генерации HTML, Trac использует систему шаблонов [http://genshi.edgewall.org/ Genshi]. 
+
+[[PageOutline(2-3,Шаги установки,inline)]]
+
+== Зависимости ==
+
+=== Обязательное зависимости ===
+
+Чтобы установить Trac, необходимо чтобы были установлены следующие пакеты:
+ * [http://www.python.org/ Python] версии >= 2.4 и < 3.0 (обратите внимание, мы не поддерживаем Python 2.3 с этого выпуска [0.12])
+ * [http://peak.telecommunity.com/DevCenter/setuptools setuptools] версии >= 0.6
+ * [http://genshi.edgewall.org/ Genshi] версии >= 0.6
+Вам также необходима база данных и соответствующие библиотеки для Python (python bindings). Поддерживаются базы данных SQLite, PostgreSQL и MySQL.
+
+===== Для базы SQLite =====
+
+Если вы используете Python 2.5 или 2.6, у вас уже есть всё что нужно.
+
+При использовании Python 2.4 необходим pysqlite. Можно загрузить с [http://code.google.com/p/pysqlite/downloads/list google code] установщик для Windows или tar.gz архив для сборки из исходников:
+
+{{{
+$ tar xvfz <version>.tar.gz 
+$ cd <version> 
+$ python setup.py build_static install
+}}}
+
+Эти команды распакуют код SQLite и соберут библиотеку.
+
+SQLite 2.x больше не поддерживается.
+
+Известная ошибка PySqlite версий 2.5.2-4 не позволит обновить базу данных Trac с версии 0.11.x до 0.12. Используйте версии 2.5.5 и новее или 2.5.1 и старше. Подробности в #9434.
+
+Дополнительная информация в [trac:PySqlite].
+
+===== Для базы PostgreSQL =====
+
+Необходимо установить СУБД и библиотеку Python:
+
+ * [http://www.postgresql.org/ PostgreSQL]
+ * [http://pypi.python.org/pypi/psycopg2 psycopg2]
+
+Подробности в [trac:DatabaseBackend#Postgresql DatabaseBackend].
+
+===== Для базы MySQL =====
+
+Trac теперь может работать с MySQL, если вы будете следовать инструкциям.
+ * [http://mysql.com/ MySQL] версии 5.0 или новее
+ * [http://sf.net/projects/mysql-python MySQLdb] версии 1.2.2 или новее
+
+'''Очень''' важно внимательно прочитать страницу [trac:MySQLdb] перед созданием базы данных.
+
+=== Опциональные зависимости ===
+
+==== Система контроля версий ====
+
+===== Subversion =====
+
+ * [http://subversion.apache.org/ Subversion], 1.5.x или 1.6.x и '''''соответствующие''''' библиотеки Python. Старые версии начиная с 1.0, такие как 1.2.4, 1.3.2 или 1.4.2, и т.п. тоже должны работать. Сведения об устранении неполадок приведены на странице [trac:TracSubversion#Troubleshooting TracSubversion].
+
+[http://subversion.apache.org/packages.html Скомпилированные SWIG библиотеки] доступны для различных платформ. (Удачи в поисках скомпилированных SWIG библиотек для любого Windows пакета. TracSubversion содержит ссылку на [http://alagazam.net Algazam], где есть библиотеки, работающие с Python 2.6.)
+
+Заметьте, что Trac '''не''' использует [http://pysvn.tigris.org/ PySVN], он ещё не работает с новыми `ctype`-style bindings. [Есть карточка о реализации ctype bindings?]
+
+
+
+== Создание окружения проекта ==
+
+[TracEnvironment Окружение Trac] - это внутреннее хранилище, в котором Trac хранит информацию такую как вики страницы, карточки, отчёты, настройки и т.д. Окружение - это по существу директория, в которой содержится [TracIni конфигурационный файл], а также другие файлы и директории.
+
+Новое окружение создаётся с помощью [wiki:TranslationRu/TracAdmin trac-admin]:
+{{{
+$ trac-admin /path/to/myproject initenv
+}}}

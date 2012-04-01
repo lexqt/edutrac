@@ -1,0 +1,109 @@
+[[TranslatedPages]]
+
+= Syntax Coloring of Source Code =
+= Подсветка синтаксиса в исходных кодах = 
+
+Trac поддерживает подсветку синтаксиса языков программирования в [wiki:WikiFormatting wiki-форматированных] текстах и [wiki:TracBrowser SVN-репозитории]. 
+
+Trac использует внешние библиотеки с поддержкой большого числа языков программирования. 
+
+В настоящее время Trac поддерживает подсветку синтаксиса, используя один или больше следующих пакетов:
+
+ * [http://www.codento.com/people/mtr/genscript/ GNU Enscript] 
+ * [http://silvercity.sourceforge.net/ SilverCity]
+ * [http://pygments.pocoo.org/ Pygments] (но нуждается в плагине для 0.10, см. [#AboutPygments ниже])
+
+Чтобы включить подсветку синтаксиса, просто установите или один (или больше) из этих пакетов. Никакая дополнительная конфигурация не требуется, однако чтобы изменить цвета, взгляните на 'trac/htdocs/css/code.css'. 
+
+Если Вы не знаете, почему trac не может найти установленной библиотеки, попытайтесь включить ведение логов Trac. Обычно с Trac не работает SilverCity 0.9.6. В таком случае используйте текущую версию 0.9.7 или старше 0.9.5 http://trac.edgewall.org/wiki/TracFaq#why-is-my-css-code-not-being-highlighted-even-though-i-have-silvercity-installed
+
+Trac автоматически отдает приоритет !SilverCity прежде Enscript если возможно (см. примечание ниже).
+
+Если никакой из этих пакетов не доступен, Trac отобразит простой plain-текст.
+
+'''Примечание:''' Enscript поддерживает большее число языков, однако !SilverCity быстрее работает, потому что реализован в виде библиотеки и не выполняется во внешнем процессе.
+
+=== !SilverCity ===
+!SilverCity использует лексический анализатор (lexer) [http://www.scintilla.org/ Scintilla]. Scintilla поддерживает больше языков, чем !SilverCity. Если вы хотите добавить к !SilverCity еще один язык, уже поддерживаемый Scintiilla, это совсем не трудно. См. [http://trac.edgewall.org/wiki/SilverCityAddLanguage SilverCityAddLanguage] для дополнительной информации.
+
+=== Pygments ===
+Начиная с версии trac 0.11 [http://pygments.org/ pygments] будет новым модулем подсветки синтаксиса по умолчанию. Эта библиотека реализована на чистом python, очень быстрая, легко расширяется и [http://pygments.org/docs/ хорошо документирована]. Пока не поддерживает столь же много языков, как Enscript или Scintilla, но в целом исполнение более качественное.
+
+Чтобы использовать pygments в trac 0.11 вы должны установить pygments 0.5.1 или выше. Для использования в trac 0.10 вы должны также установить [http://trac-hacks.org/wiki/TracPygmentsPlugin TracPygmentsPlugin] из trac hacks. Если вы нашли любой баг, пожалуйста обращайтесь к [http://dev.pocoo.org/projects/pygments/ pygments trac].
+
+Возможно, приведенная ниже таблица уже устарела, потому что список поддерживаемых языков анализатором pygments пополняется каждую неделю. Просто взгляните на страницу [http://pygments.org/docs/lexers/ поддержки языкового анализатора] pygments.
+
+== Выделение синтаксиса исходников ==
+
+|| || !SilverCity || Enscript || Pygments ||
+|| Ada      ||   || X || ||
+|| Asm      ||   || X || ||
+|| Apache Conf (htaccess)) || || || X ||
+|| * ASP    || X || X || ||
+|| * C      || X || X || X ||
+|| * C#     ||   || X(2) || X ||
+|| * C++    || X || X || X ||
+|| * Java   || X(4)|| X || X ||
+|| Awk      ||   || X || ||
+|| Boo || || || X ||
+|| CSS      || X ||   || X ||
+|| Python Doctests || || || X ||
+|| Diff     ||   || X || X ||
+|| Eiffel   ||   || X || ||
+|| Elisp    ||   || X || ||
+|| Fortran  ||   || X(3) || ||
+|| Haskell  ||   || X || X ||
+|| Genshi || || || X ||
+|| HTML     || X || X || X ||
+|| IDL      ||   || X || ||
+|| INI || || || X ||
+|| Javascript || X || X || X ||
+|| Lua || || || X ||
+|| m4       ||   || X || ||
+|| Makefile ||   || X || X ||
+|| Mako || || || X ||
+|| Matlab   ||   || X (5) || ||
+|| Mygthy || || || X ||
+|| Objective-C|| || X || ||
+|| OCaml    ||   ||   || X ||
+|| Pascal   ||   || X || X ||
+|| * Perl   || X || X || X ||
+|| * PHP    || X ||   || X ||
+|| PSP      || X ||   || ||
+|| Pyrex    ||   || X || ||
+|| * Python || X || X || X ||
+|| * Ruby   || X || X (1) || X ||
+|| Scheme   ||   || X || X ||
+|| Shell    ||   || X || X ||
+|| Smarty || || || X ||
+|| SQL      || X || X || X ||
+|| Troff    ||   || X || X ||
+|| TCL      ||   || X || ||
+|| Tex      ||   || X || X ||
+|| Verilog  || X(4) || X || ||
+|| VHDL     ||   || X || ||
+|| Visual Basic |||| X || X ||
+|| VRML     ||   || X || ||
+|| XML      || X ||  || X ||
+
+''(*) Supported as inline code blocks in [wiki:WikiFormatting Wiki text] using WikiProcessors.''
+
+''(1) Ruby highlighting is not included in the Enscript distribution.  Highlighting rules for Ruby can be obtained from: http://neugierig.org/software/ruby/
+
+''(2) C# highlighting is not included in the Enscript distribution.  Highlighting rules for C# can be obtained from: http://wiki.hasno.info/index.php/Csharp.st
+
+''(3) Fortran: as packaged, Enscript only supports the fixed source form. Highlighting rules for Fortran 90x/2003 can be obtained from: http://wiki.hasno.info/index.php/F90.st
+
+''(4) since Silvercity 0.9.7 released on 2006-11-23
+
+''(5) By default `.m` files are considered Objective-C files. In order to treat `.m` files as MATLAB files, add "text/x-matlab:m" to the "mime_map" setting in the [wiki:TracIni#mimeviewer-section "[mimeviewer] section of trac.ini"].
+
+== Extra Software ==
+ * GNU Enscript -- http://directory.fsf.org/GNU/enscript.html
+ * GNU Enscript for Windows -- http://gnuwin32.sourceforge.net/packages/enscript.htm
+ * !SilverCity -- http://silvercity.sf.net/
+ * Pygments -- http://pygments.org/
+
+----
+См. также: WikiProcessors, WikiFormatting, TracWiki, TracBrowser
+

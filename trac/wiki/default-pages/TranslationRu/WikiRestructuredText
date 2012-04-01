@@ -1,0 +1,180 @@
+[[TranslatedPages]]
+
+= Поддержка reStructuredText в Trac =
+
+Trac поддерживает ''reStructuredText'' (RST) как альтернативу wiki-разметки в любом контексте, использующем [wiki:WikiFormatting wiki-форматирование].
+
+С web сайта reStucturedText:
+ "''reStructuredText — это easy-to-read (легкочитаемый), what-you-see-is-what-you-get (что-вы-видите-то-и-получите) plaintext ("плоскотекстовый") синтаксис разметки и парсер-система. Полезен для встроенного в код документирования (как Python docstrings), для быстрого создания простых web страниц и других документов. reStructuredText разработан для расширения specific application domains (?специфичных предметных областей?).''"
+
+=== Требования ===
+Заметьте, что для активации RST поддержки в Trac, должен быть установлен пакет Python docutils.
+Если еще не доступен в вашей операционной системе, можете загрузить его с [http://docutils.sourceforge.net/rst.html RST Web сайта].
+
+=== Дополнительная информация по RST ===
+
+ * reStructuredText Website -- http://docutils.sourceforge.net/rst.html
+ * RST Quick Reference -- http://docutils.sourceforge.net/docs/rst/quickref.html
+
+----
+
+== Исопльзование RST в Trac ==
+Чтобы задать блок текста, подлежащего обработке с использованием RST парсера, используйте ''rst'' процессор.
+
+=== [wiki:TracLinks Trac-ссылки] в reStructuredText ===
+
+ * Trac обеспечивает специальную директиву 'trac', чтобы разрешить [wiki:TracLinks Trac-ссылки] внутри RST-текста. 
+
+ Пример:
+ {{{
+ {{{
+ #!rst
+ Это ссылка на  |a тикет|
+
+ .. |a тикет| trac:: #42
+ }}}
+ }}}
+ Для полного примера всех использований ''trac''-директивы, пожалуйста смотрите WikiRestructuredTextLinks. 
+
+ * Trac допускает более простой путь создания [wiki:TracLinks Trac-ссылок] в RST, используя специальную схему именования ссылок '':trac:''.
+
+ Пример:
+ {{{
+ {{{
+ #!rst
+ Это ссылка на тикет `#12`:trac:
+
+ Чтобы узнать, как использовать Trac, смотрите `TracGuide`:trac:
+ }}}
+ }}}
+
+=== Подсветка синтаксиса в reStructuredText ===
+
+Также есть директива для задания TracSyntaxColoring в ReST. Вызов директивы:
+code-block
+
+Пример
+
+{{{
+{{{
+#!rst
+
+.. code-block:: python
+
+ class Test:
+
+    def TestFunction(self):
+        pass
+
+}}}
+}}}
+
+Результат ниже.
+
+{{{
+#!rst
+
+.. code-block:: python
+
+ class Test:
+
+    def TestFunction(self):
+        pass
+
+}}}
+
+=== Wiki макросы в reStructuredText ===
+
+Для включения [WikiMacros Wiki макросов] в ReST вы должны использовать ту же директиву, что и для подсветки синтаксиса, т.е. code-block. Необходимо, чтобы к вашей версии trac был применен патч #801.
+
+=== Wiki макрос пример ===
+
+{{{
+{{{
+#!rst
+
+.. code-block:: RecentChanges
+
+   Trac,3
+
+}}}
+}}}
+
+Результат ниже:
+
+     [[RecentChanges(Trac,3)]]
+
+Или еще более краткий синтаксис, подобный Wiki macro:
+
+{{{
+{{{
+#!rst
+
+:code-block:`RecentChanges:Trac,3`
+}}}
+}}}
+
+=== Большой ReST пример ===
+Пример ниже по большей части не требует дополнительных разъяснений:
+{{{
+#!html
+<pre class="wiki">{{{
+#!rst
+FooBar Header
+=============
+reStructuredText is **nice**. It has its own webpage_.
+
+A table:
+
+=====  =====  ======
+   Inputs     Output
+------------  ------
+  A      B    A or B
+=====  =====  ======
+False  False  False
+True   False  True
+False  True   True
+True   True   True
+=====  =====  ======
+
+RST TracLinks
+-------------
+
+See also ticket `#42`:trac:.
+
+.. _webpage: http://docutils.sourceforge.net/rst.html
+}}}</pre>
+}}}
+
+
+Результат:
+{{{
+#!rst
+FooBar Header
+=============
+reStructuredText is **nice**. It has its own webpage_.
+
+A table:
+
+=====  =====  ======
+   Inputs     Output
+------------  ------
+  A      B    A or B
+=====  =====  ======
+False  False  False
+True   False  True
+False  True   True
+True   True   True
+=====  =====  ======
+
+RST TracLinks
+-------------
+
+See also ticket `#42`:trac:.
+
+.. _webpage: http://docutils.sourceforge.net/rst.html
+}}}
+
+
+----
+Смотрите также: WikiRestructuredTextLinks, WikiProcessors, WikiFormatting

@@ -1,39 +1,22 @@
-= Welcome to Trac 0.12.3 =
+= Добро пожаловать в !EduTrac =
 
-Trac is a '''minimalistic''' approach to '''web-based''' management of
-'''software projects'''. Its goal is to simplify effective tracking and handling of software issues, enhancements and overall progress.
+!EduTrac — это проект по адаптации для образования системы управления задачами Trac,
+представлящей собой простую среду для поддержки проекта по разработке программного обеспечения.
 
-All aspects of Trac have been designed with the single goal to 
-'''help developers write great software''' while '''staying out of the way'''
-and imposing as little as possible on a team's established process and
-culture.
+== Зачем это нужно? ==
 
-As all Wiki pages, this page is editable, this means that you can
-modify the contents of this page simply by using your
-web-browser. Simply click on the "Edit this page" link at the bottom
-of the page. WikiFormatting will give you a detailed description of
-available Wiki formatting commands.
-
-"[wiki:TracAdmin trac-admin] ''yourenvdir'' initenv" created
-a new Trac environment, containing a default set of wiki pages and some sample
-data. This newly created environment also contains 
-[wiki:TracGuide documentation] to help you get started with your project.
-
-You can use [wiki:TracAdmin trac-admin] to configure
-[http://trac.edgewall.org/ Trac] to better fit your project, especially in
-regard to ''components'', ''versions'' and ''milestones''. 
+Когда разработкой проекта занимается один человек, он более или менее способен самостоятельно
+без каких-либо внешних систем координировать свою работу. Но один человек не способен реализовать
+масштабный проект за ограниченное время, как обычно требуется в реальной жизни, в реальных компаниях
+по разработке ПО. Над большими проектами работают команды разработчиков и возникает проблема:
+как согласовать их деятельность?
+Стандартный подход — использование [СистемаУправленияВерсиями систем управления версиями]
+и систем управления проектами / задачами.
 
 
-TracGuide is a good place to start.
+== Полезные ссылки ==
 
-Enjoy! [[BR]]
-''The Trac Team''
+ * TranslationRu/TracGuide — Встроенное руководство.
+ * [http://trac.edgewall.org/ The Trac project] — Сайт проекта Trac.
 
-== Starting Points ==
-
- * TracGuide --  Built-in Documentation
- * [http://trac.edgewall.org/ The Trac project] -- Trac Open Source Project
- * [http://trac.edgewall.org/wiki/TracFaq Trac FAQ] -- Frequently Asked Questions
- * TracSupport --  Trac Support
-
-For a complete list of local wiki pages, see TitleIndex.
+Полный список всех wiki-страниц — TitleIndex.

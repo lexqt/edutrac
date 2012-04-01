@@ -1,0 +1,125 @@
+[[TranslatedPages]]
+
+= Trac макросы =
+
+[[PageOutline]]
+
+Trac макросы — плагины для расширения Trac движка с помощью специальных функций, написанных на Python. Макрос вставляет динамические HTML данные в любом контексте, поддерживающем Wiki-форматирование.
+
+Другой тип макросов — WikiProcessors. Обычно имеют дело с альтернативными форматами разметки и представления больших блоков информации (как подсветка исходных кодов).
+
+== Использование макросов ==
+
+Вызов макроса заключается в двойные квадратные скобки. Как и все функции Python, макросы могут принимать аргументы, перечисленные через запятую в круглых скобках после имени макроса.
+
+Trac макросы могут быть также написаны как TracPlugins. Это позволяет им некотороые дополнительные возможности, которых обычные макросы не имеют, например, непосредственный доступ к HTTP запросу.
+
+== Пример ==
+
+Список из 3 страниц, начинающихся с 'Trac', которые недавно изменялись:
+{{{
+ [[RecentChanges(Trac,3)]]
+}}}
+
+Отображается:
+ [[RecentChanges(Trac,3)]]
+
+== Доступные макросы ==
+
+''Отметьте, что следующий список будет содержать макро-документацию, только если вы не используете `OO` оптимизацию, или не установлена опция `PythonOptimize` в [wiki:TracModPython mod_python].''
+
+{{{
+[[MacroList]]
+}}}
+[[MacroList]]
+
+== Макросы в сети ==
+
+Сайт [http://trac-hacks.org/ Trac Hacks] содержит большую коллекцию макросов и других Trac [TracPlugins plugins] плагинов, созданных Trac-сообществом. Если вы ищете или написали новый макрос, которым хотите поделиться с другими, пожалуйста, не стесняйтесь заходить на этот сайт.
+
+== Разработка своих макросов ==
+
+Макросы, подобно самому Trac, пишутся на [http://python.org/ языке программирования Python].
+
+Для дополнительной информации о разработке макроса, см. TracDev на главной странице проекта.
+{{{
+!#comment
+[wiki:TracDev development resources] 
+}}}
+
+== Реализация ==
+Здесь 2 простых примера, как создавать макрос для [wiki:0.11 Trac 0.11], различия между старым и новым стилем макросов можно посмотреть в исходнике source:trunk/sample-plugins/Timestamp.py, а также в source:trunk/wiki-macros/README.
+
+=== Макрос без аргументов ===
+
+Этот код должен быть сохранен как `TimeStamp.py`, чтобы использоваться в Trac по имени макроса.
+{{{
+#!python
+from datetime import datetime
+# Note: since Trac 0.11, datetime objects are used internally
+
+from genshi.builder import tag
+
+from trac.util.datefmt import format_datetime, utc
+from trac.wiki.macros import WikiMacroBase
+
+class TimestampMacro(WikiMacroBase):
+    """Inserts the current time (in seconds) into the wiki page."""
+
+    revision = "$Rev$"
+    url = "$URL$"
+
+    def expand_macro(self, formatter, name, args):
+        t = datetime.now(utc)
+        return tag.b(format_datetime(t, '%c'))
+}}}
+
+=== Макрос с аргументами ===
+Этот код должен быть сохранен как `HelloWorld.py` (в папке plugins/).
+{{{
+#!python
+from trac.wiki.macros import WikiMacroBase
+
+class HelloWorldMacro(WikiMacroBase):
+    """Simple HelloWorld macro.
+
+    Note that the name of the class is meaningful:
+     - it must end with "Macro"
+     - what comes before "Macro" ends up being the macro name
+
+    The documentation of the class (i.e. what you're reading)
+    will become the documentation of the macro, as shown by
+    the !MacroList macro (usually used in the WikiMacros page).
+    """
+
+    revision = "$Rev$"
+    url = "$URL$"
+
+    def expand_macro(self, formatter, name, args):
+        """Return some output that will be displayed in the Wiki content.
+
+        `name` is the actual name of the macro (no surprise, here it'll be
+        `'HelloWorld'`),
+        `args` is the text enclosed in parenthesis at the call of the macro.
+          Note that if there are ''no'' parenthesis (like in, e.g.
+          [[HelloWorld]]), then `args` is `None`.
+        """
+        return 'Hello World, args = ' + unicode(args)
+    
+    # Note that there's no need to HTML escape the returned data,
+    # as the template engine (Genshi) will do it for us.
+}}}
+
+
+=== {{{expand_macro}}} details ===
+{{{expand_macro}}} должно возвращать также простую строку Python, которая будет интерпретирована как HTML, или предпочтительный объект разметки (используйте {{{from trac.util.html import Markup}}}). {{{Markup(string)}}} просто вставляет строку, которую интерпретатор преобразует в HTML строку как есть. Также вам может понадобиться использовать импорт Formatter {{{from trac.wiki import Formatter}}}.
+
+Если ваш макрос создает wiki-разметку вместо HTML, вы можете конвертировать ее в HTML примерно так:
+{{{
+#!python
+  text = "whatever wiki markup you want, even containing other macros"
+  # Convert Wiki markup to HTML, new style
+  out = StringIO()
+  Formatter(self.env, formatter.context).format(text, out)
+  return Markup(out.getvalue())
+}}}
