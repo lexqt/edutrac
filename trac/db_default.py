@@ -34,31 +34,12 @@ def __mkreports(reports):
 ##
 
 schema = [
-    # Common
+    # System
     Table('system', key='name')[
-        Column('name'),
-        Column('value')],
-    Table('permission', key=('username', 'action'))[
-        Column('username'),
-        Column('action')],
-    Table('auth_cookie', key=('cookie', 'ipnr', 'name'))[
-        Column('cookie'),
-        Column('name'),
-        Column('ipnr'),
-        Column('time', type='int')],
-    Table('session', key=('sid', 'authenticated'))[
-        Column('sid'),
-        Column('authenticated', type='int'),
-        Column('last_visit', type='int'),
-        Index(['last_visit']),
-        Index(['authenticated'])],
-    Table('session_attribute', key=('sid', 'authenticated', 'name'))[
-        Column('sid'),
-        Column('authenticated', type='int'),
-        Column('name'),
-        Column('value')],
+        Column('name', type='varchar (255)'),
+        Column('value', type='varchar (255)')],
     Table('cache', key='id')[
-        Column('id'),
+        Column('id', type='varchar (255)'),
         Column('generation', type='int')],
 
     # User / group system
@@ -103,8 +84,35 @@ schema = [
         Column('gid', type='int'),
         Column('name', type='varchar (255)'),
         Column('value', type='text'),
-        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
-        ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
+        ForeignKey('gid', 'teams', 'id', on_delete='CASCADE'),
+    ],
+
+    # Permissions, authentication, session
+    Table('permission', key=('username', 'action'))[
+        Column('username', type='varchar (255)'),
+        Column('action', type='varchar (255)'),
+    ],
+    Table('auth_cookie', key=('cookie', 'ipnr', 'name'))[
+        Column('cookie', type='varchar (255)'),
+        Column('name', type='varchar (255)'),
+        Column('ipnr', type='varchar (255)'),
+        Column('time', type='int'),
+        ForeignKey('name', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+    ],
+    Table('session', key=('sid', 'authenticated'))[
+        Column('sid', type='varchar (255)'),
+        Column('authenticated', type='int'),
+        Column('last_visit', type='int'),
+        ForeignKey('sid', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+        Index(['last_visit']),
+        Index(['authenticated']),
+    ],
+    Table('session_attribute', key=('sid', 'authenticated', 'name'))[
+        Column('sid', type='varchar (255)'),
+        Column('authenticated', type='int'),
+        Column('name', type='varchar (255)'),
+        Column('value'),
+        ForeignKey('sid', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
     ],
 
     # Project system
@@ -144,40 +152,42 @@ schema = [
 
     # Attachments
     Table('attachment', key=('type', 'id', 'project_id', 'filename'))[
-        Column('type'),
+        Column('type', type='varchar (255)'),
         Column('id'),
         Column('project_id', type='int', default='0'),
         Column('filename'),
         Column('size', type='int'),
         Column('time', type='int64'),
         Column('description'),
-        Column('author'),
-        Column('ipnr'),
+        Column('author', type='varchar (255)'),
+        Column('ipnr', type='varchar (255)'),
+        ForeignKey('author', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),],
 
     # Wiki system
     Table('wiki', key=('name', 'version'))[
-        Column('name'),
+        Column('name', type='varchar (255)'),
         Column('version', type='int'),
         Column('time', type='int64'),
-        Column('author'),
-        Column('ipnr'),
+        Column('author', type='varchar (255)'),
+        Column('ipnr', type='varchar (255)'),
         Column('text'),
         Column('comment'),
         Column('readonly', type='int'),
         Column('project_id', type='int', null=True),
+        ForeignKey('author', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
         Index(['time'])],
     Table('syllabus_pages', key=('syllabus_id', 'pagename'))[
         Column('syllabus_id', type='int'),
-        Column('pagename'),
+        Column('pagename', type='varchar (255)'),
         ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
     ],
 
     # Version control cache
     Table('repository', key=('id', 'name'))[
         Column('id', type='int'),
-        Column('name'),
+        Column('name', type='varchar (255)'),
         Column('value')],
     Table('revision', key=('repos', 'rev'))[
         Column('repos', type='int'),
@@ -199,26 +209,26 @@ schema = [
     # Ticket system
     Table('enum', key=('project_id', 'type', 'name'))[
         Column('project_id', type='int', null=False),
-        Column('type'),
-        Column('name'),
-        Column('value'),
+        Column('type', type='varchar (255)'),
+        Column('name', type='varchar (255)'),
+        Column('value', type='varchar (255)'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
     Table('enum_syllabus', key=('syllabus_id', 'type', 'name'))[
         Column('syllabus_id', type='int', null=False),
-        Column('type'),
-        Column('name'),
-        Column('value'),
+        Column('type', type='varchar (255)'),
+        Column('name', type='varchar (255)'),
+        Column('value', type='varchar (255)'),
         ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE')],
     Table('component', key=('project_id', 'name'))[
         Column('project_id', type='int', null=False),
-        Column('name'),
-        Column('owner'),
+        Column('name', type='varchar (255)'),
+        Column('owner', type='varchar (255)'),
         Column('description'),
         ForeignKey('owner', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
     Table('milestone', key=('project_id', 'name'))[
         Column('project_id', type='int', null=False),
-        Column('name'),
+        Column('name', type='varchar (255)'),
         Column('due', type='int64'),
         Column('completed', type='int64'),
         Column('description'),
@@ -226,55 +236,54 @@ schema = [
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
     Table('version', key=('project_id', 'name'))[
         Column('project_id', type='int', null=False),
-        Column('name'),
+        Column('name', type='varchar (255)'),
         Column('time', type='int64'),
         Column('description'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
     Table('ticket', key='id')[
         Column('id', auto_increment=True),
         Column('project_id', type='int', null=False),
-        Column('type'),
+        Column('type', type='varchar (255)'),
         Column('time', type='int64'),
         Column('changetime', type='int64'),
-        Column('component'),
-        Column('severity'),
-        Column('priority'),
-        Column('owner'),
-        Column('reporter'),
+        Column('component', type='varchar (255)'),
+        Column('severity', type='varchar (255)'),
+        Column('priority', type='varchar (255)'),
+        Column('owner', type='varchar (255)'),
+        Column('reporter', type='varchar (255)'),
         Column('cc'),
-        Column('version'),
-        Column('milestone'),
-        Column('status'),
-        Column('resolution'),
-        Column('summary'),
+        Column('version', type='varchar (255)'),
+        Column('milestone', type='varchar (255)'),
+        Column('status', type='varchar (255)'),
+        Column('resolution', type='varchar (255)'),
+        Column('summary', type='varchar (255)'),
         Column('description'),
         Column('keywords'),
-        ForeignKey('owner', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
-        ForeignKey('reporter', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+        ForeignKey('owner', 'users', 'username', on_delete='SET NULL', on_update='CASCADE'),
+        ForeignKey('reporter', 'users', 'username', on_delete='SET NULL', on_update='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
-#        ForeignKey(('milestone', 'project_id'), 'milestone', ('name', 'project_id'), on_update='CASCADE'),
         Index(['time']),
         Index(['status'])],    
     Table('ticket_change', key=('ticket', 'time', 'field'))[
         Column('ticket', type='int'),
         Column('time', type='int64'),
-        Column('author'),
-        Column('field'),
+        Column('author', type='varchar (255)'),
+        Column('field', type='varchar (255)'),
         Column('oldvalue'),
         Column('newvalue'),
-        ForeignKey('author', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+        ForeignKey('author', 'users', 'username', on_delete='SET NULL', on_update='CASCADE'),
         Index(['ticket']),
         Index(['time'])],
     Table('ticket_custom', key=('ticket', 'name'))[
         Column('ticket', type='int'),
-        Column('name'),
+        Column('name', type='varchar (255)'),
         Column('value')],
 
     # Report system
     Table('report', key='id')[
         Column('id', auto_increment=True),
-        Column('author'),
-        Column('title'),
+        Column('author', type='varchar (255)'),
+        Column('title', type='varchar (255)'),
         Column('query'),
         Column('description'),
         Column('syllabus_id', type='int', null=True),
@@ -315,10 +324,6 @@ schema = [
 extra_statements = (
 
 # Project system
-'''
-INSERT INTO projects (id, name, description)
-VALUES (0, 'Global', 'Dummy global project record')
-''',
 '''
 CREATE OR REPLACE VIEW real_projects AS
 SELECT *
@@ -663,8 +668,11 @@ col=changetime
 def get_data(db):
     return (
             ('projects',
-              ('id', 'name'),
-                ((0, 'Global'),)),
+              ('id', 'name', 'description'),
+                ((0, 'Global', 'Dummy global project record'),)),
+            ('users',
+              ('id', 'username'),
+                ((0, 'trac'),)),
             ('enum',
               ('type', 'name', 'value', 'project_id'),
                 (('resolution', 'fixed', 1, 0),
