@@ -523,167 +523,136 @@ $$ LANGUAGE plpgsql;
 
 def get_reports(db):
     return (
-('Active Tickets',
+('All Project Tickets by Milestone',
 """
- * List all active tickets by priority.
- * Color each row based on priority.
+List of all project tickets sorted by creation time
+and grouped by milestone.
 """,
 """
-SELECT p.value AS __color__,
-   id AS ticket, summary, component, version, milestone, t.type AS type, 
-   owner, status,
-   time AS created,
-   changetime AS _changetime, description AS _description,
-   reporter AS _reporter
-  FROM ticket t
-  LEFT JOIN enum p ON p.name = t.priority AND p.type = 'priority'
-  WHERE status <> 'closed'
-  ORDER BY """ + db.cast('p.value', 'int') + """, milestone, t.type, time
+query:?area=project
+&
+group=milestone
+&
+order=time
+&
+desc=1
+&
+col=id
+&
+col=summary
+&
+col=owner
+&
+col=type
+&
+col=priority
+&
+col=severity
+&
+col=status
+&
+col=time
 """),
 #----------------------------------------------------------------------------
- ('Active Tickets by Version',
+('Active Project Tickets',
 """
-This report shows how to color results by priority,
-while grouping results by version.
-
-Last modification time, description and reporter are included as hidden fields
-for useful RSS export.
+List of all active project tickets sorted by priority.
 """,
 """
-SELECT p.value AS __color__,
-   version AS __group__,
-   id AS ticket, summary, component, version, t.type AS type, 
-   owner, status,
-   time AS created,
-   changetime AS _changetime, description AS _description,
-   reporter AS _reporter
-  FROM ticket t
-  LEFT JOIN enum p ON p.name = t.priority AND p.type = 'priority'
-  WHERE status <> 'closed'
-  ORDER BY (version IS NULL),version, """ + db.cast('p.value', 'int') +
-  """, t.type, time
+query:?status=!closed
+&
+area=project
+&
+order=priority
+&
+col=id
+&
+col=summary
+&
+col=milestone
+&
+col=owner
+&
+col=type
+&
+col=priority
+&
+col=severity
+&
+col=status
+&
+col=time
 """),
 #----------------------------------------------------------------------------
-('Active Tickets by Milestone',
+('Active Project Tickets by Milestone',
 """
-This report shows how to color results by priority,
-while grouping results by milestone.
-
-Last modification time, description and reporter are included as hidden fields
-for useful RSS export.
+List of all active project tickets sorted by priority
+and grouped by milestone.
 """,
 """
-SELECT p.value AS __color__,
-   %s AS __group__,
-   id AS ticket, summary, component, version, t.type AS type, 
-   owner, status,
-   time AS created,
-   changetime AS _changetime, description AS _description,
-   reporter AS _reporter
-  FROM ticket t
-  LEFT JOIN enum p ON p.name = t.priority AND p.type = 'priority'
-  WHERE status <> 'closed' 
-  ORDER BY (milestone IS NULL),milestone, %s, t.type, time
-""" % (db.concat("'Milestone '", 'milestone'), db.cast('p.value', 'int'))),
-#----------------------------------------------------------------------------
-('Accepted, Active Tickets by Owner',
-"""
-List accepted tickets, group by ticket owner, sorted by priority.
-""",
-"""
-
-SELECT p.value AS __color__,
-   owner AS __group__,
-   id AS ticket, summary, component, milestone, t.type AS type, time AS created,
-   changetime AS _changetime, description AS _description,
-   reporter AS _reporter
-  FROM ticket t
-  LEFT JOIN enum p ON p.name = t.priority AND p.type = 'priority'
-  WHERE status = 'accepted'
-  ORDER BY owner, """ + db.cast('p.value', 'int') + """, t.type, time
+query:?status=!closed
+&
+group=milestone
+&
+area=project
+&
+order=priority
+&
+col=id
+&
+col=summary
+&
+col=status
+&
+col=owner
+&
+col=type
+&
+col=priority
+&
+col=severity
+&
+col=time
 """),
 #----------------------------------------------------------------------------
-('Accepted, Active Tickets by Owner (Full Description)',
+('My Active Project Tickets',
 """
-List tickets accepted, group by ticket owner.
-This report demonstrates the use of full-row display.
+List of all active project tickets for current user
+ordered by last change time.
 """,
 """
-SELECT p.value AS __color__,
-   owner AS __group__,
-   id AS ticket, summary, component, milestone, t.type AS type, time AS created,
-   description AS _description_,
-   changetime AS _changetime, reporter AS _reporter
-  FROM ticket t
-  LEFT JOIN enum p ON p.name = t.priority AND p.type = 'priority'
-  WHERE status = 'accepted'
-  ORDER BY owner, """ + db.cast('p.value', 'int') + """, t.type, time
+query:?status=!closed
+&
+owner=$USER
+&
+area=project
+&
+order=changetime
+&
+desc=1
+&
+col=id
+&
+col=summary
+&
+col=status
+&
+col=resolution
+&
+col=type
+&
+col=priority
+&
+col=severity
+&
+col=milestone
+&
+col=time
+&
+col=changetime
 """),
 #----------------------------------------------------------------------------
-('All Tickets By Milestone  (Including closed)',
-"""
-A more complex example to show how to make advanced reports.
-""",
-"""
-SELECT p.value AS __color__,
-   t.milestone AS __group__,
-   (CASE status 
-      WHEN 'closed' THEN 'color: #777; background: #ddd; border-color: #ccc;'
-      ELSE 
-        (CASE owner WHEN $USER THEN 'font-weight: bold' END)
-    END) AS __style__,
-   id AS ticket, summary, component, status, 
-   resolution,version, t.type AS type, priority, owner,
-   changetime AS modified,
-   time AS _time,reporter AS _reporter
-  FROM ticket t
-  LEFT JOIN enum p ON p.name = t.priority AND p.type = 'priority'
-  ORDER BY (milestone IS NULL), milestone DESC, (status = 'closed'), 
-        (CASE status WHEN 'closed' THEN changetime ELSE (-1) * %s END) DESC
-""" % db.cast('p.value', 'int')),
-#----------------------------------------------------------------------------
-('My Tickets',
-"""
-This report demonstrates the use of the automatically set 
-USER dynamic variable, replaced with the username of the
-logged in user when executed.
-""",
-"""
-SELECT p.value AS __color__,
-   (CASE status WHEN 'accepted' THEN 'Accepted' ELSE 'Owned' END) AS __group__,
-   id AS ticket, summary, component, version, milestone,
-   t.type AS type, priority, time AS created,
-   changetime AS _changetime, description AS _description,
-   reporter AS _reporter
-  FROM ticket t
-  LEFT JOIN enum p ON p.name = t.priority AND p.type = 'priority'
-  WHERE t.status <> 'closed' AND owner = $USER
-  ORDER BY (status = 'accepted') DESC, """ + db.cast('p.value', 'int') + 
-  """, milestone, t.type, time
-"""),
-#----------------------------------------------------------------------------
-('Active Tickets, Mine first',
-"""
- * List all active tickets by priority.
- * Show all tickets owned by the logged in user in a group first.
-""",
-"""
-SELECT p.value AS __color__,
-   (CASE owner 
-     WHEN $USER THEN 'My Tickets' 
-     ELSE 'Active Tickets' 
-    END) AS __group__,
-   id AS ticket, summary, component, version, milestone, t.type AS type, 
-   owner, status,
-   time AS created,
-   changetime AS _changetime, description AS _description,
-   reporter AS _reporter
-  FROM ticket t
-  LEFT JOIN enum p ON p.name = t.priority AND p.type = 'priority'
-  WHERE status <> 'closed' 
-  ORDER BY (COALESCE(owner, '') = $USER) DESC, """
-  + db.cast('p.value', 'int') + """, milestone, t.type, time
-"""))
+)
 
 
 ##
@@ -696,20 +665,6 @@ def get_data(db):
             ('projects',
               ('id', 'name'),
                 ((0, 'Global'),)),
-#            ('component',
-#              ('name', 'owner'),
-#                (('component1', 'somebody'),
-#                 ('component2', 'somebody'))),
-#            ('milestone',
-#              ('name', 'due', 'completed'),
-#                (('milestone1', 0, 0),
-#                 ('milestone2', 0, 0),
-#                 ('milestone3', 0, 0),
-#                 ('milestone4', 0, 0))),
-#            ('version',
-#              ('name', 'time'),
-#                (('1.0', 0),
-#                 ('2.0', 0))),
             ('enum',
               ('type', 'name', 'value', 'project_id'),
                 (('resolution', 'fixed', 1, 0),
