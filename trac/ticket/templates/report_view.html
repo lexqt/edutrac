@@ -34,7 +34,7 @@
                 <tbody>
                   <tr style="height: 1px"><td colspan="2"></td></tr>
                 </tbody>
-                <tbody py:for="(name, value) in sorted(args.items())" py:if="name != 'USER'">
+                <tbody py:for="(name, value) in sorted(args.items())" py:if="name not in dyn_vars">
                   <tr>
                     <th scope="row"><label>${name}</label></th>
                     <td class="filter">

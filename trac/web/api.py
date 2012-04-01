@@ -108,7 +108,10 @@ class _RequestArgs(dict):
         """
         if not self.get(name):
             return None
-        return int(self[name])
+        try:
+            return int(self[name])
+        except ValueError:
+            return None
 
     def getlistitem(self, listname, key):
         """Return value or None

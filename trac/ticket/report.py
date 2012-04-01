@@ -67,6 +67,8 @@ class ReportModule(Component):
     AREA_SYLLABUS = 2
     AREA_PROJECT = 3
 
+    DYNAMIC_VARS = set(['USER', 'PROJECT', 'SYLLABUS'])
+
     # INavigationContributor methods
 
     def get_active_navigation_item(self, req):
@@ -347,8 +349,11 @@ class ReportModule(Component):
             area = self.AREA_GLOBAL
             syllabus_id = self.pm.get_project_syllabus(cur_pid)
 
+        if project_id is None:
+            project_id = cur_pid
+
         try:
-            args = self.get_var_args(req)
+            args = self.get_var_args(req, project_id, syllabus_id)
         except ValueError, e:
             raise TracError(_('Report failed: %(error)s', error=e))
 
@@ -415,6 +420,8 @@ class ReportModule(Component):
             and sorting and paging variables.
             """
             params = args.copy()
+            for dyn_var in self.DYNAMIC_VARS:
+                params.pop(dyn_var, None)
             if sort_col:
                 params['sort'] = sort_col
             params['page'] = page
@@ -431,7 +438,8 @@ class ReportModule(Component):
                     'resource': report_resource},
                 'context': context,
                 'title': title, 'description': description,
-                'max': limit, 'args': args, 'show_args_form': False,
+                'max': limit,
+                'dyn_vars': self.DYNAMIC_VARS, 'args': args, 'show_args_form': False,
                 'message': None, 'paginator': None,
                 'report_href': report_href, 
                 }
@@ -654,7 +662,7 @@ class ReportModule(Component):
                         del req.session[var]
             except (ValueError, KeyError):
                 pass
-            if set(data['args']) - set(['USER']):
+            if set(data['args']) - self.DYNAMIC_VARS:
                 data['show_args_form'] = True
                 add_script(req, 'common/js/folding.js')
             if missing_args:
@@ -726,17 +734,18 @@ class ReportModule(Component):
 
         return cols, info, num_items, missing_args
 
-    def get_var_args(self, req):
-        # FIXME unicode: req.args keys are likely not unicode but str (UTF-8?)
+    def get_var_args(self, req, project_id, syllabus_id):
         report_args = {}
         for arg in req.args.keys():
+            arg = to_unicode(arg)
             if not arg.isupper():
                 continue
             report_args[arg] = req.args.get(arg)
 
-        # Set some default dynamic variables
-        if 'USER' not in report_args:
-            report_args['USER'] = req.authname
+        # Force set dynamic variables
+        report_args['USER'] = req.authname
+        report_args['PROJECT'] = project_id
+        report_args['SYLLABUS'] = syllabus_id
 
         return report_args
 

@@ -233,7 +233,7 @@ class TicketFieldFilters(Component):
         if template == "report_view.html":
             syllabus_id = data['report']['syllabus_id']
             dfields = self._denied_fields(req.perm, syllabus_id)
-            for row in data["row_groups"]:
+            for row in data.get('row_groups', []):
                 for l in row:
                     if isinstance(l,list):
                         for t in l:

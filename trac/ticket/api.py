@@ -503,12 +503,15 @@ class TicketSystem(Component):
         # i18n TODO - translated keys
         return {'created': 'time', 'modified': 'changetime'}
 
-    def eventually_restrict_owner(self, field, ticket=None):
+    def eventually_restrict_owner(self, field, ticket=None, pid=None):
         """Restrict given owner field to be a list of users having
         the TICKET_MODIFY permission (for the given ticket)
         """
-        if self.restrict_owner:
-            possible_owners = UserManagement(self.env).get_project_users(ticket.pid, ('team',))
+        if ticket:
+            pid = ticket.pid
+        skip = pid is None
+        if not skip and self.restrict_owner:
+            possible_owners = UserManagement(self.env).get_project_users(pid, ('team',))
             if possible_owners:
                 possible_owners.sort()
                 field['type'] = 'select'

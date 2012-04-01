@@ -60,7 +60,7 @@ class QueryValueError(TracError):
 
 
 class Query(object):
-    substitutions = ['$USER', '$PID']
+    substitutions = ['$USER', '$PROJECT']
     clause_re = re.compile(r'(?P<clause>\d+)_(?P<field>.+)$')
 
     def __init__(self, env, report=None, constraints=None, cols=None,
@@ -621,12 +621,17 @@ class Query(object):
                                               db.like()),
                     (value, ))
 
+        substitutions = {
+            '$USER': authname,
+        }
+        if self.area == 'project':
+            substitutions['$PROJECT'] = self.pid
+
         def get_clause_sql(constraints):
             db = self.env.get_db_cnx()
             clauses = []
             for k, v in constraints.iteritems():
-                if authname is not None:
-                    v = [val.replace('$USER', authname) for val in v]
+                v = self.substitute_dyn_vars(v, substitutions)
                 # Determine the match mode of the constraint (contains,
                 # starts-with, negation, etc.)
                 neg = v[0].startswith('!')
@@ -777,6 +782,12 @@ class Query(object):
 
     def template_data(self, context, tickets, orig_list=None, orig_time=None,
                       req=None):
+        substitutions = {}
+        if req:
+            substitutions['$USER'] = req.authname
+        if self.area == 'project':
+            substitutions['$PROJECT'] = self.pid
+
         clauses = []
         for clause in self.constraints:
             constraints = {}
@@ -791,8 +802,7 @@ class Query(object):
                                         and not val in self.substitutions:
                         idx = 2 if val[1:2] in ('~') else 1
                         mode, val = val[:idx], val[idx:]
-                    if req:
-                        val = val.replace('$USER', req.authname)
+                    val = self.substitute_dyn_vars(val, substitutions)
                     constraint['mode'] = (neg and '!' or '') + mode
                     constraint['values'].append(val)
                 constraints[k] = constraint
@@ -895,7 +905,30 @@ class Query(object):
                 'groups': groupsequence or [(None, tickets)],
                 'last_group_is_partial': last_group_is_partial,
                 'paginator': results}
-    
+
+    @classmethod
+    def substitute_dyn_vars(cls, var_list, values, del_undefined=False):
+        '''Substitute dynamic vars in `var_list` by values from dict `values`.
+        `var_list` can be just one variable or list.
+        `del_undefined` - delete var from `vars` if there is no substition
+                          from `values`.
+        '''
+        one = isinstance(var_list, basestring)
+        if one:
+            var_list = [var_list]
+            del_undefined = False
+        for key in cls.substitutions:
+            if values.get(key):
+                var_list = [val.replace(key, unicode(values[key]))
+#                            if isinstance(val, basestring) else val
+                            for val in var_list]
+            elif del_undefined:
+                var_list = [v for v in var_list if not v.endswith(key)]
+        if one:
+            return var_list[0]
+        else:
+            return var_list
+
 class QueryModule(Component):
 
     implements(IRequestHandler, INavigationContributor, IWikiSyntaxProvider,
@@ -990,14 +1023,15 @@ class QueryModule(Component):
         constraints = self._get_constraints(req, pid=pid)
         if not constraints and not 'order' in req.args:
             # If no constraints are given in the URL, use the default ones.
-            if req.authname and req.authname != 'anonymous':
-                qstring = self.default_query
-                user = req.authname
-            else:
-                email = req.session.get('email')
-                name = req.session.get('name')
-                qstring = self.default_anonymous_query
-                user = email or name or None
+            qstring = self.default_query
+            user = req.authname
+            # No anonymous in EduTrac
+#            if req.authname and req.authname != 'anonymous':
+#            else:
+#                email = req.session.get('email')
+#                name = req.session.get('name')
+#                qstring = self.default_anonymous_query
+#                user = email or name or None
                       
             self.log.debug('QueryModule: Using default query: %s', str(qstring))
             if qstring.startswith('?'):
@@ -1014,16 +1048,19 @@ class QueryModule(Component):
                     args['groupdesc'] = '1'
                 constraints = query.constraints
 
-            # Substitute $USER, or ensure no field constraints that depend
-            # on $USER are used if we have no username.
+            subs = {
+                '$PROJECT': pid,
+                '$USER': user
+            }
+            # Substitute dynamic vars, or ensure no field constraints that depend
+            # on them are used if we have some vars not set.
             for clause in constraints:
                 for field, vals in clause.items():
-                    for (i, val) in enumerate(vals):
-                        if user:
-                            vals[i] = val.replace('$USER', user)
-                        elif val.endswith('$USER'):
-                            del clause[field]
-                            break
+                    vals_ = Query.substitute_dyn_vars(vals, subs, del_undefined=True)
+                    if len(vals) == len(vals_):
+                        clause[field] = vals_
+                    else:
+                        del clause[field]
 
         cols = args.get('col')
         if isinstance(cols, basestring):
@@ -1184,7 +1221,10 @@ class QueryModule(Component):
         context = Context.from_request(req, 'query')
         owner_field = query.fields.get('owner')
         if owner_field:
-            TicketSystem(self.env).eventually_restrict_owner(owner_field)
+            ro_kwargs = {}
+            if query.area == 'project':
+                ro_kwargs['pid'] = query.pid
+            TicketSystem(self.env).eventually_restrict_owner(owner_field, **ro_kwargs)
         # FIXME: valid for area 'project' only
         data = query.template_data(context, tickets, orig_list, orig_time, req)
 
