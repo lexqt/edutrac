@@ -3,44 +3,44 @@
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:py="http://genshi.edgewall.org/"
-      xmlns:xi="http://www.w3.org/2001/XInclude"
-      py:with="
-        errors = value_of('errors', None);
-      ">
+      xmlns:i18n="http://genshi.edgewall.org/i18n"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
   <xi:include href="layout.html" />
   <head>
-    <title>Оценивание деятельности команды</title>
+    <title>Teamwork evaluation</title>
   </head>
 
   <body>
     <div id="content">
-      <h1>Оценивание деятельности команды за этап разработки</h1>
+      <h1>Milestone teamwork evaluation</h1>
 
       <p py:if="not is_new">
-        Заполнено: ${format_datetime(completed_on)}
+        Form completed: ${format_datetime(completed_on)}
       </p>
 
       <py:choose test="edit">
         <py:when test="True">
           <div py:if="errors">
-            <p>Ошибки:</p>
+            <p>Errors:</p>
             <ul>
               <li py:for="err in errors">$err</li>
             </ul>
           </div>
           <p>
-            В соответствии с объемом и качеством выполненной каждым членом команды работы,
-            распределите сумму, равную <strong>$sum</strong>, между ними.
-            Обоснуйте свое решение в поле "Комментарий".
+            <i18n:msg params="sum">
+              Distribute sum <strong>$sum</strong> among team members
+              according to amount and quality of their contribution.
+              Explain your decision in <em>Comment</em> field.
+            </i18n:msg>
           </p>
           <form method="post">
             <input type="hidden" name="action" value="teameval" />
             <table class="wiki">
               <thead>
                 <tr>
-                  <th>Член команды</th>
-                  <th>Заработанный балл</th>
-                  <th>Комментарий</th>
+                  <th>Team member</th>
+                  <th>Earned amount</th>
+                  <th>Comment</th>
                 </tr>
               </thead>
               <tbody>
@@ -59,7 +59,7 @@
               </tbody>
             </table>
             <div class="buttons">
-              <input type="submit" value="Сохранить" />
+              <input type="submit" value="${_('Save')}" />
             </div>
           </form>
         </py:when>
@@ -67,9 +67,9 @@
           <table class="wiki">
             <thead>
               <tr>
-                <th>Член команды</th>
-                <th>Заработанный балл</th>
-                <th>Комментарий</th>
+                <th>Team member</th>
+                <th>Earned amount</th>
+                <th>Comment</th>
               </tr>
             </thead>
             <tbody>

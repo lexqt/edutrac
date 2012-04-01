@@ -738,7 +738,7 @@ class MilestoneModule(Component):
             if weight != milestone.weight:
                 req.perm(milestone.resource).require('MILESTONE_MODIFY_WEIGHT')
         except ValueError:
-            warn(_('You mist provide a valid integer value for milestone weight.'))
+            warn(_('You must provide a valid integer value for milestone weight.'))
             weight = None
         milestone.weight = weight
 

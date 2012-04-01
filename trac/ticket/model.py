@@ -1180,7 +1180,7 @@ class Milestone(object):
             """, (pid, name))
         row = cursor.fetchone()
         if not row:
-            raise ResourceNotFound(_('Milestone %(name)s does not exist in project p%(pid)s.',
+            raise ResourceNotFound(_('Milestone %(name)s does not exist in project #%(pid)s.',
                                    name=name, pid=pid), _('Invalid milestone name'))
         self._from_database(row)
 

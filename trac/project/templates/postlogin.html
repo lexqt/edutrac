@@ -8,25 +8,25 @@
 	<xi:include href="layout.html" />
 
 	<head>
-		<title>Параметры сессии</title>
+		<title>Session parameters</title>
 	</head>
 	<body>
 		<div id="content">
-			<h1>Установка параметров сессии для работы в системе</h1>
+			<h1>Setting up session parameters</h1>
 			<form py:choose="step" action="/postlogin" method="post">
 				<fieldset py:when="set_role">
-					<legend>Роль пользователя</legend>
+					<legend>User role</legend>
 					<select name="role">
 						<option py:for="role_id, role_name in roles" value="${role_id}">${role_name}</option>
 					</select>
 				</fieldset>
 				<fieldset py:when="set_project">
-					<legend>Проект</legend>
+					<legend>Project</legend>
 					<select name="project">
 						<option py:for="project_id, project_name in projects" value="${project_id}">${project_name}</option>
 					</select>
 				</fieldset>
-				<button type="submit">Продолжить</button>
+				<input type="submit" value="${_('Continue')}" />
 			</form>
 		</div>
 	</body>

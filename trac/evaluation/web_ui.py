@@ -70,7 +70,7 @@ class ValuesSumValidator(validators.FormValidator):
 
 _milestone_eval_labels = {
     'devs': _('Evaluation form'),
-    'value': _('Earned score'),
+    'value': _('Earned amount'),
     'comment': _('Comment'),
 }
 
