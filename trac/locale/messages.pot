@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Trac 0.12.3\n"
 "Report-Msgid-Bugs-To: trac-dev@googlegroups.com\n"
-"POT-Creation-Date: 2012-04-01 21:55+0400\n"
+"POT-Creation-Date: 2012-04-02 14:37+0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1570,6 +1570,44 @@ msgstr ""
 msgid "Preview:"
 msgstr ""
 
+#: trac/project/api.py:138
+msgid "Can not get neither request, nor session project variable"
+msgstr ""
+
+#: trac/project/api.py:149
+msgid "Can not get session project variable"
+msgstr ""
+
+#: trac/project/api.py:164
+#, python-format
+msgid "You have not enough rights in project #%(pid)s."
+msgstr ""
+
+#: trac/project/api.py:182
+#, python-format
+msgid "Project #%(pid)s is not associated with any syllabus"
+msgstr ""
+
+#: trac/project/api.py:189
+#, python-format
+msgid "Group #%(gid)s is not associated with any metagroup"
+msgstr ""
+
+#: trac/project/api.py:201
+#, python-format
+msgid "Metagroup #%(gid)s is not associated with any syllabus"
+msgstr ""
+
+#: trac/project/api.py:218
+#, python-format
+msgid "Project #%(pid)s is not associated with any syllabus / group info"
+msgstr ""
+
+#: trac/project/api.py:247
+#, python-format
+msgid "Component \"%(cname)s\" is disabled in your syllabus #%(sid)s."
+msgstr ""
+
 #: trac/project/model.py:46
 #, python-format
 msgid "Project #%(pid)s does not exist."
@@ -1929,7 +1967,7 @@ msgstr ""
 
 #: trac/templates/diff_view.html:70 trac/ticket/api.py:282
 #: trac/versioncontrol/templates/changeset.html:204
-#: trac/versioncontrol/templates/revisionlog.html:79 trac/wiki/admin.py:207
+#: trac/versioncontrol/templates/revisionlog.html:79 trac/wiki/admin.py:213
 msgid "Modified"
 msgstr ""
 
@@ -3548,7 +3586,7 @@ msgstr ""
 msgid "Report"
 msgstr ""
 
-#: trac/ticket/templates/report_list.html:24 trac/wiki/admin.py:207
+#: trac/ticket/templates/report_list.html:24 trac/wiki/admin.py:213
 msgid "Title"
 msgstr ""
 
@@ -5393,33 +5431,33 @@ msgstr ""
 msgid "  %(title)s is already up to date"
 msgstr ""
 
-#: trac/wiki/admin.py:175 trac/wiki/admin.py:275
+#: trac/wiki/admin.py:175 trac/wiki/admin.py:281
 #, python-format
 msgid "  %(page)s imported from %(filename)s"
 msgstr ""
 
-#: trac/wiki/admin.py:207
+#: trac/wiki/admin.py:213
 msgid "Edits"
 msgstr ""
 
-#: trac/wiki/admin.py:213 trac/wiki/web_ui.py:325
+#: trac/wiki/admin.py:219 trac/wiki/web_ui.py:325
 msgid "A new name is mandatory for a rename."
 msgstr ""
 
-#: trac/wiki/admin.py:215
+#: trac/wiki/admin.py:221
 msgid "The new name is invalid."
 msgstr ""
 
-#: trac/wiki/admin.py:219 trac/wiki/web_ui.py:332
+#: trac/wiki/admin.py:225 trac/wiki/web_ui.py:332
 #, python-format
 msgid "The page %(name)s already exists."
 msgstr ""
 
-#: trac/wiki/admin.py:233
+#: trac/wiki/admin.py:239
 msgid "Deleted pages"
 msgstr ""
 
-#: trac/wiki/admin.py:253
+#: trac/wiki/admin.py:259
 #, python-format
 msgid "'%(name)s' is not a directory"
 msgstr ""
