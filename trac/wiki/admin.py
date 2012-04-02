@@ -162,24 +162,18 @@ class WikiAdmin(Component):
         return result[0]
 
     def load_pages(self, dir, ignore=[], create_only=[], replace=False):
-
-        def load_dir(db, dir, ignore, create_only, replace, prefix=''):
+        @self.env.with_transaction()
+        def do_load(db):
             for page in os.listdir(dir):
                 if page in ignore:
                     continue
                 filename = os.path.join(dir, page)
-                page = prefix + unicode_unquote(page.encode('utf-8'))
+                page = unicode_unquote(page.encode('utf-8'))
                 if os.path.isfile(filename):
                     if self.import_page(filename, page, create_only, replace):
                         printout(_("  %(page)s imported from %(filename)s",
                                    filename=path_to_unicode(filename),
                                    page=page))
-                elif os.path.isdir(filename):
-                    load_dir(db, filename, ignore, create_only, replace, page+'/')
-
-        @self.env.with_transaction()
-        def do_load(db):
-            load_dir(db, dir, ignore, create_only, replace)
     
     def _complete_page(self, args):
         if len(args) == 1:
