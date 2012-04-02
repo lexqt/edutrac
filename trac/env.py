@@ -283,12 +283,12 @@ class Environment(Component, ComponentManager):
         sid = int(syllabus_id)
         with self._syl_rules_lock:
             if sid not in self._syllabus_rules:
-                self._syllabus_rules[sid] = self._get_rules(self.configs.syllabus(sid))
+                self._syllabus_rules[sid] = self._get_rules(self.configs.syllabus(sid), inherit=False)
             return self._syllabus_rules[sid]
         
-    def _get_rules(self, config):
+    def _get_rules(self, config, inherit=True):
         rules = {}
-        for name, value in config.options('components'):
+        for name, value in config.options('components', inherit=inherit):
             if name.endswith('.*'):
                 name = name[:-2]
             rules[name.lower()] = value.lower() in ('enabled', 'on')

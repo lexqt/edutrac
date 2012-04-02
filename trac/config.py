@@ -180,15 +180,16 @@ class Configuration(object):
             defaults.setdefault(section, {})[key] = option.default
         return defaults
 
-    def options(self, section, compmgr=None):
+    def options(self, section, compmgr=None, inherit=True):
         """Return a list of `(name, value)` tuples for every option in the
         specified section.
         
         This includes options that have default values that haven't been
         overridden. If `compmgr` is specified, only return default option
         values for components that are enabled in the given `ComponentManager`.
+        If `inherit` is True, include options inherited from parents.
         """
-        return self[section].options(compmgr)
+        return self[section].options(compmgr, inherit=inherit)
 
     def remove(self, section, key):
         """Remove the specified option."""
@@ -349,11 +350,12 @@ class Section(object):
     
     __contains__ = contains
 
-    def iterate(self, compmgr=None, defaults=True):
+    def iterate(self, compmgr=None, defaults=True, inherit=True):
         """Iterate over the options in this section.
         
         If `compmgr` is specified, only return default option values for
         components that are enabled in the given `ComponentManager`.
+        If `inherit` is True, iterate through parents too.
         """
         options = set()
         name_str = _to_utf8(self.name)
@@ -362,12 +364,13 @@ class Section(object):
                 option = to_unicode(option_str)
                 options.add(option.lower())
                 yield option
-        for parent in self.config.parents:
-            for option in parent[self.name].iterate(defaults=False):
-                loption = option.lower()
-                if loption not in options:
-                    options.add(loption)
-                    yield option
+        if inherit:
+            for parent in self.config.parents:
+                for option in parent[self.name].iterate(defaults=False):
+                    loption = option.lower()
+                    if loption not in options:
+                        options.add(loption)
+                        yield option
         if defaults:
             for section, option in Option.get_registry(compmgr).keys():
                 if section == self.name and option.lower() not in options:
@@ -491,14 +494,15 @@ class Section(object):
             path = os.path.join(os.path.dirname(self.config.filename), path)
         return os.path.normcase(os.path.realpath(path))
 
-    def options(self, compmgr=None):
+    def options(self, compmgr=None, inherit=True):
         """Return `(key, value)` tuples for every option in the section.
         
         This includes options that have default values that haven't been
         overridden. If `compmgr` is specified, only return default option
         values for components that are enabled in the given `ComponentManager`.
+        If `inherit` is True, include options inherited from parents.
         """
-        for key in self.iterate(compmgr):
+        for key in self.iterate(compmgr, inherit=inherit):
             yield key, self.get(key)
 
     def set(self, key, value):

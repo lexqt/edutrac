@@ -23,7 +23,7 @@ import re
 
 from genshi.builder import tag
 
-from trac.config import IntOption, BoolOption
+from trac.config import IntOption, BoolOption, SyllabusExtensionPoint
 from trac.core import *
 from trac.mimeview import Context
 from trac.perm import IPermissionRequestor
@@ -47,7 +47,7 @@ class TimelineModule(Component):
     implements(INavigationContributor, IPermissionRequestor, IRequestHandler,
                IRequestFilter, ITemplateProvider, IWikiSyntaxProvider)
 
-    event_providers = ExtensionPoint(ITimelineEventProvider)
+    event_providers = SyllabusExtensionPoint(ITimelineEventProvider)
 
     default_daysback = IntOption('timeline', 'default_daysback', 30,
         """Default number of days displayed in the Timeline, in days.
@@ -145,7 +145,7 @@ class TimelineModule(Component):
                 'syllabus_id': syllabus_id}
 
         available_filters = []
-        for event_provider in self.event_providers:
+        for event_provider in self.event_providers(syllabus_id):
             available_filters += event_provider.get_timeline_filters(req) or []
 
         # check the request or session for enabled filters, or use default
@@ -180,7 +180,7 @@ class TimelineModule(Component):
         
         # gather all events for the given period of time
         events = []
-        for provider in self.event_providers:
+        for provider in self.event_providers(syllabus_id):
             try:
                 for event in provider.get_timeline_events(req, start, stop,
                                                           filters, pid) or []:
