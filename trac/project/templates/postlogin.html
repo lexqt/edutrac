@@ -13,7 +13,7 @@
 	<body>
 		<div id="content">
 			<h1>Setting up session parameters</h1>
-			<form py:choose="step" action="/postlogin" method="post">
+			<form py:choose="step" action="${href.postlogin()}" method="post">
 				<fieldset py:when="set_role">
 					<legend>User role</legend>
 					<select name="role">
