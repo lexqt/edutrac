@@ -175,6 +175,8 @@ class Attachment(object):
 
     @staticmethod
     def _format_pid_cond_query(q, args, parent_pid=None):
+        if parent_pid is False:
+            return q.format(pid_cond=''), args
         q = q.format(pid_cond = 'AND project_id=%s')
         args = list(args)
         args.append(parent_pid if parent_pid is not None else GLOBAL_PID)
@@ -350,7 +352,7 @@ class Attachment(object):
         parent_realm = resource.realm
         parent_id    = resource.id
         # if we don't need pid to select - do not use it
-        parent_pid   = resource.pid if resource.need_pid else None
+        parent_pid   = resource.pid if resource.need_pid else False
         q = '''
             SELECT filename,description,size,time,author,ipnr
             FROM attachment WHERE type=%s AND id=%s {pid_cond} ORDER BY time
