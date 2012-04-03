@@ -420,16 +420,19 @@ class Environment(Component, ComponentManager):
         os.mkdir(self.get_log_dir())
         os.mkdir(self.get_htdocs_dir())
         os.mkdir(os.path.join(self.path, 'plugins'))
+        os.mkdir(os.path.join(self.path, 'evaluation'))
 
         # Create a few files
         create_file(os.path.join(self.path, 'VERSION'),
-                    'Trac Environment Version 1\n')
+                    'EduTrac Environment Version 1\n')
         create_file(os.path.join(self.path, 'README'),
                     'This directory contains a Trac environment.\n'
                     'Visit http://trac.edgewall.org/ for more information.\n')
 
         # Setup the default configuration
         os.mkdir(os.path.join(self.path, 'conf'))
+        os.mkdir(os.path.join(self.path, 'conf', 'project'))
+        os.mkdir(os.path.join(self.path, 'conf', 'syllabus'))
         create_file(os.path.join(self.path, 'conf', 'trac.ini.sample'))
         config = Configuration(os.path.join(self.path, 'conf', 'trac.ini'))
         for section, name, value in options:
