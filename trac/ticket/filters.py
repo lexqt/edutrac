@@ -276,7 +276,7 @@ class TicketFieldFilters(Component):
         for f in fields:
             editable = True
             fconf = conf[f]
-            if ticket._old.get(f) is not None:
+            if ticket._old.get(f) is not None and ticket._old[f] != ticket[f]:
                 if fconf['hide'] or fconf['remove'] or fconf['disable']:
                     editable = False
                 elif fconf['permission']:
@@ -290,7 +290,8 @@ class TicketFieldFilters(Component):
             # if field cannot be modified by user
             if not editable:
                 res.append((f, _('Access denied to modifying field "%(field)s"', field=f)))
-                self.env.log.debug('Invalid ticket. Access to field "%s" denied.' % f)
+                self.env.log.debug('Invalid ticket. Access to field "%s" denied. Old: %s. New: %s',
+                                   f, ticket._old[f], ticket[f])
 
         return res
 

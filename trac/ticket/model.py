@@ -165,7 +165,6 @@ class Ticket(object):
             elif not field.get('custom'):
                 default = self.env.config.get('ticket',
                                               'default_' + field['name'])
-                default = convert_type_value(field['type'], default)
             else:
                 default = field.get('value')
                 options = field.get('options')
@@ -177,6 +176,7 @@ class Ticket(object):
                                              'for custom field "%s"'
                                              % (default, field['name']))
             if default:
+                default = convert_type_value(field['type'], default)
                 self.values.setdefault(field['name'], default)
 
     def _fetch_ticket(self, tkt_id, db=None):
