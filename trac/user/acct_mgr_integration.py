@@ -1,8 +1,18 @@
-from trac.config import Option, ExtensionOption
-from trac.core import Component, implements
-from trac.db import with_transaction
+import re
 
-from acct_mgr.api import IPasswordStore, IAccountChangeListener, del_user_attribute
+from trac.config import Option, ExtensionOption
+from trac.core import Component, implements, TracError
+from trac.db import with_transaction
+from trac.admin import IAdminCommandProvider
+from trac.perm import PermissionSystem
+
+from genshi.builder import tag
+from trac.util.translation import _
+
+from acct_mgr.api import AccountManager, IPasswordStore, IAccountChangeListener, \
+            del_user_attribute, set_user_attribute
+from acct_mgr.api import _ as am_
+from acct_mgr.web_ui import EmailVerificationModule
 from acct_mgr.pwhash import IPasswordHashMethod
 from random import Random
 
@@ -21,13 +31,21 @@ def generatePassword(passwordLength=10):
 class AccountManagerIntegration(Component):
     """
     This class implements DB password store for AccountManager.
+
+    It can be used as primary Password store
+    or as just AccountChangeListener (then it replicates all
+    user/password info in `users` table)
     """
 
     hash_method = ExtensionOption('account-manager', 'hash_method', IPasswordHashMethod, 'HtPasswdHashMethod')
 
-    implements(IPasswordStore, IAccountChangeListener)
+    implements(IPasswordStore, IAccountChangeListener, IAdminCommandProvider)
 
-    # IPasswordStore methods
+    def __init__(self):
+        self.acctmgr = AccountManager(self.env)
+
+    # IPasswordStore
+
     def get_users(self):
         """
         Returns an iterable of the known usernames.
@@ -72,37 +90,37 @@ class AccountManagerIntegration(Component):
         """
 
         pwdhash = self.hash_method.generate_hash(user, password)
-        
+
         res = {'created': False}
-        
+
         @with_transaction(self.env)
         def set_password_db(db):
             cursor = db.cursor()
-        
+
             query = '''
                 UPDATE users
                 SET password=%s
                 WHERE username=%s
             '''
             cursor.execute(query, (pwdhash, user))
-            
+
             if cursor.rowcount > 0:
-                self.log.debug('group_management: set_password: an existing user was updated')
+                self.log.debug('AccountManagerIntegration: set_password: an existing user was updated')
                 return
-    
+
             query = '''
                 INSERT INTO users (username, password)
                 VALUES (%s, %s)
             '''
             cursor.execute(query, (user, pwdhash))
-    
+
             res['created'] = True
-            
+
         return res['created']
 
     def check_password(self, user, password):
         """Checks if the password is valid for the user.
-    
+
         Returns True if the correct user and password are specified.  Returns
         False if the incorrect password was specified.  Returns None if the
         user doesn't exist in this password store.
@@ -149,7 +167,7 @@ class AccountManagerIntegration(Component):
         del_user_attribute(self.env, username=user)
         return True
 
-    #IAccountChangeListener methods
+    # IAccountChangeListener
 
     def user_created(self, user, password):
         """
@@ -159,22 +177,22 @@ class AccountManagerIntegration(Component):
         if self.has_user(user):
             return False
 
-        res = self.set_password(user, password, create_user=True)
-        self.log.debug("group_management: user_created: %s, %s" % (user, res))
+        res = self.set_password(user, password)
+        self.log.debug("AccountManagerIntegration: user_created: %s, %s" % (user, res))
         return res
 
     def user_password_changed(self, user, password):
         """Password changed
         """
-        res = self.set_password(user, password, create_user=True)
-        self.log.debug("group_management: user_password_changed: %s" % user)
+        res = self.set_password(user, password)
+        self.log.debug("AccountManagerIntegration: user_password_changed: %s" % user)
         return res
 
     def user_deleted(self, user):
         """User deleted
         """
         res = self.delete_user(user)
-        self.log.debug("group_management: user_deleted: %s" % user)
+        self.log.debug("AccountManagerIntegration: user_deleted: %s" % user)
         return res
 
     def user_password_reset(self, user, email, password):
@@ -186,4 +204,107 @@ class AccountManagerIntegration(Component):
         """User verification requested
         """
         pass
+
+    # IAdminCommandProvider
+
+    def get_admin_commands(self):
+        yield ('account add', '<username> <password> [<name> [<email>]]',
+               'Add user account',
+               None, self._do_add_account)
+        yield ('account remove', '<username>',
+               'Remove user account',
+               None, self._do_remove_account)
+
+    def _do_add_account(self, username, password, *attrs):
+        '''See acct_mgr.web_ui._create_user function'''
+        username = self.acctmgr.handle_username_casing(username)
+        attr_cnt = len(attrs)
+        name = ''
+        email = ''
+        if attr_cnt > 0:
+            name = attrs[0]
+        if attr_cnt > 1:
+            email = attrs[1]
+
+        account = {
+            'username' : username,
+            'name' : name,
+            'email' : email,
+        }
+        error = TracError('')
+        error.account = account
+
+        if username in ['authenticated', 'anonymous']:
+            error.message = am_("Username %s is not allowed.") % username
+            raise error
+
+        if self.acctmgr.has_user(username):
+            error.message = am_(
+                "Another account or group named %s already exists.") % username
+            raise error
+
+        # Skip checking for match with permission groups here.
+        # It is too resource-intensive query for this op
+
+        from acct_mgr.util import containsAny
+        blacklist = self.acctmgr.username_char_blacklist
+        if containsAny(username, blacklist):
+            pretty_blacklist = ''
+            for c in blacklist:
+                if pretty_blacklist == '':
+                    pretty_blacklist = tag(' \'', tag.b(c), '\'')
+                else:
+                    pretty_blacklist = tag(pretty_blacklist,
+                                           ', \'', tag.b(c), '\'')
+            error.message = tag(am_(
+                "The username must not contain any of these characters:"),
+                pretty_blacklist)
+            raise error
+
+        if email:
+            if not re.match('^[A-Z0-9._%+-]+@(?:[A-Z0-9-]+\.)+[A-Z]{2,6}$',
+                              email, re.IGNORECASE):
+                error.message = am_("""The email address specified appears to be
+                                  invalid. Please specify a valid email address.
+                                  """)
+                raise error
+
+        if self.env.is_enabled(EmailVerificationModule) and self.acctmgr.verify_email:
+            if not email:
+                error.message = am_("You must specify a valid email address.")
+                raise error
+            if self.acctmgr.has_email(email):
+                error.message = am_("""The email address specified is already in
+                                  use. Please specify a different one.
+                                  """)
+                raise error
+
+        self.acctmgr.set_password(username, password)
+
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+        cursor.execute('SELECT 1 FROM session WHERE sid=%s LIMIT 1',
+                (username,))
+        exists = cursor.fetchone()
+        if not exists:
+            cursor.execute('''
+                INSERT INTO session
+                        (sid,authenticated,last_visit)
+                VALUES  (%s,0,0)
+                ''', (username,))
+
+        extra = {
+            'name': name,
+            'email': email,
+        }
+        for attr, val in extra.iteritems():
+            if not val:
+                continue
+            set_user_attribute(self.env, username, attr, val)
+
+    def _do_remove_account(self, username):
+        if not self.acctmgr.has_user(username):
+            raise TracError(_('User with username %(username)s does not exists',
+                                   username=username))
+        self.acctmgr.delete_user(username)
 
