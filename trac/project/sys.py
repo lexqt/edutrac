@@ -1,6 +1,6 @@
 import re
 
-from trac.core import Component, implements, ExtensionPoint
+from trac.core import Component, implements, ExtensionPoint, TracError
 from trac.perm import IPermissionRequestor
 from trac.web.main import IRequestHandler, IRequestFilter
 
@@ -8,6 +8,7 @@ from trac.web import chrome
 from trac.web.chrome import INavigationContributor
 from genshi.core import Markup
 from genshi.builder import tag
+from trac.util.translation import _, tag_
 
 from trac.project.api import IProjectSwitchListener, ProjectManagement
 
@@ -104,7 +105,7 @@ class PostloginModule(Component):
     def get_navigation_items(self, req):
         if req.session.authenticated:
             yield ('metanav', 'changeproject',
-                   tag.a("Change project", href=req.href.postlogin(step=STEP_SET_PROJECT))
+                   tag.a(tag_('Change project'), href=req.href.postlogin(step=STEP_SET_PROJECT))
                   )
 
     # IRequestFilter methods
@@ -141,7 +142,7 @@ class PostloginModule(Component):
     def process_request(self, req):
         if not req.session.authenticated:
             chrome.add_warning(req, Markup(tag.span(
-                "Please log in first.")))
+                tag_('Please log in first.'))))
             req.redirect(req.href.login())
 
         s = req.session
@@ -163,8 +164,11 @@ class PostloginModule(Component):
             if step == STEP_SET_ROLE:
                 data['roles']    = self.pm.get_user_roles(req.authname)
                 if not data['roles']:
-                    chrome.add_warning(req, 'User has no roles. Can not continue login.')
-                    req.redirect(req.href.logout())
+                    raise TracError(tag(tag_(
+                        'User has no roles. Can not continue login.'
+                        ' You may %(logout)s to continue work as anonymous user.',
+                        logout=tag.a(_('logout'), href=req.href.logout())
+                    )))
             elif step == STEP_SET_PROJECT:
                 role = int(s['role'])
 #                if role not in (USER_ROLE_DEVELOPER, USER_ROLE_MANAGER):
@@ -178,7 +182,7 @@ class PostloginModule(Component):
             if step == STEP_SET_ROLE and 'role' in req.args:
                 role = int(req.args['role'])
                 if role not in [rid for rid, rname in data['roles']]:
-                    chrome.add_warning(req, 'Select role from availables only!')
+                    chrome.add_warning(req, _('Select role from availables only!'))
                     req.redirect(req.href.postlogin())
                 step = STEP_SET_PROJECT
                 s['role']           = role
@@ -187,7 +191,7 @@ class PostloginModule(Component):
             elif step == STEP_SET_PROJECT and 'project' in req.args:
                 project_id = int(req.args['project'])
                 if project_id not in [pid for pid, pname in data['projects']]:
-                    chrome.add_warning(req, 'Select project from availables only!')
+                    chrome.add_warning(req, _('Select project from availables only!'))
                     req.redirect(req.href.postlogin())
                 info = self.pm.get_project_info(project_id, fail_on_none=True)
                 old_project_id = s.get('project') if not s.get('postlogin_change_param') else None

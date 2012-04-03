@@ -49,7 +49,7 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((UserManagement.USER_ROLE_DEVELOPER, 'Developer'))
+            roles.append((UserManagement.USER_ROLE_DEVELOPER, _('Developer')))
 
         # check for manager
         query = '''
@@ -61,7 +61,7 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((UserManagement.USER_ROLE_MANAGER, 'Project manager'))
+            roles.append((UserManagement.USER_ROLE_MANAGER, _('Project manager')))
 
         # check for admin
         query = '''
@@ -72,7 +72,7 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((UserManagement.USER_ROLE_ADMIN, 'Administrator'))
+            roles.append((UserManagement.USER_ROLE_ADMIN, _('Administrator')))
 
         return roles
 
