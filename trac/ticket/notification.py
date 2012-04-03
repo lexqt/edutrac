@@ -207,7 +207,8 @@ class TicketNotifyEmail(NotifyEmail):
     def format_props(self):
         tkt = self.ticket
         fields = [f for n, f in tkt.fields.iteritems()
-                  if n not in ('summary', 'cc', 'time', 'changetime')]
+                  if n not in ('summary', 'cc', 'time', 'changetime')
+                  and not f.get('hide_view')]
         width = [0, 0, 0, 0]
         i = 0
 

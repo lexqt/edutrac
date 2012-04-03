@@ -166,16 +166,18 @@ class IMilestoneChangeListener(Interface):
 class TicketFieldsStore(object):
     """Project/syllabus dependent store for ticket fields.
 
-    Each field can has some parameters:
+    Each field can has some parameters ([value] - value to use when param not set):
     `name`: should be valid python identifier
             and can not be one of reserved names (TicketSystem.reserved_field_names)
     `type`: field type (id, int, float, text, textarea, username, time, checkbox, select, radio)
     `label`: field label to render in templates
     `optional`: is field optional
-    `auto` (base only): field is out of user control, its value automatically filled by the system
-    `skip`: field is not rendered in ticket templates
+    `auto` (base only): field is out of user control,
+            its value automatically filled by the system [False]
+    `skip`: field is not rendered in ticket templates [False]
             (may be changed before rendering, here it is only default value)
-    `value`: default value for field
+    `hide_view`: do not show field in view templates [False]
+    `value`: default value for field [None]
     `order` (custom only): field sort priority (defines field order in template)
 
     Parameters for type=select and type=radio:
@@ -225,6 +227,7 @@ class TicketFieldsStore(object):
         fields.append({'name': 'project_id', 'type': 'id',
                        'label': N_('Project ID'),
                        'skip': True, 'auto': True,
+                       'hide_view': True,
                        'optional': False})
         fields.append({'name': 'summary', 'type': 'text',
                        'label': N_('Summary'),
@@ -316,6 +319,11 @@ class TicketFieldsStore(object):
                 'value': self._get_type_value(config, type_, name),
                 'optional': config.getbool(name + '.optional', True),
             }
+            for param in ('hide_view',):
+                val = config.getbool(name + '.' + param, None)
+                if val is None:
+                    continue
+                field[param] = val
             if field['type'] == 'select' or field['type'] == 'radio':
                 field['options'] = config.getlist(name + '.options', sep='|')
                 if '' in field['options']:

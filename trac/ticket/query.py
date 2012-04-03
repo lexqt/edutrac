@@ -247,7 +247,8 @@ class Query(object):
     def get_all_columns(self):
         # Prepare the default list of columns
         cols = ['id']
-        cols += [n for n, f in self.fields.iteritems() if f['type'] != 'textarea']
+        cols += [n for n, f in self.fields.iteritems()
+                    if f['type'] != 'textarea' and not f.get('hide_view')]
         for col in ('reporter', 'keywords', 'cc'):
             if col in cols:
                 cols.remove(col)
@@ -822,6 +823,8 @@ class Query(object):
 
         fields = {'id': {'type': 'id', 'label': _("Ticket")}}
         for name, field in self.fields.iteritems():
+            if field.get('hide_view'):
+                continue
             if name == 'owner' and field['type'] == 'select':
                 # Make $USER work when restrict_owner = true
                 field = field.copy()
