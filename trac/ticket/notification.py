@@ -221,7 +221,7 @@ class TicketNotifyEmail(NotifyEmail):
                 l = len(f['label'])
                 if max_len < l:
                     max_len = l
-            str_format = '{0:<%i} {1}' % (max_len+1)
+            str_format = u'{0:<%i} {1}' % (max_len+1)
             txt = '---------------------------------------------------------------------------\n'
             txt += u'\n'.join(
                 str_format.format(f['label']+':', get_value(f['name']))
