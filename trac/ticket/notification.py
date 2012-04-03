@@ -110,6 +110,7 @@ class TicketNotifyEmail(NotifyEmail):
         change_data = {}
         link = self.env.abs_href.ticket(ticket.id)
         summary = self.ticket['summary']
+        fields = self.ticket.fields
         
         if not self.newticket and modtime:  # Ticket change
             from trac.ticket.web_ui import TicketModule
@@ -171,7 +172,7 @@ class TicketNotifyEmail(NotifyEmail):
                                 spacer_old = '\n'
                             if len(new) + length > self.COLS:
                                 spacer_new = '\n'
-                        chg = '* %s: %s%s%s=>%s%s' % (field, spacer_old, old,
+                        chg = '* %s: %s%s%s=>%s%s' % (fields[field]['label'], spacer_old, old,
                                                       spacer_old, spacer_new,
                                                       new)
                         chg = chg.replace('\n', '\n' + length * ' ')
@@ -204,25 +205,40 @@ class TicketNotifyEmail(NotifyEmail):
             })
         NotifyEmail.notify(self, ticket.id, subject)
 
-    def format_props(self):
+    def format_props(self, format='multiline'):
         tkt = self.ticket
         fields = [f for n, f in tkt.fields.iteritems()
-                  if n not in ('summary', 'cc', 'time', 'changetime')
+                  if n not in ('summary', 'cc', 'time', 'changetime', 'description')
                   and not f.get('hide_view')]
-        width = [0, 0, 0, 0]
-        i = 0
 
-        def get_value(tkt, name):
-            fval = tkt[fname]
+        def get_value(name):
+            fval = tkt[name]
             return fval is not None and unicode(fval) or u''
 
+        if format == 'multiline':
+            max_len = 0
+            for f in fields:
+                l = len(f['label'])
+                if max_len < l:
+                    max_len = l
+            str_format = '{0:<%i} {1}' % (max_len+1)
+            txt = '---------------------------------------------------------------------------\n'
+            txt += u'\n'.join(
+                str_format.format(f['label']+':', get_value(f['name']))
+                    for f in fields
+            )
+            txt += '\n---------------------------------------------------------------------------'
+            return txt
+
+        width = [0, 0, 0, 0]
+        i = 0
         for f in fields:
             if f['type'] == 'textarea':
                 continue
             fname = f['name']
             if not fname in tkt.values:
                 continue
-            fval = get_value(tkt, fname)
+            fval = get_value(fname)
             if fval.find('\n') != -1:
                 continue
             if fname in ['owner', 'reporter']:
@@ -255,7 +271,7 @@ class TicketNotifyEmail(NotifyEmail):
             fname = f['name']
             if not tkt.values.has_key(fname):
                 continue
-            fval = get_value(tkt, fname)
+            fval = get_value(fname)
             if fname in ['owner', 'reporter']:
                 fval = self.obfuscate_email(fval)
             if f['type'] == 'textarea' or '\n' in fval:
