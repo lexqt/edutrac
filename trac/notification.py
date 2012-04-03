@@ -18,6 +18,7 @@ import re
 import smtplib
 from subprocess import Popen, PIPE
 import time
+from functools import partial
 
 from genshi.builder import tag
 
@@ -114,6 +115,10 @@ class NotificationSystem(Component):
         If the setting is not defined, then the [$project_name] prefix.
         If no prefix is desired, then specifying an empty option 
         will disable it. (''since 0.10.1'').""")
+
+    notify_untranslated = BoolOption('notification', 'notify_untranslated',
+                                       'true',
+        """Deactivate translation before sending notifications.""")
 
     def send_email(self, from_addr, recipients, message):
         """Send message to recipients via e-mail."""
@@ -394,11 +399,16 @@ class NotifyEmail(Notify):
         from email.Utils import formatdate
         stream = self.template.generate(**self.data)
         # don't translate the e-mail stream
-        t = deactivate()
-        try:
-            body = stream.render('text', encoding='utf-8')
-        finally:
-            reactivate(t)
+        untranslated = self.env.config.getbool('notification', 'notify_untranslated', True)
+        do_render = partial(stream.render, 'text', encoding='utf-8')
+        if untranslated:
+            t = deactivate()
+            try:
+                body = do_render()
+            finally:
+                reactivate(t)
+        else:
+            body = do_render()
         projname = self.env.project_name
         public_cc = self.config.getbool('notification', 'use_public_cc')
         headers = {}

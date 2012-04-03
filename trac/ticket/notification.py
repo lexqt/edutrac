@@ -16,6 +16,7 @@
 # Author: Daniel Lundin <daniel@edgewall.com>
 #
 
+from functools import partial
 from genshi.template.text import NewTextTemplate
 
 from trac.core import *
@@ -83,14 +84,19 @@ class TicketNotifyEmail(NotifyEmail):
 
     def notify(self, ticket, newticket=True, modtime=None):
         """Send ticket change notification e-mail (untranslated)"""
-        t = deactivate()
-        translated_fields = ticket.fields
-        try:
-            ticket.fields = TicketSystem(self.env).get_ticket_fields(ticket.pid)
-            self._notify(ticket, newticket, modtime)
-        finally:
-            ticket.fields = translated_fields
-            reactivate(t)
+        untranslated = self.env.config.getbool('notification', 'notify_untranslated', True)
+        do_notify = partial(self._notify, newticket=newticket, modtime=modtime)
+        if untranslated:
+            t = deactivate()
+            translated_fields = ticket.fields
+            try:
+                ticket.fields = TicketSystem(self.env).get_ticket_fields(ticket.pid)
+                do_notify(ticket)
+            finally:
+                ticket.fields = translated_fields
+                reactivate(t)
+        else:
+            do_notify(ticket)
 
     def _notify(self, ticket, newticket=True, modtime=None):
         self.ticket = ticket
