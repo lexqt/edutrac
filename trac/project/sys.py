@@ -48,7 +48,7 @@ class ProjectSystem(Component):
 #                # 'project' in the middle
 #                return False
             req.args['__pid__'] = int(pid)
-            req.environ['PATH_INFO'] = str('/' + post).rstrip('/')
+            req.environ['PATH_INFO'] = unicode('/' + post).rstrip('/').encode('utf-8')
             return True
         return False
 
