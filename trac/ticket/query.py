@@ -436,7 +436,7 @@ class Query(object):
 
         extra = {'area': self.area}
         if self.area == 'project':
-            extra['project'] = self.pid
+#            extra['project'] = self.pid
             constraints = filter(lambda p: p[0] != 'project' and p[0] != 'project_id', constraints)
 
         return href.query(constraints,

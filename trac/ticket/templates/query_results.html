@@ -63,7 +63,7 @@
           <py:with vars="ticket_context = context('ticket', result.id)">
             <py:if test="'TICKET_VIEW' in perm(ticket_context.resource)">
 
-              <tr class="${idx % 2 and 'odd' or 'even'} prio${max(1, int(round( float(priorities['max'] - int(result.priority_value) + priorities['min']) / priorities['max'] * 6 ) ))}${
+              <tr class="${idx % 2 and 'odd' or 'even'} prio${max(1, int(round( float(priorities['max'] - int(result.priority_value or 0) + priorities['min']) / priorities['max'] * 6 ) ))}${
                 'added' in result and ' added' or ''}${
                 'changed' in result and ' changed' or ''}${
                 'removed' in result and ' removed' or ''}">
