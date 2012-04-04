@@ -84,7 +84,7 @@ class WikiModule(Component):
             yield ('mainnav', 'wiki',
                    tag.a(_('Wiki'), href=req.href.wiki(), accesskey=1))
             yield ('metanav', 'help',
-                   tag.a(_('Help/Guide'), href=req.href.wiki('TracGuide'),
+                   tag.a(_('Help/Guide'), href=req.href.wiki('TranslationRu', 'TracGuide'),
                          accesskey=6))
 
     # IPermissionRequestor methods
