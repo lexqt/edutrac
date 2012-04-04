@@ -3,13 +3,14 @@
 # This file is distributed under the same license as the Trac project.
 #
 # Алексей, 2012.
+# Aleksey A. Porfirov <lexqt@yandex.ru>, 2012.
 msgid ""
 msgstr ""
 "Project-Id-Version: Trac 0.12.3\n"
 "Report-Msgid-Bugs-To: trac-dev@googlegroups.com\n"
-"POT-Creation-Date: 2012-04-02 14:37+0400\n"
-"PO-Revision-Date: 2012-04-02 14:44+0400\n"
-"Last-Translator: Алексей\n"
+"POT-Creation-Date: 2012-04-05 00:16+0400\n"
+"PO-Revision-Date: 2012-04-05 00:28+0400\n"
+"Last-Translator: Aleksey A. Porfirov <lexqt@yandex.ru>\n"
 "Language-Team: Russian <>\n"
 "Language: ru\n"
 "MIME-Version: 1.0\n"
@@ -18,7 +19,7 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
 "%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2)\n"
 "Generated-By: Babel 0.9.6\n"
-"X-Generator: Lokalize 1.4\n"
+"X-Generator: Lokalize 1.2\n"
 
 #: tracopt/mimeview/php.py:98
 msgid ""
@@ -130,8 +131,9 @@ msgid "Delete comment"
 msgstr "Удалить комментарий"
 
 #: trac/about.py:47 trac/templates/about.html:10 trac/templates/about.html:29
-msgid "About Trac"
-msgstr "О Trac"
+#| msgid "About Trac"
+msgid "About EduTrac"
+msgstr "О EduTrac"
 
 #: trac/attachment.py:166
 #, python-format
@@ -142,18 +144,18 @@ msgstr "Вложение \"%(title)s\" не существует."
 msgid "Invalid Attachment"
 msgstr "Недопустимое вложение"
 
-#: trac/attachment.py:225
+#: trac/attachment.py:227
 msgid "Could not delete attachment"
 msgstr "Не удалось удалить вложение"
 
-#: trac/attachment.py:247
+#: trac/attachment.py:249
 #, python-format
 msgid "Cannot reparent attachment \"%(att)s\" as %(realm)s:%(id)s is invalid"
 msgstr ""
 "Невозможно изменить принадлежность вложения \"%(att)s\" так как %(realm)s:"
 "%(id)s недопустимо"
 
-#: trac/attachment.py:253
+#: trac/attachment.py:255
 #, python-format
 msgid ""
 "Cannot reparent attachment \"%(att)s\" as it already exists in %(realm)s:"
@@ -162,85 +164,85 @@ msgstr ""
 "Невозможно изменить принадлежность вложения \"%(att)s\" так как оно уже "
 "существует в %(realm)s:%(id)s"
 
-#: trac/attachment.py:274
+#: trac/attachment.py:276
 #, python-format
 msgid "Could not reparent attachment %(name)s"
 msgstr "Не удалось изменить принадлежность вложения %(name)s"
 
-#: trac/attachment.py:303
+#: trac/attachment.py:305
 #, python-format
 msgid "Cannot create attachment \"%(att)s\" as %(realm)s:%(id)s is invalid"
 msgstr ""
 "Невозможно создать вложения \"%(att)s\" так как %(realm)s:%(id)s недопустимо"
 
-#: trac/attachment.py:411
+#: trac/attachment.py:413
 #, python-format
 msgid "Attachment '%(filename)s' not found"
 msgstr "Вложение \"%(filename)s\" не найдено"
 
-#: trac/attachment.py:492
+#: trac/attachment.py:494
 msgid "Bad request"
 msgstr "Неверный запрос"
 
-#: trac/attachment.py:512
+#: trac/attachment.py:514
 #, python-format
 msgid "Back to %(parent)s"
 msgstr "Вернуться к %(parent)s"
 
-#: trac/attachment.py:636
+#: trac/attachment.py:638
 #, python-format
 msgid "%(attachment)s attached to %(resource)s"
 msgstr "%(attachment)s прикреплен к %(resource)s"
 
-#: trac/attachment.py:694
+#: trac/attachment.py:696
 #, python-format
 msgid "Unparented attachment %(id)s"
 msgstr "Вложение без родителя %(id)s"
 
-#: trac/attachment.py:702
+#: trac/attachment.py:704
 #, python-format
 msgid "Attachment '%(id)s' in %(parent)s"
 msgstr "Вложение \"%(id)s\" в %(parent)s"
 
-#: trac/attachment.py:705
+#: trac/attachment.py:707
 #, python-format
 msgid "Attachments of %(parent)s"
 msgstr "Вложения %(parent)s"
 
-#: trac/attachment.py:749
+#: trac/attachment.py:751
 #, python-format
 msgid "%(parent)s doesn't exist, can't create attachment"
 msgstr "%(parent)s не существует, невозможно создать вложение"
 
-#: trac/attachment.py:756 trac/attachment.py:779 trac/admin/web_ui.py:430
+#: trac/attachment.py:758 trac/attachment.py:781 trac/admin/web_ui.py:430
 #: trac/admin/web_ui.py:433 trac/admin/web_ui.py:437
 msgid "No file uploaded"
 msgstr "Нет загружаемого файла"
 
-#: trac/attachment.py:764
+#: trac/attachment.py:766
 msgid "Can't upload empty file"
 msgstr "Нельзя загрузить пустой файл"
 
-#: trac/attachment.py:769
+#: trac/attachment.py:771
 #, python-format
 msgid "Maximum attachment size: %(num)s bytes"
 msgstr "Максимальный размер вложения: %(num)s байт"
 
-#: trac/attachment.py:770
+#: trac/attachment.py:772
 msgid "Upload failed"
 msgstr "Сбой при загрузке"
 
-#: trac/attachment.py:792
+#: trac/attachment.py:794
 #, python-format
 msgid "Attachment field %(field)s is invalid: %(message)s"
 msgstr "Поле %(field)s вложения недопустимо: %(message)s"
 
-#: trac/attachment.py:796
+#: trac/attachment.py:798
 #, python-format
 msgid "Invalid attachment: %(message)s"
 msgstr "Недопустимое вложение: %(message)s"
 
-#: trac/attachment.py:806
+#: trac/attachment.py:808
 #, python-format
 msgid ""
 "You don't have permission to replace the attachment %(name)s. You can only "
@@ -250,34 +252,34 @@ msgstr ""
 "У вас нет прав для замены вложения %(name)s. Вы можете заменять только свои "
 "вложения. Для замены чужих вложений необходимо право ATTACHMENT_DELETE."
 
-#: trac/attachment.py:837
+#: trac/attachment.py:839
 #, python-format
 msgid "%(attachment)s (delete)"
 msgstr "%(attachment)s (удалить)"
 
-#: trac/attachment.py:898 trac/versioncontrol/web_ui/browser.py:678
+#: trac/attachment.py:900 trac/versioncontrol/web_ui/browser.py:678
 #: trac/wiki/web_ui.py:71
 msgid "Plain Text"
 msgstr "Простой текст"
 
-#: trac/attachment.py:904 trac/versioncontrol/web_ui/browser.py:684
+#: trac/attachment.py:906 trac/versioncontrol/web_ui/browser.py:684
 msgid "Original Format"
 msgstr "Исходный формат"
 
-#: trac/attachment.py:959 trac/templates/list_of_attachments.html:20
+#: trac/attachment.py:961 trac/templates/list_of_attachments.html:20
 #: trac/ticket/templates/ticket_change.html:21
 msgid "Download"
 msgstr "Скачать"
 
-#: trac/attachment.py:1053
+#: trac/attachment.py:1055
 #, python-format
 msgid "Invalid resource identifier '%(id)s'"
 msgstr "Недопустимый идентификатор ресурса \"%(id)s\""
 
-#: trac/attachment.py:1091 trac/admin/templates/admin_components.html:80
+#: trac/attachment.py:1093 trac/admin/templates/admin_components.html:80
 #: trac/admin/templates/admin_enums.html:48
 #: trac/admin/templates/admin_milestones.html:101
-#: trac/admin/templates/admin_versions.html:78 trac/templates/about.html:84
+#: trac/admin/templates/admin_versions.html:78 trac/templates/about.html:100
 #: trac/templates/error.html:160 trac/ticket/admin.py:208
 #: trac/ticket/admin.py:399 trac/ticket/admin.py:560
 #: trac/versioncontrol/admin.py:113
@@ -286,26 +288,26 @@ msgstr "Недопустимый идентификатор ресурса \"%(i
 msgid "Name"
 msgstr "Имя"
 
-#: trac/attachment.py:1091
+#: trac/attachment.py:1093
 msgid "Size"
 msgstr "Размер"
 
-#: trac/attachment.py:1091 trac/templates/history_view.html:30
+#: trac/attachment.py:1093 trac/templates/history_view.html:30
 #: trac/ticket/templates/ticket.html:361
 #: trac/versioncontrol/templates/revisionlog.html:98
 msgid "Author"
 msgstr "Автор"
 
-#: trac/attachment.py:1091 trac/templates/history_view.html:29
+#: trac/attachment.py:1093 trac/templates/history_view.html:29
 msgid "Date"
 msgstr "Дата"
 
-#: trac/attachment.py:1092 trac/templates/attachment.html:93
-#: trac/ticket/api.py:244 trac/ticket/templates/ticket_box.html:60
+#: trac/attachment.py:1094 trac/templates/attachment.html:93
+#: trac/ticket/api.py:247 trac/ticket/templates/ticket_box.html:60
 msgid "Description"
 msgstr "Описание"
 
-#: trac/attachment.py:1118 trac/wiki/admin.py:108
+#: trac/attachment.py:1120 trac/wiki/admin.py:108
 #, python-format
 msgid "File '%(name)s' exists"
 msgstr "Файл \"%(name)s\" существует"
@@ -314,30 +316,30 @@ msgstr "Файл \"%(name)s\" существует"
 msgid "Configuration Error"
 msgstr "Ошибка конфигурации"
 
-#: trac/config.py:285
+#: trac/config.py:286
 #, python-format
 msgid "Error reading '%(file)s', make sure it is readable."
 msgstr "Ошибка чтения '%(file)s', убедитесь, что файл доступен для чтения."
 
-#: trac/config.py:440
+#: trac/config.py:443
 #, python-format
 msgid "[%(section)s] %(entry)s: expected integer, got %(value)s"
 msgstr "[%(section)s] %(entry)s: ожидалось целое число, получено %(value)s"
 
-#: trac/config.py:458
+#: trac/config.py:461
 #, python-format
 msgid "[%(section)s] %(entry)s: expected float, got %(value)s"
 msgstr ""
 "[%(section)s] %(entry)s: ожидалось число с плавающей точкой, получено "
 "%(value)s"
 
-#: trac/config.py:709
+#: trac/config.py:713
 #, python-format
 msgid "[%(section)s] %(entry)s: expected one of (%(choices)s), got %(value)s"
 msgstr ""
 "[%(section)s] %(entry)s: ожидалось одно из (%(choices)s), получено %(value)s"
 
-#: trac/config.py:854 trac/config.py:867
+#: trac/config.py:858 trac/config.py:871
 #, python-format
 msgid "Option '%(option)s' doesn't exist in section '%(section)s'"
 msgstr "Опция \"%(option)s\" не существует в секции \"%(section)s\""
@@ -354,16 +356,16 @@ msgstr ""
 "Посетите сайт проекта с открытым исходным кодом Trac<br /><a href=\"http://"
 "trac.edgewall.org/\">http://trac.edgewall.org/</a>"
 
-#: trac/env.py:631
+#: trac/env.py:634
 msgid "Database newer than Trac version"
 msgstr "Версия базы данных новее версии Trac"
 
-#: trac/env.py:648
+#: trac/env.py:651
 #, python-format
 msgid "No upgrade module for version %(num)i (%(version)s.py)"
 msgstr "Не найден модуль обновления для версии %(num)i (%(version)s.py)"
 
-#: trac/env.py:694
+#: trac/env.py:697
 msgid ""
 "Missing environment variable \"TRAC_ENV\". Trac requires this variable to "
 "point to a valid Trac environment."
@@ -371,7 +373,7 @@ msgstr ""
 "Отсутствует переменная окружения \"TRAC_ENV\". Trac требуется, чтобы данная "
 "переменная указывала на путь к окружению Trac."
 
-#: trac/env.py:726
+#: trac/env.py:729
 #, python-format
 msgid ""
 "The Trac Environment needs to be upgraded.\n"
@@ -382,41 +384,41 @@ msgstr ""
 "\n"
 "Выполните \"trac-admin %(path)s upgrade\""
 
-#: trac/env.py:760
+#: trac/env.py:763
 msgid "Copying resources from:"
 msgstr "Копирование ресурсов из:"
 
-#: trac/env.py:776
+#: trac/env.py:779
 msgid "Creating scripts."
 msgstr "Создание скриптов."
 
-#: trac/env.py:792
+#: trac/env.py:795
 #, python-format
 msgid "hotcopy can't overwrite existing '%(dest)s'"
 msgstr "hotcopy не может перезаписать существующий \"%(dest)s\""
 
-#: trac/env.py:803
+#: trac/env.py:806
 #, python-format
 msgid "Hotcopying %(src)s to %(dst)s ..."
 msgstr "Создание горячей копии %(src)s в %(dst)s ..."
 
-#: trac/env.py:817
+#: trac/env.py:820
 msgid "The following errors happened while copying the environment:"
 msgstr "При копировании окружения произошли следующие ошибки:"
 
-#: trac/env.py:828
+#: trac/env.py:831
 msgid "Hotcopy done."
 msgstr "Создание горячей копии завершено."
 
-#: trac/env.py:833 trac/admin/api.py:130
+#: trac/env.py:836 trac/admin/api.py:130
 msgid "Invalid arguments"
 msgstr "Недопустимые аргументы"
 
-#: trac/env.py:836
+#: trac/env.py:839
 msgid "Database is up to date, no upgrade necessary."
 msgstr "База данных актуальна: обновление не требуется."
 
-#: trac/env.py:844
+#: trac/env.py:847
 #, python-format
 msgid ""
 "Backup failed: %(msg)s.\n"
@@ -425,7 +427,7 @@ msgstr ""
 "Ошибка при создании резервной копии: %(msg)s.\n"
 "Используйте ключ \"--no-backup\" для обновления без создания резервной копии."
 
-#: trac/env.py:854
+#: trac/env.py:857
 msgid ""
 "Warning: the wiki-macros directory in the environment is non-empty, but "
 "Trac\n"
@@ -434,7 +436,7 @@ msgstr ""
 "Внимание: каталог wiki-macros окружения не пуст, но Trac\n"
 "больше не загружает плагины оттуда. Пожалуйста удалите его вручную."
 
-#: trac/env.py:865
+#: trac/env.py:868
 #, python-format
 msgid ""
 "Error while removing wiki-macros: %(err)s\n"
@@ -444,7 +446,7 @@ msgstr ""
 "Trac больше не загружает плагины из wiki-macros. Пожалуйста, удалите его "
 "вручную."
 
-#: trac/env.py:870
+#: trac/env.py:873
 #, python-format
 msgid ""
 "Upgrade done.\n"
@@ -459,29 +461,29 @@ msgstr ""
 "\n"
 "  trac-admin %(path)s wiki upgrade"
 
-#: trac/notification.py:154
+#: trac/notification.py:159
 msgid "TLS enabled but server does not support TLS"
 msgstr "TLS включён, но сервер не поддерживает TLS"
 
-#: trac/notification.py:305
+#: trac/notification.py:310
 #, python-format
 msgid "Invalid email encoding setting: %(pref)s"
 msgstr "Недопустимая настройка кодировки email: %(pref)s"
 
-#: trac/notification.py:319
+#: trac/notification.py:324
 msgid "Unable to send email due to identity crisis."
 msgstr "Не удается отправить сообщение из-за ошибки подлинности."
 
-#: trac/notification.py:323
+#: trac/notification.py:328
 #, python-format
 msgid "Neither %(from_)s nor %(reply_to)s are specified in the configuration."
 msgstr "Ни %(from_)s, ни %(reply_to)s не указаны в конфигурации."
 
-#: trac/notification.py:324
+#: trac/notification.py:329
 msgid "SMTP Notification Error"
 msgstr "Ошибка уведомления SMTP"
 
-#: trac/notification.py:333
+#: trac/notification.py:338
 msgid "Header length is too short"
 msgstr "Слишком короткая длина заголовка"
 
@@ -646,10 +648,12 @@ msgid "Directory exists and is not empty."
 msgstr "Каталог существует и не пуст."
 
 #: trac/admin/console.py:394
-#, fuzzy, python-format
+#, python-format
 msgid ""
 "Base directory '%(env)s' does not exist. Please create it manually and retry."
-msgstr "Страница %(name)s не существует. Вы можете создать её здесь."
+msgstr ""
+"Базовая директория %(env)s не существует. Пожалуйста, создайте её вручную и "
+"повторите попытку."
 
 #: trac/admin/console.py:422
 msgid "Creating and Initializing Project"
@@ -1003,7 +1007,7 @@ msgid "Add"
 msgstr "Добавить"
 
 #: trac/admin/templates/admin_components.html:80 trac/ticket/admin.py:208
-#: trac/ticket/api.py:239 trac/ticket/web_ui.py:1428
+#: trac/ticket/api.py:242 trac/ticket/web_ui.py:1428
 msgid "Owner"
 msgstr "Владелец"
 
@@ -1076,7 +1080,7 @@ msgid ""
 "              in the ticket queries and reports."
 msgstr "Порядок приоритетов определяет цвет записей в запросах и отчётах."
 
-#: trac/admin/templates/admin_logging.html:26 trac/templates/about.html:79
+#: trac/admin/templates/admin_logging.html:26 trac/templates/about.html:95
 msgid "Configuration"
 msgstr "Конфигурация"
 
@@ -1264,7 +1268,7 @@ msgid "License:"
 msgstr "Лицензия:"
 
 #: trac/admin/templates/admin_plugins.html:102 trac/ticket/admin.py:75
-#: trac/ticket/api.py:261
+#: trac/ticket/api.py:264
 msgid "Component"
 msgstr "Компонент"
 
@@ -1733,6 +1737,20 @@ msgstr "Стиль:"
 msgid "Preview:"
 msgstr "Предварительный просмотр:"
 
+#: trac/project/api.py:52
+msgid "Developer"
+msgstr "Разработчик"
+
+#: trac/project/api.py:64
+#| msgid "Project ID"
+msgid "Project manager"
+msgstr "Менеджер проекта"
+
+#: trac/project/api.py:75
+#| msgid "Administration"
+msgid "Administrator"
+msgstr "Администратор"
+
 #: trac/project/api.py:138
 msgid "Can not get neither request, nor session project variable"
 msgstr ""
@@ -1745,13 +1763,11 @@ msgstr "Невозможно получить переменную иденти�
 
 #: trac/project/api.py:164
 #, python-format
-#| msgid "Version %(name)s does not exist in project #%(pid)s."
 msgid "You have not enough rights in project #%(pid)s."
 msgstr "У вас недостаточные права в рамках проекта #%(pid)s."
 
 #: trac/project/api.py:182
 #, python-format
-#| msgid "Project #%(pid)s does not exist."
 msgid "Project #%(pid)s is not associated with any syllabus"
 msgstr "Проект #%(pid)s не связан с какой-либо рабочей программой"
 
@@ -1774,7 +1790,6 @@ msgstr ""
 
 #: trac/project/api.py:247
 #, python-format
-#| msgid "Component %(name)s does not exist in project #%(pid)s."
 msgid "Component \"%(cname)s\" is disabled in your syllabus #%(sid)s."
 msgstr ""
 "Компонент %(cname)s отключен в рамках Вашей рабочей программы #%(sid)s."
@@ -1787,6 +1802,33 @@ msgstr "Проект #%(pid)s не существует."
 #: trac/project/model.py:94 trac/project/model.py:119
 msgid "Invalid project name."
 msgstr "Недопустимое имя проекта."
+
+#: trac/project/sys.py:108
+#| msgid "Wiki changes (project)"
+msgid "Change project"
+msgstr "Сменить проект"
+
+#: trac/project/sys.py:145
+msgid "Please log in first."
+msgstr "Пожалуйста, вначале пройдите авторизацию."
+
+#: trac/project/sys.py:170
+#, python-format
+msgid ""
+"User has no roles. Can not continue login. You may %(logout)s to continue "
+"work as anonymous user."
+msgstr ""
+"У пользователя нет назначенных ролей. Невозможно продолжить вход в систему. "
+"Вы можете %(logout)s, чтобы продолжить работу в системе как анонимный "
+"пользователь."
+
+#: trac/project/sys.py:185
+msgid "Select role from availables only!"
+msgstr "Выбирайте роль только из предложенных!"
+
+#: trac/project/sys.py:194
+msgid "Select project from availables only!"
+msgstr "Выбирайте проект только из предложенных!"
 
 #: trac/project/templates/postlogin.html:11
 msgid "Session parameters"
@@ -1821,12 +1863,12 @@ msgid "Search query too short. Query must be at least %(num)s characters long."
 msgstr ""
 "Слишком короткий поисковый запрос, требуется как минимум %(num)s символов."
 
-#: trac/search/web_ui.py:244 trac/ticket/query.py:870
+#: trac/search/web_ui.py:244 trac/ticket/query.py:873
 #: trac/ticket/report.py:466
 msgid "Next Page"
 msgstr "Следующая страница"
 
-#: trac/search/web_ui.py:250 trac/ticket/query.py:875
+#: trac/search/web_ui.py:250 trac/ticket/query.py:878
 #: trac/ticket/report.py:469
 msgid "Previous Page"
 msgstr "Предыдущая страница"
@@ -1867,6 +1909,59 @@ msgstr "Trac: Интегрированная система управления
 
 #: trac/templates/about.html:30
 msgid ""
+"EduTrac is a fork of Trac. It includes some modifications and enhancements\n"
+"      aimed to incorporate project management system into software "
+"engineering\n"
+"      courses."
+msgstr ""
+"EduTrac — это ответвление от проекта Trac. "
+"Оно включает в себя некоторые изменения и улучшения, \n"
+"направленные на внедрение систем управления проектами \n"
+"в учебные курсы по разработке программного обеспечения."
+
+#: trac/templates/about.html:34
+msgid "Main features"
+msgstr "Основные возможности"
+
+#: trac/templates/about.html:36
+msgid "Multi-project support."
+msgstr "Поддержка ведения нескольких проектов."
+
+#: trac/templates/about.html:37
+msgid "User groups (3 levels: team, student group, metagroup)."
+msgstr ""
+"Пользовательские группы 3-х уровней (команда, студенческая группа, поток)."
+
+#: trac/templates/about.html:38
+msgid "Syllabuses (specific configuration for project set)."
+msgstr "Рабочие (учебные) программы (особые конфигурации для набора проектов)."
+
+#: trac/templates/about.html:39
+msgid "More flexible ticket workflow (new operations and parameters)."
+msgstr "Более гибкий рабочий процесс для задач (новые операции и параметры)."
+
+#: trac/templates/about.html:40
+msgid "New ticket field types and parameters (+ conversion, validation, etc)."
+msgstr ""
+"Новые типы и параметры для свойств задач (а также конвертирование, валидация "
+"и т.д.)."
+
+#: trac/templates/about.html:41
+#| msgid "Invalid ticket number"
+msgid "Enhanced ticket queries."
+msgstr "Улучшенные запросы по карточкам."
+
+#: trac/templates/about.html:42
+#| msgid "Evaluation form"
+msgid "Evaluation modules."
+msgstr "Модули для оценивания."
+
+#: trac/templates/about.html:45
+msgid "About Trac"
+msgstr "О Trac"
+
+#: trac/templates/about.html:46
+msgid ""
 "Trac is a web-based software project management and bug/issue\n"
 "        tracking system emphasizing ease of use and low ceremony.\n"
 "        It provides an integrated Wiki, an interface to version control\n"
@@ -1882,7 +1977,7 @@ msgstr ""
 "        версий, а также ряд удобных способов быть в курсе событий\n"
 "        и изменений в проекте."
 
-#: trac/templates/about.html:36
+#: trac/templates/about.html:52
 msgid ""
 "Trac is distributed under the modified BSD License.[1:]\n"
 "        The complete text of the license can be found\n"
@@ -1894,11 +1989,11 @@ msgstr ""
 "        [2:онлайн],\n"
 "        а также в файле [3:COPYING], включенном в дистрибутив."
 
-#: trac/templates/about.html:41
+#: trac/templates/about.html:57
 msgid "python powered"
 msgstr "Работает под управлением Python"
 
-#: trac/templates/about.html:44
+#: trac/templates/about.html:60
 msgid ""
 "Please visit the Trac open source project:\n"
 "        [1:http://trac.edgewall.org/]"
@@ -1906,7 +2001,7 @@ msgstr ""
 "Пожалуйста, посетите сайт проекта с открытым кодом Trac: \n"
 "        [1:http://trac.edgewall.org/]"
 
-#: trac/templates/about.html:46
+#: trac/templates/about.html:62
 #, fuzzy
 msgid ""
 "Copyright © 2003-2012\n"
@@ -1915,24 +2010,24 @@ msgstr ""
 "Авторские права © 2003-2011\n"
 "        [1:Edgewall Software]"
 
-#: trac/templates/about.html:54
+#: trac/templates/about.html:70
 msgid "System Information"
 msgstr "Системная информация"
 
-#: trac/templates/about.html:64
+#: trac/templates/about.html:80
 msgid "Installed Plugins"
 msgstr "Установленные плагины:"
 
-#: trac/templates/about.html:72 trac/templates/error.html:192
+#: trac/templates/about.html:88 trac/templates/error.html:192
 #: trac/web/main.py:638
 msgid "N/A"
 msgstr "Н/Д"
 
-#: trac/templates/about.html:83
+#: trac/templates/about.html:99
 msgid "Section"
 msgstr "Раздел"
 
-#: trac/templates/about.html:85 trac/templates/error.html:160
+#: trac/templates/about.html:101 trac/templates/error.html:160
 msgid "Value"
 msgstr "Значение"
 
@@ -2177,9 +2272,9 @@ msgstr "Добавлено"
 msgid "Removed"
 msgstr "Удалено"
 
-#: trac/templates/diff_view.html:70 trac/ticket/api.py:282
+#: trac/templates/diff_view.html:70 trac/ticket/api.py:285
 #: trac/versioncontrol/templates/changeset.html:204
-#: trac/versioncontrol/templates/revisionlog.html:79 trac/wiki/admin.py:213
+#: trac/versioncontrol/templates/revisionlog.html:79 trac/wiki/admin.py:207
 msgid "Modified"
 msgstr "Изменено"
 
@@ -2360,7 +2455,7 @@ msgid "Change history"
 msgstr "История изменений"
 
 #: trac/templates/history_view.html:28 trac/ticket/admin.py:440
-#: trac/ticket/api.py:262
+#: trac/ticket/api.py:265
 msgid "Version"
 msgstr "Версия"
 
@@ -2516,7 +2611,7 @@ msgstr "Ни один компонент не выбран."
 msgid "The selected components have been removed."
 msgstr "Выбранные компоненты удалены."
 
-#: trac/ticket/admin.py:240 trac/ticket/api.py:260
+#: trac/ticket/admin.py:240 trac/ticket/api.py:263
 #: trac/ticket/templates/milestone_view.html:10
 #: trac/ticket/templates/milestone_view.html:23
 msgid "Milestone"
@@ -2626,7 +2721,7 @@ msgstr "Возможные значения"
 msgid "Invalid up/down value: %(value)s"
 msgstr "Неправильное up/down значение: %(value)s"
 
-#: trac/ticket/admin.py:791 trac/ticket/api.py:252
+#: trac/ticket/admin.py:791 trac/ticket/api.py:255
 msgid "Priority"
 msgstr "Приоритет"
 
@@ -2634,7 +2729,7 @@ msgstr "Приоритет"
 msgid "Priorities"
 msgstr "Приоритеты"
 
-#: trac/ticket/admin.py:797 trac/ticket/api.py:250
+#: trac/ticket/admin.py:797 trac/ticket/api.py:253
 msgid "Resolution"
 msgstr "Решение"
 
@@ -2642,7 +2737,7 @@ msgstr "Решение"
 msgid "Resolutions"
 msgstr "Решения"
 
-#: trac/ticket/admin.py:803 trac/ticket/api.py:253
+#: trac/ticket/admin.py:803 trac/ticket/api.py:256
 msgid "Severity"
 msgstr "Серьёзность"
 
@@ -2667,49 +2762,49 @@ msgstr "<number> должен быть числом"
 msgid "Ticket #%(num)s and all associated data removed."
 msgstr "Карточка #%(num)s и все связанные данные удалены."
 
-#: trac/ticket/api.py:226
+#: trac/ticket/api.py:228
 msgid "Project ID"
 msgstr "ID проекта"
 
-#: trac/ticket/api.py:230
+#: trac/ticket/api.py:233
 msgid "Summary"
 msgstr "Краткое описание"
 
-#: trac/ticket/api.py:233 trac/ticket/templates/ticket.html:362
+#: trac/ticket/api.py:236 trac/ticket/templates/ticket.html:362
 msgid "Reporter"
 msgstr "Докладчик"
 
-#: trac/ticket/api.py:249
+#: trac/ticket/api.py:252
 msgid "Status"
 msgstr "Состояние"
 
-#: trac/ticket/api.py:251 trac/versioncontrol/admin.py:113
+#: trac/ticket/api.py:254 trac/versioncontrol/admin.py:113
 #: trac/versioncontrol/templates/admin_repositories.html:125
 msgid "Type"
 msgstr "Тип"
 
-#: trac/ticket/api.py:270
+#: trac/ticket/api.py:273
 msgid "Keywords"
 msgstr "Ключевые слова"
 
-#: trac/ticket/api.py:273
+#: trac/ticket/api.py:276
 msgid "Cc"
 msgstr "Копия"
 
-#: trac/ticket/api.py:278
+#: trac/ticket/api.py:281
 msgid "Created"
 msgstr "Создано"
 
-#: trac/ticket/api.py:469
+#: trac/ticket/api.py:477
 msgid "Attachment"
 msgstr "Вложение"
 
-#: trac/ticket/api.py:599
+#: trac/ticket/api.py:607
 #, python-format
 msgid "Comment %(cnum)s for Ticket #%(id)s"
 msgstr "Комментарий %(cnum)s для карточки #%(id)s"
 
-#: trac/ticket/api.py:620
+#: trac/ticket/api.py:628
 #, python-format
 msgid "Ticket #%(shortname)s"
 msgstr "Карточка #%(shortname)s"
@@ -2898,94 +2993,94 @@ msgstr ""
 msgid "Query filter requires field name"
 msgstr "Для фильтра запроса необходимо имя поля"
 
-#: trac/ticket/query.py:350
+#: trac/ticket/query.py:351
 #, python-format
 msgid "Page %(page)s is beyond the number of pages in the query"
 msgstr "Номер страницы %(page)s больше количества страниц в запросе"
 
-#: trac/ticket/query.py:652
+#: trac/ticket/query.py:653
 #, python-format
 msgid "Invalid ticket id list: %(value)s"
 msgstr "Неверный список идентификаторов карточек: %(value)s"
 
-#: trac/ticket/query.py:752 trac/ticket/query.py:760
+#: trac/ticket/query.py:753 trac/ticket/query.py:761
 msgid "contains"
 msgstr "содержит"
 
-#: trac/ticket/query.py:753 trac/ticket/query.py:761
+#: trac/ticket/query.py:754 trac/ticket/query.py:762
 msgid "doesn't contain"
 msgstr "не содержит"
 
-#: trac/ticket/query.py:754
+#: trac/ticket/query.py:755
 msgid "begins with"
 msgstr "начинается с"
 
-#: trac/ticket/query.py:755
+#: trac/ticket/query.py:756
 msgid "ends with"
 msgstr "заканчивается на"
 
-#: trac/ticket/query.py:756 trac/ticket/query.py:764 trac/ticket/query.py:768
+#: trac/ticket/query.py:757 trac/ticket/query.py:765 trac/ticket/query.py:769
 msgid "is"
 msgstr "совпадает с"
 
-#: trac/ticket/query.py:757 trac/ticket/query.py:765 trac/ticket/query.py:769
+#: trac/ticket/query.py:758 trac/ticket/query.py:766 trac/ticket/query.py:770
 msgid "is not"
 msgstr "не совпадает с"
 
-#: trac/ticket/query.py:772
+#: trac/ticket/query.py:773
 msgid "equal"
 msgstr "равно"
 
-#: trac/ticket/query.py:773
+#: trac/ticket/query.py:774
 msgid "not equal"
 msgstr "не равно"
 
-#: trac/ticket/query.py:774
+#: trac/ticket/query.py:775
 msgid "greater"
 msgstr "больше"
 
-#: trac/ticket/query.py:775
+#: trac/ticket/query.py:776
 msgid "greater or equal"
 msgstr "больше или равно"
 
-#: trac/ticket/query.py:776
+#: trac/ticket/query.py:777
 msgid "less"
 msgstr "меньше"
 
-#: trac/ticket/query.py:777
+#: trac/ticket/query.py:778
 msgid "less or equal"
 msgstr "меньше или равно"
 
-#: trac/ticket/query.py:817 trac/ticket/query.py:823
+#: trac/ticket/query.py:818 trac/ticket/query.py:824
 msgid "Ticket"
 msgstr "Карточка"
 
-#: trac/ticket/query.py:883 trac/ticket/report.py:475
+#: trac/ticket/query.py:886 trac/ticket/report.py:475
 #, python-format
 msgid "Page %(num)d"
 msgstr "Страница %(num)d"
 
-#: trac/ticket/query.py:960 trac/ticket/report.py:312
+#: trac/ticket/query.py:963 trac/ticket/report.py:312
 #: trac/ticket/report.py:639 trac/ticket/web_ui.py:132
 #: trac/timeline/web_ui.py:221 trac/versioncontrol/web_ui/log.py:299
 msgid "RSS Feed"
 msgstr "RSS-лента"
 
-#: trac/ticket/query.py:962 trac/ticket/report.py:314
+#: trac/ticket/query.py:965 trac/ticket/report.py:314
 #: trac/ticket/report.py:641 trac/ticket/web_ui.py:128
 msgid "Comma-delimited Text"
 msgstr "Текст, разделённый запятыми"
 
-#: trac/ticket/query.py:964 trac/ticket/report.py:316
+#: trac/ticket/query.py:967 trac/ticket/report.py:316
 #: trac/ticket/report.py:643 trac/ticket/web_ui.py:130
 msgid "Tab-delimited Text"
 msgstr "Текст, разделённый табуляцией"
 
-#: trac/ticket/query.py:986 trac/ticket/report.py:79
+#: trac/ticket/query.py:989 trac/ticket/report.py:79
 msgid "View Tickets"
 msgstr "Просмотр карточек"
 
-#: trac/ticket/query.py:1013
+#: trac/ticket/query.py:1016
 #, python-format
 msgid ""
 "Can not change \"project\" param to \"%(ppid)s\" for project #%(rpid)s report"
@@ -2993,33 +3088,33 @@ msgstr ""
 "Невозможно изменить параметр \"project\" в значение \"%(ppid)s\" для отчета "
 "по проекту #%(rpid)s"
 
-#: trac/ticket/query.py:1235 trac/ticket/query.py:1246
+#: trac/ticket/query.py:1238 trac/ticket/query.py:1249
 #: trac/ticket/report.py:144
 msgid "Custom Query"
 msgstr "Произвольный запрос"
 
-#: trac/ticket/query.py:1245 trac/ticket/report.py:134
+#: trac/ticket/query.py:1248 trac/ticket/report.py:134
 #: trac/ticket/report.py:135 trac/ticket/report.py:137
 #: trac/ticket/templates/report_list.html:10
 #: trac/ticket/templates/report_list.html:15
 msgid "Available Reports"
 msgstr "Доступные отчёты"
 
-#: trac/ticket/query.py:1336
+#: trac/ticket/query.py:1339
 #, python-format
 msgid "[Error: %(error)s]"
 msgstr "[Ошибка: %(error)s]"
 
-#: trac/ticket/query.py:1471
+#: trac/ticket/query.py:1474
 msgid "No results"
 msgstr "Результатов нет"
 
-#: trac/ticket/query.py:1489
+#: trac/ticket/query.py:1492
 #, python-format
 msgid "%(groupvalue)s %(groupname)s tickets matching %(query)s"
 msgstr "%(groupvalue)s %(groupname)s карточки, отвечающие %(query)s"
 
-#: trac/ticket/query.py:1512
+#: trac/ticket/query.py:1515
 #, python-format
 msgid "%(groupvalue)s %(groupname)s tickets:"
 msgstr "%(groupvalue)s %(groupname)s карточки:"
@@ -3411,7 +3506,7 @@ msgid "%(field)s: Bad conversion \"%(original)s\" -> \"%(used)s\""
 msgstr ""
 "%(field)s: Неверное конвертирование значения \"%(original)s\" -> \"%(used)s\""
 
-#: trac/ticket/web_ui.py:1198
+#: trac/ticket/web_ui.py:1198 trac/user/acct_mgr_integration.py:307
 #, python-format
 msgid "User with username %(username)s does not exists"
 msgstr "Пользователь с именем %(username)s не существует"
@@ -3889,7 +3984,7 @@ msgstr "Сохранить отчёт"
 msgid "Report"
 msgstr "Отчёт"
 
-#: trac/ticket/templates/report_list.html:24 trac/wiki/admin.py:213
+#: trac/ticket/templates/report_list.html:24 trac/wiki/admin.py:207
 msgid "Title"
 msgstr "Название"
 
@@ -5886,33 +5981,33 @@ msgstr " %(title)s уже существует"
 msgid "  %(title)s is already up to date"
 msgstr " %(title)s уже обновлён"
 
-#: trac/wiki/admin.py:175 trac/wiki/admin.py:281
+#: trac/wiki/admin.py:175 trac/wiki/admin.py:275
 #, python-format
 msgid "  %(page)s imported from %(filename)s"
 msgstr "  %(page)s импортирована из %(filename)s"
 
-#: trac/wiki/admin.py:213
+#: trac/wiki/admin.py:207
 msgid "Edits"
 msgstr "Правки"
 
-#: trac/wiki/admin.py:219 trac/wiki/web_ui.py:325
+#: trac/wiki/admin.py:213 trac/wiki/web_ui.py:325
 msgid "A new name is mandatory for a rename."
 msgstr "Новое имя является обязательным для переименования."
 
-#: trac/wiki/admin.py:221
+#: trac/wiki/admin.py:215
 msgid "The new name is invalid."
 msgstr "Новое имя недопустимо."
 
-#: trac/wiki/admin.py:225 trac/wiki/web_ui.py:332
+#: trac/wiki/admin.py:219 trac/wiki/web_ui.py:332
 #, python-format
 msgid "The page %(name)s already exists."
 msgstr "Страница %(name)s уже существует."
 
-#: trac/wiki/admin.py:239
+#: trac/wiki/admin.py:233
 msgid "Deleted pages"
 msgstr "Удалённые страницы"
 
-#: trac/wiki/admin.py:259
+#: trac/wiki/admin.py:253
 #, python-format
 msgid "'%(name)s' is not a directory"
 msgstr "\"%(name)s\" не является каталогом"
