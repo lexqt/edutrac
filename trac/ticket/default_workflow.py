@@ -339,10 +339,10 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
             if operation == 'reset_workflow':
                 updated['status'] = 'new'
             elif operation == 'del_owner':
-                updated['owner'] = ''
+                updated['owner'] = None
             elif operation == 'set_owner':
                 newowner = req.args.get('action_%s_reassign_owner' % action,
-                                    this_action.get('set_owner', '').strip())
+                                    this_action.get('set_owner'))
                 # If there was already an owner, we get a list, [new, old],
                 # but if there wasn't we just get new.
                 if type(newowner) == list:
@@ -353,11 +353,11 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
             elif operation == 'set_previous_owner':
                 updated['owner'] = self.get_previous_owner(ticket)
             elif operation == 'del_resolution':
-                updated['resolution'] = ''
+                updated['resolution'] = None
             elif operation == 'set_resolution':
                 newresolution = req.args.get('action_%s_resolve_resolution' % \
                                              action,
-                                this_action.get('set_resolution', '').strip())
+                                this_action.get('set_resolution'))
                 updated['resolution'] = newresolution
 
             # leave_status is just a no-op here, so we don't look for it.
