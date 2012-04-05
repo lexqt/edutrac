@@ -54,9 +54,8 @@ class ProjectManagement(Component):
         # check for manager
         query = '''
             SELECT 1
-            FROM project_managers pm JOIN users u
-            ON u.id=pm.user_id
-            WHERE u.username=%s
+            FROM manager_projects
+            WHERE username=%s
             LIMIT 1
         '''
         cursor.execute(query, (username,))
