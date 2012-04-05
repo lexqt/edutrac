@@ -76,6 +76,7 @@ class TicketNotifyEmail(NotifyEmail):
 
     def __init__(self, env):
         NotifyEmail.__init__(self, env)
+        self.extra_recipients = []
         self.prev_cc = []
         ambiguous_char_width = env.config.get('notification',
                                               'ambiguous_char_width',
@@ -102,6 +103,8 @@ class TicketNotifyEmail(NotifyEmail):
         self.ticket = ticket
         self.modtime = modtime
         self.newticket = newticket
+
+        self.extra_recipients = getattr(ticket, 'notified_recipients', [])
 
         changes_body = ''
         self.reporter = ''
@@ -393,6 +396,9 @@ class TicketNotifyEmail(NotifyEmail):
                 torecipients = [r for r in torecipients if r and r != updater]
         elif updater:
             torecipients.append(updater)
+
+        for rcpt in self.extra_recipients:
+            torecipients.append(rcpt)
 
         return (torecipients, ccrecipients)
 

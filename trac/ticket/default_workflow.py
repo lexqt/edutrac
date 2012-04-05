@@ -316,6 +316,8 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         else:
             if status != '*':
                 hints.append(_("Next status will be '%(name)s'", name=status))
+        if 'notify_owner' in operations:
+            hints.append(_('Owner will be notified by email'))
         if 'comment' in operations:
             hints.append(_("Leave comment without any change to ticket"))
         return (this_action['name'], tag(*control), '. '.join(hints))
@@ -361,6 +363,13 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                 updated['resolution'] = newresolution
 
             # leave_status is just a no-op here, so we don't look for it.
+
+        # safe, not a side effect
+        if 'notify_owner' in this_action['operations']:
+            owner = updated.get('owner') or ticket['owner']
+            if owner:
+                ticket.notified_recipients = [owner]
+
         return updated
 
     def apply_action_side_effects(self, req, ticket, action):
