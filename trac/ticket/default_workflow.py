@@ -94,10 +94,11 @@ def load_workflow_config_snippet(config, filename):
         config.set('ticket-workflow', name, value)
 
 
-class IValidOwnerProvider(Interface):
+class IValidUserProvider(Interface):
 
-    def get_owners(req, ticket, next_action_obj):
+    def get_users(self, req, ticket, next_action_obj):
         """Returns a list of valid usernames for set_owner ticket actions"""
+        raise NotImplementedError
 
 
 class ConfigurableTicketWorkflow(Component):
@@ -114,8 +115,8 @@ class ConfigurableTicketWorkflow(Component):
         doc="""Ordered list of workflow controllers to use for ticket actions
             (''since 0.11'').""")
 
-    valid_owner_provider = ExtensionOption('ticket-workflow-config', 'valid_owner_provider',
-                                           IValidOwnerProvider, 'OwnerGroupProvider')
+    valid_user_provider = ExtensionOption('ticket-workflow-config', 'valid_user_provider',
+                                           IValidUserProvider, 'UserGroupProvider')
     
     implements(ITicketActionController, IEnvironmentSetupParticipant, ITicketManipulator)
 
@@ -319,7 +320,23 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         if 'notify_owner' in operations:
             hints.append(_('Owner will be notified by email'))
         if 'comment' in operations:
-            hints.append(_("Leave comment without any change to ticket"))
+            comment_hint = _("Leave comment without any change to ticket")
+            if this_action.get('notify'):
+                users = self.valid_user_provider.get_users(req, ticket, this_action)
+                if users:
+                    id = 'action_%s_comment_notify' % action
+                    selected_user = req.args.get(id, ticket['reporter'])
+                    control.append(tag.select(
+                                            [tag.option(x, value=x,
+                                             selected=(x == selected_user or None))
+                                             for x in users],
+                                        id=id, name=id))
+                    hints.append(comment_hint +
+                                     _(' and notify only selected user'))
+                else:
+                    hints.append(comment_hint)
+            else:
+                hints.append(comment_hint)
         return (this_action['name'], tag(*control), '. '.join(hints))
 
     def get_ticket_changes(self, req, ticket, action):
@@ -361,14 +378,20 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
                                              action,
                                 this_action.get('set_resolution'))
                 updated['resolution'] = newresolution
+            elif operation == 'comment' and this_action.get('notify'):
+                id = 'action_%s_comment_notify' % action
+                selected_user = req.args.get(id)
+                if selected_user:
+                    ticket.notify_target_recipients = [selected_user]
 
             # leave_status is just a no-op here, so we don't look for it.
 
         # safe, not a side effect
+        # after for loop because owner may be updated
         if 'notify_owner' in this_action['operations']:
             owner = updated.get('owner') or ticket['owner']
             if owner:
-                ticket.notified_recipients = [owner]
+                ticket.notify_extra_recipients = [owner]
 
         return updated
 
@@ -388,16 +411,24 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         if 'comment' in ops:
             if ticket._old:
                 res.append((None, _('You can not change ticket fields for "comment" operation.')))
+                self.log.info('FOOOOOOOOOL: %s', ticket._old)
+            if action.get('notify'):
+                users = self.valid_user_provider.get_users(req, ticket, action)
+                id = 'action_%s_comment_notify' % action['alias']
+                selected_user = req.args.get(id)
+                if users and selected_user not in users:
+                    res.append((None, '"%s" is not valid user to notify for "%s" action'
+                                        % (selected_user, action['alias'])))
         if 'set_owner' in ops:
             owners = self.get_valid_owners(req, ticket, action)
             if ticket['owner'] not in owners:
                 res.append(('owner', '"%s" is not valid owner for "%s" action'
-                                    % (ticket['owner'], action['name'])))
+                                    % (ticket['owner'], action['alias'])))
         if 'set_resolution' in ops:
             resolutions = self.get_valid_resolutions(action, ticket)
             if ticket['resolution'] not in resolutions:
                 res.append(('resolution', '"%s" is not valid resolution for "%s" action'
-                                    % (ticket['resolution'], action['name'])))
+                                    % (ticket['resolution'], action['alias'])))
         return res
 
     # Internal methods
@@ -516,14 +547,9 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         if action.has_key('set_owner'):
             owners = [x.strip() for x in
                       action['set_owner'].split(',')]
-#        elif self.config.getbool('ticket', 'restrict_owner'):
-#            perm = PermissionSystem(self.env)
-#            owners = perm.get_users_with_permission('TICKET_MODIFY')
-#            owners.sort()
-#        else:
-#            owners = None
         else:
-            owners = self.valid_owner_provider.get_owners(req, ticket, action)
+            owners = self.valid_user_provider.get_users(req, ticket, action,
+                                                        'owner_realm', 'owner_perm_group')
         return owners
 
     def get_valid_resolutions(self, action, ticket):
@@ -541,23 +567,23 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
             return res[1]
 
 
-class OwnerGroupProviderError(TracError):
 
-    title = 'Ticket Workflow config error'
+class UserGroupProvider(Component):
 
-
-class OwnerGroupProvider(Component):
-
-    implements(IValidOwnerProvider)
+    implements(IValidUserProvider)
 
     default_owner_realms = ListOption('ticket-workflow-config', 'default_owner_realm', 'team', sep='|',
         doc="""Default owner realms for set_owner ticket actions.""", switcher=True)
 
-    def get_owners(self, req, ticket, next_action):
-        realms = action_getlist(next_action, 'owner_realm', sep='|')
+    def get_users(self, req, ticket, next_action, realm_key=None, perm_group_key=None):
+        if realm_key is None:
+            realm_key = 'user_realm'
+        if perm_group_key is None:
+            perm_group_key = 'user_perm_group'
+        realms = action_getlist(next_action, realm_key, sep='|')
         if not realms:
             realms = self.default_owner_realms.project(ticket.pid)
-        perm_groups = action_getlist(next_action, 'owner_perm_group', sep='|')
+        perm_groups = action_getlist(next_action, perm_group_key, sep='|')
 
         users = UserManagement(self.env).get_project_users(ticket.pid, realms, perm_groups)
         return sorted(users)

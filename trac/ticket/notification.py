@@ -104,7 +104,8 @@ class TicketNotifyEmail(NotifyEmail):
         self.modtime = modtime
         self.newticket = newticket
 
-        self.extra_recipients = getattr(ticket, 'notified_recipients', [])
+        self.extra_recipients  = getattr(ticket, 'notify_extra_recipients', [])
+        self.target_recipients = getattr(ticket, 'notify_target_recipients', [])
 
         changes_body = ''
         self.reporter = ''
@@ -343,6 +344,9 @@ class TicketNotifyEmail(NotifyEmail):
         return template.generate(**data).render('text', encoding=None).strip()
 
     def get_recipients(self, tktid):
+        if self.target_recipients:
+            return (self.target_recipients, ())
+
         notify_reporter = self.config.getbool('notification',
                                               'always_notify_reporter')
         notify_owner = self.config.getbool('notification',
