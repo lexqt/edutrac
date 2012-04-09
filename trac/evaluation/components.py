@@ -14,16 +14,17 @@ class TicketStatistics(Component):
     # ITicketChangeListener methods
 
     def ticket_created(self, tkt):
-        self.ticket_changed(tkt, '', tkt['reporter'], None)
+        self.watch_ticket(tkt, is_new=True)
 
     def ticket_changed(self, tkt, comment, author, old_values):
-        assert tkt.pid is not None
-        is_new = old_values is None
-        self.update_ticket(tkt, is_new=is_new)
+        self.watch_ticket(tkt)
 
     def ticket_deleted(self, tkt):
         # values from ticket_evaluation removed ON CASCADE
         pass
+
+    def watch_ticket(self, tkt, is_new=False):
+        self.update_ticket(tkt, is_new=is_new)
 
     #
 
