@@ -268,7 +268,7 @@ class TicketFieldFilters(Component):
     def validate_ticket(self, req, ticket, action):
         self.env.log.debug('TicketFieldFilters: Validating ticket #%s' % ticket.id)
         res = []
-        syllabus_id = ProjectManagement(self.env).get_project_syllabus(ticket.pid)
+        syllabus_id = ticket.syllabus_id
 
         fields = self.fields.syllabus(syllabus_id)
         conf   = self.get_fields_config(syllabus_id)

@@ -190,14 +190,19 @@ class ITicketChangeListener(Interface):
     when tickets are created, modified, or deleted."""
 
     def ticket_created(ticket):
-        """Called when a ticket is created."""
+        """Called when a ticket is created.
+        
+        If ticket values are changed after processing by all listeners,
+        a new round on ticket_changed will be started."""
 
     def ticket_changed(ticket, comment, author, old_values):
         """Called when a ticket is modified.
         
         `old_values` is a dictionary containing the previous values of the
         fields that have changed.
-        """
+
+        If ticket values are changed after processing by all listeners,
+        a new round on ticket_changed will be started."""
 
     def ticket_deleted(ticket):
         """Called when a ticket is deleted."""

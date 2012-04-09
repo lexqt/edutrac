@@ -1262,6 +1262,7 @@ class TicketModule(Component):
 
         # Custom validation rules
         sid = self.pm.get_project_syllabus(ticket.pid)
+        ticket.syllabus_id = sid
         for manipulator in self.ticket_manipulators(sid):
             for field, message in manipulator.validate_ticket(req, ticket, action):
                 valid = False

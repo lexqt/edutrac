@@ -52,6 +52,8 @@ class Ticket(object):
     # Fields that must not be modified directly by the user
     protected_fields = ('resolution', 'status', 'time', 'changetime', 'project_id')
 
+    MAX_CHANGE_ROUNDS = 10
+
     @staticmethod
     def id_is_valid(num):
         return 0 < int(num) <= 1L << 31
@@ -278,12 +280,17 @@ class Ticket(object):
         self._old = {}
 
         sid = ProjectManagement(self.env).get_project_syllabus(self.pid)
+        self.syllabus_id = sid
         for listener in TicketSystem(self.env).change_listeners(sid):
             listener.ticket_created(self)
 
+        if self._old:
+            self.env.log.debug('Ticket.save_changes call after insert. Changed fields: %s', self._old.keys())
+            self.save_changes('trac', 'Changed automatically on create.', when, db, '1')
+
         return self.id
 
-    def save_changes(self, author=None, comment=None, when=None, db=None, cnum=''):
+    def save_changes(self, author=None, comment=None, when=None, db=None, cnum='', _change_round=1):
         """
         Store ticket changes in the database. The ticket must already exist in
         the database.  Returns False if there were no changes to save, True
@@ -292,6 +299,10 @@ class Ticket(object):
         The `db` argument is deprecated in favor of `with_transaction()`.
         """
         assert self.exists, 'Cannot update a new ticket'
+
+        if _change_round > self.MAX_CHANGE_ROUNDS:
+            raise TracError('Too many Ticket.save_changes recursive calls.'
+                            ' Please, check your configuration and enabled listener plugins.')
 
         if 'cc' in self.values:
             self['cc'] = _fixup_cc_list(self.values['cc'])
@@ -322,6 +333,7 @@ class Ticket(object):
                     # we just leave the owner as is.
                     pass
 
+        upd = {'cnum': None}
         @self.env.with_transaction(db)
         def do_save(db):
             cursor = db.cursor()
@@ -346,6 +358,7 @@ class Ticket(object):
                     except ValueError:
                         num += 1
                 comment_num = str(num + 1)
+            upd['cnum'] = comment_num
 
             # store fields
             custom_fields = [n for n, f in self.fields.iteritems() if f.get('custom')]
@@ -375,30 +388,50 @@ class Ticket(object):
                 else:
                     cursor.execute("UPDATE ticket SET %s=%%s WHERE id=%%s" 
                                    % name, (val, self.id))
+                cursor.execute('''
+                    SELECT 1
+                    FROM ticket_change
+                    WHERE ticket=%s AND time=%s AND field=%s
+                    ''', (self.id, when_ts, name))
+                if cursor.fetchone():
+                    cursor.execute('''
+                        UPDATE ticket_change
+                        SET oldvalue=%s, newvalue=%s
+                        WHERE ticket=%s AND time=%s AND field=%s
+                    ''', (oldval, val, self.id, when_ts, name))
+                else:
+                    cursor.execute("""
+                        INSERT INTO ticket_change
+                            (ticket,time,author,field,oldvalue,newvalue)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        """, (self.id, when_ts, author, name, oldval, val))
+
+            if _change_round == 1:
+                # always save comment, even if empty 
+                # (numbering support for timeline)
                 cursor.execute("""
                     INSERT INTO ticket_change
                         (ticket,time,author,field,oldvalue,newvalue)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (self.id, when_ts, author, name, oldval, val))
-
-            # always save comment, even if empty 
-            # (numbering support for timeline)
-            cursor.execute("""
-                INSERT INTO ticket_change
-                    (ticket,time,author,field,oldvalue,newvalue)
-                VALUES (%s,%s,%s,'comment',%s,%s)
-                """, (self.id, when_ts, author, comment_num, comment))
-
-            cursor.execute("UPDATE ticket SET changetime=%s WHERE id=%s",
-                           (when_ts, self.id))
+                    VALUES (%s,%s,%s,'comment',%s,%s)
+                    """, (self.id, when_ts, author, comment_num, comment))
+    
+                cursor.execute("UPDATE ticket SET changetime=%s WHERE id=%s",
+                               (when_ts, self.id))
 
         old_values = self._old
         self._old = {}
         self.values['changetime'] = when
 
         sid = ProjectManagement(self.env).get_project_syllabus(self.pid)
+        self.syllabus_id = sid
         for listener in TicketSystem(self.env).change_listeners(sid):
             listener.ticket_changed(self, comment, author, old_values)
+
+        if self._old:
+            _change_round += 1
+            self.env.log.debug('Ticket.save_changes round #%d. Changed fields: %s', _change_round, self._old.keys())
+            self.save_changes(author, None, when, db, upd['cnum'], _change_round)
+
         return True
 
     def get_from_changelog(self, field, old=None, new=None, limit=1):
@@ -494,6 +527,7 @@ class Ticket(object):
                            (self.id,))
 
         sid = ProjectManagement(self.env).get_project_syllabus(self.pid)
+        self.syllabus_id = sid
         for listener in TicketSystem(self.env).change_listeners(sid):
             listener.ticket_deleted(self)
 

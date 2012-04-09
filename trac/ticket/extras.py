@@ -3,7 +3,6 @@ from trac.perm import IPermissionRequestor, IPermissionPolicy
 from trac.ticket.api import ITicketManipulator
 from trac.ticket.model import Ticket
 from trac.config import ListOption, IntOption
-from trac.project.api import ProjectManagement
 from trac.util.translation import _
 
 
@@ -29,8 +28,7 @@ class ExtraTicketControl(Component):
         pass
 
     def validate_ticket(self, req, ticket, action):
-        pid = ticket.pid
-        syllabus_id = ProjectManagement(self.env).get_project_syllabus(pid)
+        syllabus_id = ticket.syllabus_id
         res = []
 
         busy_statuses = self.busy_statuses.syllabus(syllabus_id)
