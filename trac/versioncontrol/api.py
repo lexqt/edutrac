@@ -334,6 +334,7 @@ class RepositoryManager(Component):
     def __init__(self):
         self._cache = {}
         self._lock = threading.Lock()
+        self._cache_lock = threading.Lock()
         self._connectors = None
         self._all_repo_cache = {
             'project': {},
@@ -639,20 +640,22 @@ class RepositoryManager(Component):
 
     def get_all_repositories(self, project_id=None, syllabus_id=None):
         """Return a dictionary of repository information, indexed by name."""
-        if not self._get_all_repo_cache(project_id, syllabus_id):
-            all_repositories = {}
-            for provider in self.providers:
-                for reponame, info in provider.get_repositories(project_id, syllabus_id) or []:
-                    if reponame in all_repositories:
-                        self.log.warn("Discarding duplicate repository '%s'",
-                                      reponame)
-                    else:
-                        info['name'] = reponame
-                        if 'id' not in info:
-                            info['id'] = self.get_repository_id(reponame)
-                        all_repositories[reponame] = info
-            self._set_all_repo_cache(all_repositories, project_id, syllabus_id)
-        return self._get_all_repo_cache(project_id, syllabus_id)
+        with self._cache_lock:
+            if not self._get_all_repo_cache(project_id, syllabus_id):
+                all_repositories = {}
+                for provider in self.providers:
+                    for reponame, info in provider.get_repositories(project_id, syllabus_id) or []:
+                        if reponame in all_repositories:
+                            self.log.warn("Discarding duplicate repository '%s'",
+                                          reponame)
+                        else:
+                            info['name'] = reponame
+                            if 'id' not in info:
+                                info['id'] = self.get_repository_id(reponame)
+                            all_repositories[reponame] = info
+                self._set_all_repo_cache(all_repositories, project_id, syllabus_id)
+                return all_repositories
+            return self._get_all_repo_cache(project_id, syllabus_id)
     
     def get_real_repositories(self, project_id=None, syllabus_id=None):
         """Return a set of all real repositories (i.e. excluding aliases)."""
