@@ -37,7 +37,7 @@ from trac.timeline.api import ITimelineEventProvider
 from trac.util import as_bool, get_reporter_id
 from trac.util.compat import any
 from trac.util.datefmt import format_datetime, from_utimestamp, \
-                              to_utimestamp, utc
+                              to_utimestamp, utc, parse_date_only
 from trac.util.text import exception_to_unicode, obfuscate_email_address, \
                            shorten_line, to_unicode
 from trac.util.presentation import separated
@@ -447,9 +447,7 @@ class TicketModule(Component):
 
         data['fields'] = fields
 
-        add_stylesheet(req, 'common/css/ticket.css')
-        add_script(req, 'common/js/folding.js')
-        Chrome(self.env).add_wiki_toolbars(req)
+        self._prepare_chrome_resources(req, data, is_new=True)
         return 'ticket.html', data, None
 
     def _process_ticket_request(self, req):
@@ -639,10 +637,7 @@ class TicketModule(Component):
                         add_ticket_link('next', int(next_id))
                 break
 
-        add_stylesheet(req, 'common/css/ticket.css')
-        add_script(req, 'common/js/folding.js')
-        Chrome(self.env).add_wiki_toolbars(req)
-        Chrome(self.env).add_auto_preview(req)
+        self._prepare_chrome_resources(req, data)
 
         # Add registered converters
         for conversion in mime.get_supported_conversions('trac.ticket.Ticket'):
@@ -656,6 +651,26 @@ class TicketModule(Component):
                      _("Back to Query"))
 
         return 'ticket.html', data, None
+
+    def _prepare_chrome_resources(self, req, data, is_new=False):
+        add_stylesheet(req, 'common/css/ticket.css')
+        add_script(req, 'common/js/folding.js')
+        Chrome(self.env).add_wiki_toolbars(req)
+        if not is_new:
+            Chrome(self.env).add_auto_preview(req)
+        ui_datepicker = False
+        for f in data['fields']:
+            if f['type'] == 'date':
+                ui_datepicker = True
+                break
+        if ui_datepicker:
+            add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.core.css')
+            add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.datepicker.css')
+            add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.theme.css')
+            add_script(req, 'common/js/jquery.ui.core.js')
+            add_script(req, 'common/js/jquery.ui.widget.js')
+            add_script(req, 'common/js/jquery.ui.datepicker.js')
+            add_script(req, 'common/js/datepicker.js')
 
     def _prepare_data(self, req, ticket, absurls=False):
         return {'ticket': ticket,
@@ -1167,13 +1182,15 @@ class TicketModule(Component):
                 continue
             type_ = field['type']
             value = ticket[name]
-            if type_ in ('int', 'id', 'float'):
+            if type_ in ('int', 'id', 'float', 'date'):
                 try:
                     if form_fields.get(name):
                         if type_ in ('int', 'id'):
                             func = validators.Int.to_python
                         elif type_ == 'float':
                             func = validators.Number.to_python
+                        elif type_ == 'date':
+                            func = parse_date_only
 
                         if name in workflow_changes and workflow_changes[name]['by'] != 'user':
                             used_value = workflow_changes[name]['old']
@@ -1189,8 +1206,12 @@ class TicketModule(Component):
                                                field=field['label'], original=orig_value, used=used_value))
                             valid = False
                 except formencode.Invalid, e:
+                    add_warning(req, u'{0}: {1}. '.format(
+                                    field['label'], e.msg) + _('Field type: %(type)s', type=type_))
+                    valid = False
+                except TracError, e:
                     add_warning(req, u'{0}: {1}'.format(
-                                    field['label'], e.msg))
+                                    field['label'], e.message))
                     valid = False
             if value:
                 if type_ == 'username':
@@ -1203,12 +1224,14 @@ class TicketModule(Component):
                     continue
                 if name in ticket.values and name in ticket._old:
                     if value not in field['options']:
-                        add_warning(req, '"%s" is not a valid value for '
-                                    'the %s field.' % (value, name))
+                        add_warning(req,
+                                _('"%(val)s" is not a valid value for the %(name)s field',
+                                  val=value, name=field['label']))
                         valid = False
-            elif not field.get('optional', False):
-                add_warning(req, _("field %(name)s must be set",
-                                   name=name))
+            elif not field.get('optional', False) and \
+                (value is None or value == ''):
+                add_warning(req, _('Field "%(name)s" can not be empty',
+                                   name=field['label']))
                 valid = False
 
         # Validate description length
@@ -1243,6 +1266,8 @@ class TicketModule(Component):
             for field, message in manipulator.validate_ticket(req, ticket, action):
                 valid = False
                 if field:
+                    if field in ticket.fields:
+                        field = ticket.fields[field]['label']
                     add_warning(req, _("The ticket field '%(field)s' is "
                                        "invalid: %(message)s",
                                        field=field, message=message))

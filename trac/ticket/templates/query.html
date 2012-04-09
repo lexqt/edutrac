@@ -59,7 +59,7 @@
                   <tbody py:for="field_name in field_names" py:if="field_name in constraints"
                          py:with="field = fields[field_name]; n_field_name = clause_pre + field_name;
                                   constraint = constraints[field_name];
-                                  multiline = field.type in ('select', 'text', 'textarea', 'time')">
+                                  multiline = field.type in ('select', 'text', 'textarea', 'time', 'date')">
                     <tr py:for="constraint_idx, constraint_value in enumerate(constraint['values'])"
                         class="${field_name}" py:if="multiline or constraint_idx == 0">
                       <td>
@@ -70,7 +70,7 @@
                       <py:choose test="constraint_idx">
                         <py:when test="0">
                           <th scope="row"><label id="label_${n_field_name}">${fields[field_name].label}</label></th>
-                          <td py:if="field.type not in ('radio', 'checkbox', 'time')" class="mode">
+                          <td py:if="field.type not in ('radio', 'checkbox', 'time', 'date')" class="mode">
                             <select name="${n_field_name}_mode">
                               <option py:for="mode in modes[field.type]" value="$mode.value"
                                 selected="${mode.value == constraint.mode and 'selected' or None}">$mode.name</option>
@@ -78,11 +78,11 @@
                           </td>
                         </py:when>
                         <py:otherwise><!--! not the first line of a multiline constraint -->
-                          <th colspan="${field.type == 'time' and 1 or 2}"><label>or</label></th>
+                          <th colspan="${field.type in ('time', 'date') and 1 or 2}"><label>or</label></th>
                         </py:otherwise>
                       </py:choose>
 
-                      <td class="filter" colspan="${field.type in ('radio', 'checkbox', 'time') and 2 or None}"
+                      <td class="filter" colspan="${field.type in ('radio', 'checkbox', 'time', 'date') and 2 or None}"
                           py:choose="">
 
                         <py:when test="field.type == 'select'">
@@ -117,14 +117,16 @@
                           <input type="text" name="${n_field_name}" value="$constraint_value" size="42" />
                         </py:when>
                         
-                        <py:when test="field.type == 'time'"
+                        <py:when test="field.type in ('time', 'date')"
                                  py:with="(start, end) = '..' in constraint_value and constraint_value.split('..', 1)
-                                                         or (constraint_value, '')">
+                                                         or (constraint_value, '');
+                                          class_ = 'datepicker-field' if field.type == 'date' else None;
+                                          width  = 14 if field.type == 'time' else 10">
                           <i18n:msg>
                             <label>between</label>
-                            <input type="text" name="${n_field_name}" value="$start" size="14" />
+                            <input type="text" name="${n_field_name}" value="$start" size="$width" class="$class_" />
                             <label>and</label>
-                            <input type="text" name="${n_field_name}_end" value="$end" size="14" />
+                            <input type="text" name="${n_field_name}_end" value="$end" size="$width" class="$class_" />
                           </i18n:msg>
                         </py:when>
                       </td>

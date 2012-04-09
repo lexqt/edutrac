@@ -28,7 +28,7 @@ import sys
 import urlparse
 
 from trac.core import Interface, TracError
-from trac.util import get_last_traceback, md5, unquote
+from trac.util import get_last_traceback, md5, unquote, as_bool
 from trac.util.datefmt import http_date, localtz
 from trac.util.text import empty, to_unicode
 from trac.util.translation import _
@@ -103,15 +103,22 @@ class _RequestArgs(dict):
             val = [val]
         return val
 
-    def getint(self, name):
+    def getint(self, name, default=None):
         """Return int(value) or None
         """
         if not self.get(name):
-            return None
+            return default
         try:
             return int(self[name])
         except ValueError:
             return None
+
+    def getbool(self, name, default=None):
+        """Return as_bool(value) or None
+        """
+        if not self.has_key(name):
+            return default
+        return as_bool(self[name])
 
     def getlistitem(self, listname, key):
         """Return value or None

@@ -269,7 +269,10 @@ ${ticket.description}</textarea>
                     py:if="can_modify or can_create"
                     py:with="fullrow = len(row) == 1">
                   <py:for each="idx, field in enumerate(row)"
-                          py:with="value = ticket.get_value_or_default(field.name)">
+                          py:with="
+                            value = ticket.get_value_or_default(field.name);
+                            fvalue = format_field(value, field);
+                          ">
                     <th class="col${idx + 1}" py:if="idx == 0 or not fullrow">
                       <label for="field-${field.name}" py:if="field"
                              py:strip="field.type == 'radio'" i18n:msg="field">${
@@ -320,9 +323,13 @@ ${value}</textarea>
                                 title="Space or comma delimited email addresses and usernames are accepted."
                                 name="field_${field.name}" value="${value}" />
                             </span>
+                            <!--! Date fields -->
+                            <input py:when="field.type == 'date'" type="text" id="field-${field.name}"
+                              title="Date in YYYY-MM-DD format" class="datepicker-field"
+                              name="field_${field.name}" value="${fvalue}" />
                             <!--! All the other text input fields -->
                             <input py:otherwise="" type="text" id="field-${field.name}"
-                              name="field_${field.name}" value="${value}" />
+                              name="field_${field.name}" value="${fvalue}" />
                           </py:choose>
                         </py:otherwise>
                       </py:choose>

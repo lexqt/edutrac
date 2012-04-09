@@ -49,7 +49,7 @@ Arguments:
           <py:if test="field">
             <py:choose test="">
               <py:when test="'rendered' in field">${field.rendered}</py:when>
-              <py:otherwise>${ticket[field.name]}</py:otherwise>
+              <py:otherwise>${format_field(ticket[field.name], field)}</py:otherwise>
             </py:choose>
           </py:if>
         </td>

@@ -17,6 +17,7 @@
 import copy
 import re
 import threading
+from datetime import date, datetime
 
 from genshi.builder import tag
 
@@ -26,12 +27,85 @@ from trac.core import *
 from trac.perm import IPermissionRequestor, PermissionCache, PermissionSystem
 from trac.resource import IResourceManager
 from trac.util import Ranges
+from trac.util.datefmt import from_utimestamp, parse_date_only, to_utimestamp,\
+                            format_date, utc
 from trac.util.text import shorten_line
 from trac.util.translation import _, N_, gettext
 from trac.wiki import IWikiSyntaxProvider, WikiParser
 
 from trac.project.api import ProjectManagement
 from trac.user.api import UserManagement
+
+
+
+def convert_type_value(type_, value):
+    if value is None:
+        return value
+    if type_ in ('id', 'int'):
+        func = int
+    elif type_ == 'float':
+        func = float
+    elif type_ == 'time':
+        func = from_utimestamp
+    elif type_ == 'date':
+        if isinstance(value, date):
+            return value
+        if isinstance(value, datetime):
+            return value.date()
+        func = parse_date_only
+    elif type_ == 'checkbox':
+        func = lambda v: bool(int(v))
+    else:
+        func = unicode
+    try:
+        value = func(value)
+        return value
+    except (ValueError, TypeError, TracError):
+        return None
+
+def convert_field_value(type_or_field, value, default=None):
+    '''Convert field value according to its type'''
+    if not type_or_field:
+        return value
+    if isinstance(type_or_field, dict):
+        field = type_or_field
+        type_ = field['type']
+        default = field.get('value')
+    else:
+        type_ = type_or_field
+    if value == '':
+        value = None
+    val = convert_type_value(type_, value)
+    if val is None:
+        return default
+    return val
+
+def prepare_field_value(value, field):
+    '''Prepare field value to save in DB'''
+    custom = field.get('custom')
+    type_  = field['type']
+    if value is None or value == '':
+        return None
+    if custom:
+        return unicode(value)
+    elif type_ == 'time':
+        return to_utimestamp(value)
+    elif type_ == 'date':
+        return format_date(value, format='iso8601', tzinfo=utc)
+    return value
+
+def format_field_value(value, field):
+    '''Prepare field value to render'''
+    if value is None:
+        return ''
+    if not field:
+        return value
+    custom = field.get('custom')
+    type_  = field['type']
+    if type_ == 'date':
+        return format_date(value, format='iso8601', tzinfo=utc)
+    else:
+        return unicode(value)
 
 
 
@@ -166,12 +240,15 @@ class IMilestoneChangeListener(Interface):
 class TicketFieldsStore(object):
     """Project/syllabus dependent store for ticket fields.
 
-    Each field can has some parameters ([value] - value to use when param not set):
-    `name`: should be valid python identifier
-            and can not be one of reserved names (TicketSystem.reserved_field_names)
-    `type`: field type (id, int, float, text, textarea, username, time, checkbox, select, radio)
-    `label`: field label to render in templates
-    `optional`: is field optional
+    Each field can has some parameters.
+        Conventions:
+            [value] - value to use when param not set
+            (+) - value is defined always
+    `name` (+): should be valid python identifier
+                and can not be one of reserved names (TicketSystem.reserved_field_names)
+    `type` (+): field type (id, int, float, text, textarea, username, time, checkbox, select, radio)
+    `label` (+): field label to render in templates
+    `optional` (+): is field optional
     `auto` (base only): field is out of user control,
             its value automatically filled by the system [False]
     `skip`: field is not rendered in ticket templates [False]
@@ -347,7 +424,8 @@ class TicketFieldsStore(object):
             func = config.getint
         else:
             func = config.get
-        return func(name + '.value', None)
+        val = func(name + '.value', None)
+        return convert_type_value(type_, val)
 
     def _prepare_selects_fields(self, selects, id_kwargs):
         fields = []

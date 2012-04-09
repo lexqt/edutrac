@@ -216,6 +216,9 @@ _ISO_8601_RE = re.compile(r'''
     (Z?(?:([-+])?(\d\d):?(\d\d)?)?)?$       # timezone
     ''', re.VERBOSE)
 
+_ISO_8601_DATE_RE = re.compile(
+    r'(\d\d\d\d)(?:-?(\d\d)(?:-?(\d\d))?)')
+
 def parse_date(text, tzinfo=None, hint='date'):
     tzinfo = tzinfo or localtz
     dt = None
@@ -271,6 +274,38 @@ def parse_date(text, tzinfo=None, hint='date'):
                           'Try a date closer to present time.', date=text),
                           _('Invalid Date'))
     return dt
+
+
+def parse_date_only(text):
+    d = None
+    text = text.strip()
+    # normalize ISO time
+    match = _ISO_8601_DATE_RE.match(text)
+    if match:
+        try:
+            g = match.groups()
+            year  = int(g[0])
+            month = int(g[1] or 1)
+            day   = int(g[2] or 1)
+            d = date(year, month, day)
+            return d
+        except ValueError:
+            pass
+
+    for format in ['%x', '%b %d, %Y']:
+        try:
+            dt = datetime.strptime(text, format)
+            d = dt.date()
+            return d
+        except ValueError:
+            continue
+        dt = _parse_relative_time(text, localtz)
+        if dt:
+            return dt.date()
+
+    raise TracError(_('"%(date)s" is an invalid date, or the date format '
+                      'is not known. Try "%(hint)s" instead.', 
+                      date=text, hint='YYYY-MM-DD'), _('Invalid Date'))
 
 
 _REL_TIME_RE = re.compile(

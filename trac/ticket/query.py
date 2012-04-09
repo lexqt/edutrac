@@ -29,11 +29,10 @@ from trac.core import *
 from trac.db import get_column_names
 from trac.mimeview.api import Mimeview, IContentConverter, Context
 from trac.resource import Resource
-from trac.ticket.api import TicketSystem
-from trac.ticket.model import convert_field_value
+from trac.ticket.api import TicketSystem, convert_field_value
 from trac.util import Ranges, as_bool, as_int
 from trac.util.datefmt import format_datetime, from_utimestamp, parse_date, \
-                              to_timestamp, to_utimestamp, utc
+                              to_timestamp, to_utimestamp, utc, parse_date_only
 from trac.util.presentation import Paginator
 from trac.util.text import empty, shorten_line, quote_query_string
 from trac.util.translation import _, tag_
@@ -517,7 +516,15 @@ class Query(object):
         def get_timestamp(date):
             if date:
                 try:
-                    return to_utimestamp(parse_date(date, tzinfo))
+                    return to_utimestamp(parse_date(date, tzinfo, hint='datetime'))
+                except TracError, e:
+                    errors.append(unicode(e))
+            return None
+
+        def get_date(text):
+            if text:
+                try:
+                    return parse_date_only(text)
                 except TracError, e:
                     errors.append(unicode(e))
             return None
@@ -534,39 +541,56 @@ class Query(object):
             '>~': '>=',
             '<~': '<='
         }
+        map_cast = {
+            'int': 'INTEGER',
+            'float': 'NUMERIC',
+            'date': 'DATE',
+        }
 
         def get_constraint_sql(name, value, mode, neg):
-            if name not in custom_fields:
-                col = 't.' + name
-            else:
-                col = '%s.value' % db.quote(name)
             value = value[len(mode) + neg:]
             field = self.all_fields[name]
             type_ = field['type']
             default = field.get('value')
+            custom = field.get('custom')
+
+            if custom:
+                col = '%s.value' % db.quote(name)
+            else:
+                col = 't.' + name
 
             if type_ == 'id':
                 return ("%s%s=%%s" % (col, neg and '!' or ''),
                         (int(value), ))
 
-            if type_ == 'time':
+            if type_ in ('time', 'date'):
                 if '..' in value:
                     (start, end) = [each.strip() for each in 
                                     value.split('..', 1)]
                 else:
-                    (start, end) = (value.strip(), '')
-                col_cast = db.cast(col, 'int64')
-                start = get_timestamp(start)
-                end = get_timestamp(end)
+                    (start, end) = (value.strip(), None)
+                if type_ == 'time':
+                    cast_type = 'int64'
+                    conv_func = get_timestamp
+                elif type_ == 'date':
+                    cast_type = 'date'
+                    conv_func = get_date
+                col_cast = db.cast(col, cast_type)
+                start = conv_func(start)
+                end   = conv_func(end)
+                neg = neg and 'NOT ' or ''
                 if start is not None and end is not None:
-                    return ("%s(%s>=%%s AND %s<%%s)" % (neg and 'NOT ' or '',
-                                                        col_cast, col_cast),
-                            (start, end))
+                    if start == end:
+                        return ('%s(%s=%%s)' % (neg, col_cast), (start,))
+                    else:
+                        return ("%s(%s>=%%s AND %s<%%s)" % (neg, col_cast, col_cast),
+                                (start, end))
+
                 elif start is not None:
-                    return ("%s%s>=%%s" % (neg and 'NOT ' or '', col_cast),
+                    return ("%s%s>=%%s" % (neg, col_cast),
                             (start, ))
                 elif end is not None:
-                    return ("%s%s<%%s" % (neg and 'NOT ' or '', col_cast),
+                    return ("%s%s<%%s" % (neg, col_cast),
                             (end, ))
                 else:
                     return None
@@ -591,11 +615,8 @@ class Query(object):
 
             op = None
             if type_ in ('int', 'float'):
-                if type_ == 'int':
-                    cast = 'INTEGER'
-                else:
-                    cast = 'NUMERIC'
-                col = 'CAST(%s AS %s)' % (col, cast)
+                if custom and type_ in map_cast:
+                    col = db.cast(col, map_cast[type_])
                 if mode in _map_compare_op:
                     if neg:
                         neg = False
@@ -716,10 +737,13 @@ class Query(object):
             else:
                 col = 't.' + name
             desc = desc and ' DESC' or ''
-            # FIXME: This is a somewhat ugly hack.  Can we also have the
-            #        column type for this?  If it's an integer, we do first
-            #        one, if text, we do 'else'
-            if name == 'id' or name in self.time_fields:
+
+            field = self.all_fields[name]
+            type_ = field['type']
+            custom = field.get('custom')
+            if type_ in ('id', 'int', 'float', 'time'):
+                if custom and type_ in map_cast:
+                    col = db.cast(col, map_cast[type_])
                 sql.append("COALESCE(%s,0)=0%s," % (col, desc))
             else:
                 sql.append("COALESCE(%s,'')=''%s," % (col, desc))
@@ -1065,6 +1089,22 @@ class QueryModule(Component):
                     else:
                         del clause[field]
 
+        fields = TicketSystem(self.env).get_ticket_fields(pid=pid)
+        has_date = False
+        for n, f in fields.iteritems():
+            if f['type'] == 'date':
+                has_date = True
+                break
+
+        if has_date:
+            add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.core.css')
+            add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.datepicker.css')
+            add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.theme.css')
+            add_script(req, 'common/js/jquery.ui.core.js')
+            add_script(req, 'common/js/jquery.ui.widget.js')
+            add_script(req, 'common/js/jquery.ui.datepicker.js')
+            add_script(req, 'common/js/datepicker.js')
+
         cols = args.get('col')
         if isinstance(cols, basestring):
             cols = [cols]
@@ -1157,7 +1197,7 @@ class QueryModule(Component):
                     mode = req.args.get(k + '_mode')
                     if mode:
                         vals = [mode + x for x in vals]
-                    if fields[field]['type'] == 'time':
+                    if fields[field]['type'] in ('time', 'date'):
                         ends = req.args.getlist(k + '_end')
                         if ends:
                             vals = [start + '..' + end 

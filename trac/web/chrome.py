@@ -745,6 +745,8 @@ class Chrome(Component):
         from trac.user.api import UserManagement
         user_management = UserManagement(self.env)
 
+        from trac.ticket.api import format_field_value
+
         d.update({
             'context': req and Context.from_request(req) or None,
             'Resource': Resource,
@@ -767,6 +769,7 @@ class Chrome(Component):
             'authorinfo_short': self.authorinfo_short,
             'format_author': partial(self.format_author, req),
             'format_emails': self.format_emails,
+            'format_field': format_field_value,
             'get_systeminfo': self.env.get_systeminfo,
 
             # Date/time formatting
@@ -902,6 +905,8 @@ class Chrome(Component):
     def cc_list(self, cc_field):
         """Split a CC: value in a list of addresses."""
         ccs = []
+        if not cc_field:
+            return ccs
         for cc in re.split(r'[;,]', cc_field):
             cc = cc.strip()
             if cc:

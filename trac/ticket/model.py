@@ -23,9 +23,9 @@ from datetime import datetime
 from trac.attachment import Attachment
 from trac.core import TracError
 from trac.resource import Resource, ResourceNotFound
-from trac.ticket.api import TicketSystem
+from trac.ticket.api import TicketSystem, convert_field_value, convert_type_value, \
+                            prepare_field_value
 from trac.util import embedded_numbers, partition
-from trac.util.text import empty
 from trac.util.datefmt import from_utimestamp, to_utimestamp, utc, utcmax
 from trac.util.translation import _
 
@@ -39,55 +39,12 @@ __all__ = ['Ticket', 'Type', 'Status', 'Resolution', 'Priority', 'Severity',
 def _fixup_cc_list(cc_value):
     """Fix up cc list separators and remove duplicates."""
     cclist = []
-    for cc in re.split(r'[;,\s]+', cc_value):
+    for cc in re.split(r'[;,\s]+', cc_value or ''):
         if cc and cc not in cclist:
             cclist.append(cc)
     return ', '.join(cclist)
 
 
-def convert_type_value(type_, value):
-    if value is None:
-        return value
-    if type_ in ('id', 'int'):
-        func = int
-    elif type_ == 'float':
-        func = float
-    elif type_ == 'time':
-        func = from_utimestamp
-    elif type_ == 'checkbox':
-        func = lambda v: bool(int(v))
-    else:
-        func = unicode
-    try:
-        value = func(value)
-        return value
-    except (ValueError, TypeError):
-        return None
-
-def convert_field_value(type_or_field, value, default=None):
-    if not type_or_field:
-        return value
-    if isinstance(type_or_field, dict):
-        field = type_or_field
-        type_ = field['type']
-        default = field.get('value')
-    else:
-        type_ = type_or_field
-    val = convert_type_value(type_, value)
-    if val is None:
-        return default
-    return val
-
-def prepare_field_value(value, custom, type_):
-#    custom = field.get('custom')
-#    type_  = field['type']
-    if value is None:
-        return value
-    if custom:
-        return unicode(value)
-    elif type_ == 'time':
-        return to_utimestamp(value)
-    return value
 
 
 class Ticket(object):
@@ -246,13 +203,12 @@ class Ticket(object):
 
     def populate(self, values):
         """Populate the ticket with 'suitable' values from a dictionary"""
-        field_names = self.fields.keys()
-        for name in [name for name in values.keys() if name in field_names]:
+        for name in [name for name in values.keys() if name in self.fields]:
             value = values.get(name)
-            self[name] = convert_field_value(self.fields[name], value)
+            self[name] = value
 
         # We have to do an extra trick to catch unchecked checkboxes
-        for name in [name for name in values.keys() if name[9:] in field_names
+        for name in [name for name in values.keys() if name[9:] in self.fields
                      and name.startswith('checkbox_')]:
             if name[9:] not in values:
                 self[name[9:]] = False
@@ -290,11 +246,10 @@ class Ticket(object):
             if f.get('virtual'):
                 continue
             if name in values:
-                type_ = f['type']
                 custom = f.get('custom')
                 val = values[name]
 
-                values[name] = prepare_field_value(val, custom, type_)
+                values[name] = prepare_field_value(val, f)
 
                 if custom:
                     custom_fields.append(name)
@@ -400,11 +355,11 @@ class Ticket(object):
                 oldval = self._old[name]
                 custom = name in custom_fields
                 type_ = self.fields[name]['type']
-                val = prepare_field_value(val, custom, type_)
-                oldval = prepare_field_value(oldval, custom, type_)
+                val = prepare_field_value(val, self.fields[name])
+                oldval = prepare_field_value(oldval, self.fields[name])
                 if name in custom_fields:
                     cursor.execute("""
-                        SELECT * FROM ticket_custom 
+                        SELECT 1 FROM ticket_custom 
                         WHERE ticket=%s and name=%s
                         """, (self.id, name))
                     if cursor.fetchone():

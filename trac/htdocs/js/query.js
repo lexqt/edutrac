@@ -76,9 +76,10 @@
     }
     
     // Convenience function for creating an <input type="text">
-    function createText(name, size) {
-      return $($.htmlFormat('<input type="text" name="$1" size="$2">', 
-                            name, size));
+    function createText(name, size, class_) {
+      class_ = class_ || ''
+      return $($.htmlFormat('<input type="text" name="$1" size="$2" class="$3">', 
+                            name, size, class_));
     }
     
     // Convenience function for creating an <input type="checkbox">
@@ -141,7 +142,7 @@
         th.append(createLabel(property.label)
                     .attr("id", "label_" + propertyName));
       } else {
-        th.attr("colSpan", property.type == "time"? 1: 2)
+        th.attr("colSpan", (property.type == "time" || property.type == "date")? 1: 2)
           .append(createLabel(_("or")))
       }
       tr.append(th);
@@ -149,7 +150,7 @@
       var td = $("<td>");
       var focusElement = null;
       if (property.type == "radio" || property.type == "checkbox"
-          || property.type == "time") {
+          || property.type == "time" || property.type == "date") {
         td.addClass("filter").attr("colSpan", 2);
         if (property.type == "radio") {
           for (var i = 0; i < property.options.length; i++) {
@@ -165,12 +166,21 @@
             .append(" ")
             .append(createRadio(propertyName, "0", propertyName + "_off"))
             .append(" ").append(createLabel(_("no"), propertyName + "_off"));
-        } else if (property.type == "time") {
-          focusElement = createText(propertyName, 14)
+        } else if (property.type == "time" || property.type == "date") {
+          if (property.type == "time") {
+              width = 14
+              class_ = ''
+          } else if (property.type == "date") {
+              width = 10
+              class_ = 'datepicker-field'
+          }
+          focusElement = createText(propertyName, width, class_)
+          focusElementEnd = createText(propertyName + "_end", width, class_)
           td.append(createLabel(_("between"))).append(" ")
             .append(focusElement).append(" ")
             .append(createLabel(_("and"))).append(" ")
-            .append(createText(propertyName + "_end", 14));
+            .append(focusElementEnd);
+          $('.datepicker-field', td).datepicker_field()
         }
         tr.append(td);
       } else {
