@@ -17,6 +17,7 @@
 # Author: Eli Carter
 
 import pkg_resources
+import threading
 
 from genshi.builder import tag
 
@@ -122,9 +123,8 @@ class ConfigurableTicketWorkflow(Component):
 
     def __init__(self, *args, **kwargs):
         self.pm = ProjectManagement(self.env)
-#        self.log.debug('action controllers for ticket workflow (global): %r' % 
-#                [c.__class__.__name__ for c in self.action_controllers(None)])
         self._actions = {} # syllabus_id: actions
+        self._actions_lock = threading.Lock()
 
     # IEnvironmentSetupParticipant methods
 
@@ -535,12 +535,13 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
             sid = self.pm.get_project_syllabus(pid)
         if sid is not None:
             sid = int(sid)
-            if sid not in self._actions:
-                syl_config = self.configs.syllabus(sid)
-                actions = get_workflow_config(syl_config)
-                actions = self._prepare_actions(actions)
-                self._actions[sid] = actions
-            return self._actions[sid]
+            with self._actions_lock:
+                if sid not in self._actions:
+                    syl_config = self.configs.syllabus(sid)
+                    actions = get_workflow_config(syl_config)
+                    actions = self._prepare_actions(actions)
+                    self._actions[sid] = actions
+                return self._actions[sid]
         raise TypeError('You must specify one of id''s or ticket argument')
 
     def get_valid_owners(self, req, ticket, action):
