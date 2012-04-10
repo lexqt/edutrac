@@ -551,7 +551,7 @@ class TicketModule(Component):
             # things.
             from trac.ticket.default_workflow import ConfigurableTicketWorkflow
             action_obj = ConfigurableTicketWorkflow(self.env
-                            ).get_actions(ticket=ticket, req=req)[action]
+                            ).get_actions(ticket=ticket, req=req).get(action)
             valid = self._validate_ticket(req, ticket, form_fields, field_changes, action_obj, not valid) and valid
             if 'preview' not in req.args:
                 if valid:
@@ -1675,7 +1675,7 @@ class TicketModule(Component):
 
     def _render_property_changes(self, req, ticket, fields, resource_new=None):
         for field, changes in fields.iteritems():
-            new, old = changes['new'], changes['old']
+            new, old = changes['new'] or '', changes['old'] or ''
             rendered = self._render_property_diff(req, ticket, field, old, new,
                                                   resource_new)
             if rendered:

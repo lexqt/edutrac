@@ -467,6 +467,7 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
             # exists, as no other action can then change its state. (#5307)
             actions['_reset'] = {
                 'default': 0,
+                'alias': '_reset',
                 'name': 'reset',
                 'newstate': 'new',
                 'oldstates': [],  # Will not be invoked unless needed
