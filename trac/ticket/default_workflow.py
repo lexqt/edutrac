@@ -74,6 +74,9 @@ def parse_workflow_config(rawactions):
         attributes['permissions'] = as_list('permissions')
         # Normalize the oldstates
         attributes['oldstates'] = as_list('oldstates')
+        # Normalize include/exclude types
+        attributes['includetype'] = map(lambda s: s.lower(), as_list('includetype'))
+        attributes['excludetype'] = map(lambda s: s.lower(), as_list('excludetype'))
     return actions
 
 def get_workflow_config(config):
@@ -178,22 +181,36 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
         # once and get really confused.
         status = ticket._old.get('status', ticket['status']) or 'new'
 
+        ticket_type = (ticket.get_value_or_default('type') or '').lower()
         ticket_perm = req.perm(ticket.resource)
-        allowed_actions = []
-        for action_name, action_info in self.get_actions(ticket=ticket, req=req).items():
+
+        all_actions = self.get_actions(ticket=ticket, req=req).items()
+        filtered_actions = []
+
+        for action_name, action_info in all_actions:
             oldstates = action_info['oldstates']
             if oldstates == ['*'] or status in oldstates:
-                # This action is valid in this state.  Check permissions.
+                # This action is valid in this state. Check permissions.
                 required_perms = action_info['permissions']
-                if self._is_action_allowed(ticket_perm, required_perms):
-                    allowed_actions.append((action_info['default'],
-                                            action_name))
+                if not self._is_action_allowed(ticket_perm, required_perms):
+                    continue
+                # Check action include/exclude type
+                # Check order: Exclude, Include
+                exclude = action_info['excludetype']
+                include = action_info['includetype']
+                if ticket_type in exclude:
+                    continue
+                # if include is empty list, consider there are no restrictions
+                elif include and ticket_type not in include:
+                    continue
+                filtered_actions.append((action_info['default'],
+                                        action_name))
         if not (status in ['new', 'closed'] or \
                     status in self.get_available_statuses(ticket.pid)) \
                 and 'TICKET_ADMIN' in ticket_perm:
             # State no longer exists - add a 'reset' action if admin.
-            allowed_actions.append((0, '_reset'))
-        return allowed_actions
+            filtered_actions.append((0, '_reset'))
+        return filtered_actions
 
     def _is_action_allowed(self, ticket_perm, required_perms):
         if not required_perms:
