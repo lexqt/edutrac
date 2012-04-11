@@ -145,7 +145,7 @@ class Ticket(object):
 
             # Fetch the standard ticket fields
             std_fields = [n for n, f in self.fields.iteritems()
-                          if not f.get('custom') and not f.get('virtual')]
+                          if not f.get('custom')]
             cursor = db.cursor()
             cursor.execute("SELECT %s FROM ticket WHERE id=%%s"
                            % ','.join(std_fields), (tkt_id,))
@@ -159,13 +159,27 @@ class Ticket(object):
             value = row[i]
             self.values[field] = convert_field_value(self.fields[field], value)
 
+        custom_fields  = []
+        virtual_fields = {}
+        for n, f in self.fields.iteritems():
+            if not f.get('custom'):
+                continue
+            if not f.get('virtual'):
+                custom_fields.append(n)
+            else:
+                virtual_fields[n] = f
+
         # Fetch custom fields if available
-        custom_fields = [n for n, f in self.fields.iteritems() if f.get('custom') and not f.get('virtual')]
         cursor.execute("SELECT name,value FROM ticket_custom WHERE ticket=%s",
                        (tkt_id,))
         for name, value in cursor:
             if name in custom_fields:
                 self.values[name] = convert_field_value(self.fields[name], value)
+        # Set defaults for virtual fields
+        for name, field in virtual_fields.iteritems():
+            default = field.get('value')
+            default = convert_type_value(field['type'], default)
+            self.values.setdefault(name, default)
 
     def __getitem__(self, name):
         return self.values.get(name)
@@ -364,27 +378,29 @@ class Ticket(object):
             custom_fields = [n for n, f in self.fields.iteritems() if f.get('custom')]
 
             for name in self._old.keys():
+                field = self.fields[name]
                 val = self[name]
                 oldval = self._old[name]
-                custom = name in custom_fields
-                type_ = self.fields[name]['type']
-                val = prepare_field_value(val, self.fields[name])
-                oldval = prepare_field_value(oldval, self.fields[name])
+                val = prepare_field_value(val, field)
+                oldval = prepare_field_value(oldval, field)
                 if name in custom_fields:
-                    cursor.execute("""
-                        SELECT 1 FROM ticket_custom 
-                        WHERE ticket=%s and name=%s
-                        """, (self.id, name))
-                    if cursor.fetchone():
+                    # Do not save virtual fields in ticket_custom
+                    # but do save in ticket_change
+                    if not field.get('virtual'):
                         cursor.execute("""
-                            UPDATE ticket_custom SET value=%s
-                            WHERE ticket=%s AND name=%s
-                            """, (val, self.id, name))
-                    else:
-                        cursor.execute("""
-                            INSERT INTO ticket_custom (ticket,name,value)
-                            VALUES(%s,%s,%s)
-                            """, (self.id, name, val))
+                            SELECT 1 FROM ticket_custom 
+                            WHERE ticket=%s and name=%s
+                            """, (self.id, name))
+                        if cursor.fetchone():
+                            cursor.execute("""
+                                UPDATE ticket_custom SET value=%s
+                                WHERE ticket=%s AND name=%s
+                                """, (val, self.id, name))
+                        else:
+                            cursor.execute("""
+                                INSERT INTO ticket_custom (ticket,name,value)
+                                VALUES(%s,%s,%s)
+                                """, (self.id, name, val))
                 else:
                     cursor.execute("UPDATE ticket SET %s=%%s WHERE id=%%s" 
                                    % name, (val, self.id))
@@ -567,6 +583,8 @@ class Ticket(object):
 
             custom_fields = set(n for n, f in self.fields.iteritems()
                                 if f.get('custom'))
+            virtual_fields = set(n for n in custom_fields
+                                 if self.fields[n].get('virtual'))
 
             # Find modified fields and their previous value
             cursor.execute("""
@@ -574,7 +592,7 @@ class Ticket(object):
                 WHERE ticket=%s AND time=%s
                 """, (self.id, ts))
             fields = [(field, old, new) for field, old, new in cursor
-                      if field != 'comment' and not field.startswith('_')]
+                      if field != 'comment' and not field.startswith('_') and not field in virtual_fields]
             for field, oldvalue, newvalue in fields:
                 # Find the next change
                 cursor.execute("""

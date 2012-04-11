@@ -261,6 +261,10 @@ class TicketFieldsStore(object):
     `hide_view`: do not show field in view templates [False]
     `value`: default value for field [None]
     `order` (custom only): field sort priority (defines field order in template)
+    `virtual` (custom only): field value is not stored in DB [False]
+            Virtual fields can be usefull as temporary storage to set other fields
+            e.g. 'hours' field in TimingAndEstimation plugin.
+            We need changelog for this fields, but do not need their current values.
 
     Parameters for type=select and type=radio:
     `model_class` (base only): python class corresponding to field
@@ -401,7 +405,7 @@ class TicketFieldsStore(object):
                 'value': self._get_type_value(config, type_, name),
                 'optional': config.getbool(name + '.optional', True),
             }
-            for param in ('hide_view',):
+            for param in ('hide_view', 'virtual'):
                 val = config.getbool(name + '.' + param, None)
                 if val is None:
                     continue
