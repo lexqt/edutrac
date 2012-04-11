@@ -444,7 +444,7 @@ class Ticket(object):
         conn = self.env.get_sa_connection()
         tab = self.env.get_sa_metadata().tables['ticket_change']
         q = tab.select().with_only_columns([tab.c.author, tab.c.oldvalue, tab.c.newvalue]).\
-            where(tab.c.field==field).order_by(tab.c.time.desc()).limit(limit)
+            where((tab.c.ticket==self.id) and (tab.c.field==field)).order_by(tab.c.time.desc()).limit(limit)
         for val, col in ((old, tab.c.oldvalue), (new, tab.c.newvalue)):
             if val is not None:
                 if isinstance(val, basestring):
