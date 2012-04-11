@@ -138,7 +138,10 @@ def unicode_unquote(value):
                 `unicode_quote`).
     :rtype: `unicode`
     """
-    return unquote(value).decode('utf-8')
+    value = unquote(value)
+    if isinstance(value, unicode):
+        return value
+    return value.decode('utf-8')
 
 
 def unicode_urlencode(params, safe=''):
