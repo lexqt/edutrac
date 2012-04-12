@@ -253,6 +253,7 @@ class Chrome(Component):
                IRequestHandler, ITemplateProvider, IWikiSyntaxProvider)
 
     navigation_contributors = ExtensionPoint(INavigationContributor)
+    navigation_contributors_syllabus = SyllabusExtensionPoint(INavigationContributor)
     template_providers = ExtensionPoint(ITemplateProvider)
     stream_filters = ExtensionPoint(ITemplateStreamFilter)
 
@@ -550,10 +551,19 @@ class Chrome(Component):
         # Logo image
         chrome['logo'] = self.get_logo_data(req.href, req.abs_href)
 
+        from trac.project.api import ProjectManagement
+        pm = ProjectManagement(self.env)
+        pid = pm.get_session_project(req, fail_on_none=False)
+        if pid is not None:
+            syllabus_id = pm.get_project_syllabus(pid)
+            navigation_contributors = self.navigation_contributors_syllabus(syllabus_id)
+        else:
+            navigation_contributors = self.navigation_contributors
+
         # Navigation links
         allitems = {}
         active = None
-        for contributor in self.navigation_contributors:
+        for contributor in navigation_contributors:
             try:
                 for category, name, text in \
                         contributor.get_navigation_items(req) or []:
