@@ -1280,7 +1280,7 @@ class Milestone(object):
                 INSERT INTO milestone (project_id,name,due,completed,description,weight) 
                 VALUES (%s,%s,%s,%s,%s,%s)
                 """, (self.pid, self.name, to_utimestamp(self.due),
-                      to_utimestamp(self.completed), self.description, self.weight))
+                      to_utimestamp(self.completed), self.description, self.weight or 0))
             self._to_old()
             TicketSystem(self.env).reset_ticket_fields(self.pid)
 

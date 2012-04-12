@@ -355,7 +355,7 @@ class MilestoneAdminPanel(TicketAdminPanel):
         yield ('milestone list', '',
                'Show milestones',
                None, self._do_list)
-        yield ('milestone add', '<name> [due]',
+        yield ('milestone add', '<pid> <name> [due]',
                'Add milestone',
                None, self._do_add)
         yield ('milestone rename', '<name> <newname>',
@@ -398,8 +398,9 @@ class MilestoneAdminPanel(TicketAdminPanel):
                      for m in model.Milestone.select(self.env)],
                     [_('Name'), _('Due'), _('Completed')])
     
-    def _do_add(self, name, due=None):
+    def _do_add(self, pid, name, due=None):
         milestone = model.Milestone(self.env)
+        milestone.pid = pid
         milestone.name = name
         if due is not None:
             milestone.due = parse_date(due, hint='datetime')
