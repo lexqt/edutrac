@@ -992,7 +992,7 @@ class LegacyAttachmentPolicy(Component):
                               'milestone': 'MILESTONE_DELETE'},
     }
 
-    def check_permission(self, action, username, resource, perm):
+    def check_permission(self, action, username, resource, perm, req):
         perm_map = self._perm_maps.get(action)
         if not perm_map or not resource or resource.realm != 'attachment':
             return

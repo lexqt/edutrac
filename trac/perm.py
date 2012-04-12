@@ -72,8 +72,9 @@ class IPermissionStore(Interface):
     """Extension point interface for components that provide storage and
     management of permissions."""
 
-    def get_user_permissions(username):
+    def get_user_permissions(username, pid=None):
         """Return all permissions for the user with the specified name.
+        And optionally for specified project ID.
         
         The permissions are returned as a dictionary where the key is the name
         of the permission, and the value is either `True` for granted
@@ -91,10 +92,10 @@ class IPermissionStore(Interface):
         The permissions are returned as a list of (subject, action)
         formatted tuples."""
 
-    def grant_permission(username, action):
+    def grant_permission(username, action, pid=None, syllabus_id=None):
         """Grant a user permission to perform an action."""
 
-    def revoke_permission(username, action):
+    def revoke_permission(username, action, pid=None, syllabus_id=None):
         """Revokes the permission of the given user to perform an action."""
 
 
@@ -111,7 +112,7 @@ class IPermissionGroupProvider(Interface):
 class IPermissionPolicy(Interface):
     """A security policy provider used for fine grained permission checks."""
 
-    def check_permission(action, username, resource, perm):
+    def check_permission(action, username, resource, perm, req=None):
         """Check that the action can be performed by username on the resource
 
         :param action: the name of the permission
@@ -123,6 +124,8 @@ class IPermissionPolicy(Interface):
         :param perm: the permission cache for that username and resource, 
                      which can be used for doing secondary checks on other
                      permissions. Care must be taken to avoid recursion.  
+        :param req: request object. Can be usefull for dynamic permissions.
+                    But can be None.
 
         :return: `True` if action is allowed, `False` if action is denied,
                  or `None` if indifferent. If `None` is returned, the next
@@ -159,7 +162,7 @@ class DefaultPermissionStore(Component):
 
     group_providers = ExtensionPoint(IPermissionGroupProvider)
 
-    def get_user_permissions(self, username):
+    def get_user_permissions(self, username, pid):
         """Retrieve the permissions for the given user and return them in a
         dictionary.
         
@@ -172,10 +175,28 @@ class DefaultPermissionStore(Component):
         for provider in self.group_providers:
             subjects.update(provider.get_permission_groups(username) or [])
 
+        args = []
+        q = 'SELECT username, action FROM permission'
+        if pid is not None:
+            syllabus_id = ProjectManagement(self.env).get_project_syllabus(pid)
+            q += '''
+                UNION
+                SELECT permgroup, action
+                FROM syllabus_permissions
+                WHERE syllabus_id=%s
+                UNION
+                SELECT username, action
+                FROM project_permissions
+                WHERE project_id=%s AND username=%s
+            '''
+            args.append(syllabus_id)
+            args.append(pid)
+            args.append(username)
+
         actions = set([])
         db = self.env.get_read_db()
         cursor = db.cursor()
-        cursor.execute("SELECT username,action FROM permission")
+        cursor.execute(q, args)
         rows = cursor.fetchall()
         while True:
             num_users = len(subjects)
@@ -219,24 +240,66 @@ class DefaultPermissionStore(Component):
         cursor.execute("SELECT username,action FROM permission")
         return [(row[0], row[1]) for row in cursor]
 
-    def grant_permission(self, username, action):
+    def grant_permission(self, username, action, pid, syllabus_id):
         """Grants a user the permission to perform the specified action."""
+        args = [username, action]
+        if pid is not None:
+            q = '''
+                INSERT INTO project_permissions
+                (username, action, project_id)
+                VALUES (%s, %s, %s)
+            '''
+            args.append(pid)
+            log = '(project #%s)' % pid
+        elif syllabus_id is not None:
+            q = '''
+                INSERT INTO syllabus_permissions
+                (permgroup, action, syllabus_id)
+                VALUES (%s, %s, %s)
+            '''
+            args.append(syllabus_id)
+            log = '(syllabus #%s)' % syllabus_id
+        else:
+            q = '''
+                INSERT INTO permission
+                (username, action)
+                VALUES (%s, %s)
+            '''
+            log = '(global)'
         @self.env.with_transaction()
         def do_grant(db):
             cursor = db.cursor()
-            cursor.execute("INSERT INTO permission VALUES (%s, %s)",
-                           (username, action))
-        self.log.info('Granted permission for %s to %s' % (action, username))
+            cursor.execute(q, args)
+        self.log.info('Granted permission for %s to %s %s' % (action, username, log))
 
-    def revoke_permission(self, username, action):
+    def revoke_permission(self, username, action, pid, syllabus_id):
         """Revokes a users' permission to perform the specified action."""
+        args = [username, action]
+        if pid is not None:
+            q = '''
+                DELETE FROM project_permissions
+                WHERE username=%s AND action=%s AND project_id=%s
+            '''
+            args.append(pid)
+            log = '(project #%s)' % pid
+        elif syllabus_id is not None:
+            q = '''
+                DELETE FROM syllabus_permissions
+                WHERE permgroup=%s AND action=%s AND syllabus_id=%s
+            '''
+            args.append(syllabus_id)
+            log = '(syllabus #%s)' % syllabus_id
+        else:
+            q = '''
+                DELETE FROM permission
+                WHERE username=%s AND action=%s
+            '''
+            log = '(global)'
         @self.env.with_transaction()
         def do_revoke(db):
             cursor = db.cursor()
-            cursor.execute("DELETE FROM permission WHERE username=%s "
-                           "AND action=%s",
-                           (username, action))
-        self.log.info('Revoked permission for %s to %s' % (action, username))
+            cursor.execute(q, args)
+        self.log.info('Revoked permission for %s to %s %s' % (action, username, log))
 
 
 class DefaultPermissionGroupProvider(Component):
@@ -270,7 +333,25 @@ class DefaultPermissionPolicy(Component):
 
     # IPermissionPolicy methods
 
-    def check_permission(self, action, username, resource, perm):
+    def check_permission(self, action, username, resource, perm, req):
+        pid = resource.pid if resource else None
+        if pid is None and req:
+            pid = ProjectManagement(self.env).get_current_project(req, fail_on_none=False)
+        if pid is not None:
+            if req:
+                cache = req.data['project_perm_cache']
+                perms = cache.get(pid)
+                if not perms:
+                    perms = PermissionSystem(self.env). \
+                            get_user_permissions(username, pid)
+                    cache[pid] = perms
+            else:
+                perms = PermissionSystem(self.env). \
+                        get_user_permissions(username, pid)
+            return action in perms or None
+
+        # Check only global permissions
+
         now = time()
 
         if now - self.last_reap > self.CACHE_REAP_TIME:
@@ -326,17 +407,17 @@ class PermissionSystem(Component):
 
     # Public API
 
-    def grant_permission(self, username, action):
+    def grant_permission(self, username, action, pid=None, syllabus_id=None):
         """Grant the user with the given name permission to perform to specified
         action."""
         if action.isupper() and action not in self.get_actions():
             raise TracError(_('%(name)s is not a valid action.', name=action))
 
-        self.store.grant_permission(username, action)
+        self.store.grant_permission(username, action, pid, syllabus_id)
 
-    def revoke_permission(self, username, action):
+    def revoke_permission(self, username, action, pid=None, syllabus_id=None):
         """Revokes the permission of the specified user to perform an action."""
-        self.store.revoke_permission(username, action)
+        self.store.revoke_permission(username, action, pid, syllabus_id)
 
     def get_actions(self):
         actions = []
@@ -348,7 +429,7 @@ class PermissionSystem(Component):
                     actions.append(action)
         return actions
 
-    def get_user_permissions(self, username=None):
+    def get_user_permissions(self, username=None, pid=None):
         """Return the permissions of the specified user.
         
         The return value is a dictionary containing all the actions as keys, and
@@ -369,7 +450,7 @@ class PermissionSystem(Component):
                 permissions[action] = True
                 if meta.has_key(action):
                     [_expand_meta(perm) for perm in meta[action]]
-            for perm in self.store.get_user_permissions(username) or []:
+            for perm in self.store.get_user_permissions(username, pid) or []:
                 _expand_meta(perm)
         else:
             # Return all permissions available in the system
@@ -442,7 +523,7 @@ class PermissionSystem(Component):
         [expand_action(a) for a in actions]
         return expanded_actions
 
-    def check_permission(self, action, username=None, resource=None, perm=None):
+    def check_permission(self, action, username=None, resource=None, perm=None, req=None):
         """Return True if permission to perform action for the given resource
         is allowed."""
         if username is None:
@@ -451,7 +532,7 @@ class PermissionSystem(Component):
             resource = None
         for policy in self.policies:
             decision = policy.check_permission(action, username, resource,
-                                               perm)
+                                               perm, req)
             if decision is not None:
                 if not decision:
                     self.log.debug("%s denies %s performing %s on %r" %
@@ -514,13 +595,14 @@ class PermissionCache(object):
     permission is missing.
     """
 
-    __slots__ = ('env', 'username', '_resource', '_cache')
+    __slots__ = ('env', 'username', '_resource', '_cache', '_req')
 
     def __init__(self, env, username=None, resource=None, cache=None,
-                 groups=None):
+                 groups=None, req=None):
         self.env = env
         self.username = username or 'anonymous'
         self._resource = resource
+        self._req = req
         if cache is None:
             cache = {}
         self._cache = cache
@@ -545,7 +627,7 @@ class PermissionCache(object):
             return self
         else:
             return PermissionCache(self.env, self.username, resource,
-                                   self._cache)
+                                   self._cache, req=self._req)
 
     def has_permission(self, action, realm_or_resource=None, id=False,
                        version=False, pid=False):
@@ -562,9 +644,9 @@ class PermissionCache(object):
         perm = self
         if resource is not self._resource:
             perm = PermissionCache(self.env, self.username, resource,
-                                   self._cache)
+                                   self._cache, req=self._req)
         decision = PermissionSystem(self.env). \
-                   check_permission(action, perm.username, resource, perm)
+                   check_permission(action, perm.username, resource, perm, perm._req)
         self._cache[key] = (decision, resource)
         return decision
 
@@ -596,10 +678,10 @@ class PermissionAdmin(Component):
         yield ('permission list', '[user]',
                'List permission rules',
                self._complete_list, self._do_list)
-        yield ('permission add', '<user> <action> [action] [...]',
+        yield ('permission add', 'G|S<id>|P<id> <user> <action> [action] [...]',
                'Add a new permission rule',
                self._complete_add, self._do_add)
-        yield ('permission remove', '<user> <action> [action] [...]',
+        yield ('permission remove', 'G|S<id>|P<id> <user> <action> [action] [...]',
                'Remove a permission rule',
                self._complete_remove, self._do_remove)
     
@@ -650,15 +732,25 @@ class PermissionAdmin(Component):
                       linesep='\n'))
         print
     
-    def _do_add(self, user, *actions):
+    def _do_add(self, area_id, user, *actions):
+        kwargs = {}
+        if area_id.startswith('S'):
+            kwargs['syllabus_id'] = int(area_id[1:])
+        elif area_id.startswith('P'):
+            kwargs['pid'] = int(area_id[1:])
         permsys = PermissionSystem(self.env)
         if user.isupper():
             raise AdminCommandError(_('All upper-cased tokens are reserved '
                                       'for permission names'))
         for action in actions:
-            permsys.grant_permission(user, action)
+            permsys.grant_permission(user, action, **kwargs)
     
-    def _do_remove(self, user, *actions):
+    def _do_remove(self, area_id, user, *actions):
+        kwargs = {}
+        if area_id.startswith('S'):
+            kwargs['syllabus_id'] = int(area_id[1:])
+        elif area_id.startswith('P'):
+            kwargs['pid'] = int(area_id[1:])
         permsys = PermissionSystem(self.env)
         rows = permsys.get_all_permissions()
         for action in actions:
@@ -666,11 +758,15 @@ class PermissionAdmin(Component):
                 for row in rows:
                     if user != '*' and user != row[0]:
                         continue
-                    permsys.revoke_permission(row[0], row[1])
+                    permsys.revoke_permission(row[0], row[1], **kwargs)
             else:
                 for row in rows:
                     if action != row[1]:
                         continue
                     if user != '*' and user != row[0]:
                         continue
-                    permsys.revoke_permission(row[0], row[1])
+                    permsys.revoke_permission(row[0], row[1], **kwargs)
+
+
+
+from trac.project.api import ProjectManagement

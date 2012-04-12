@@ -149,7 +149,7 @@ class AuthzSourcePolicy(Component):
 
     # IPermissionPolicy methods
 
-    def check_permission(self, action, username, resource, perm):
+    def check_permission(self, action, username, resource, perm, req):
         realm = resource and resource.realm or None
         if (realm, action) in self._handled_perms:
             authz, users = self._get_authz_info()

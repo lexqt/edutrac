@@ -138,7 +138,7 @@ class AuthzPolicy(Component):
 
     # IPermissionPolicy methods
     
-    def check_permission(self, action, username, resource, perm):
+    def check_permission(self, action, username, resource, perm, req):
         if ConfigObj is None:
             self.log.error('configobj package not found')
             return None

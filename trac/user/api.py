@@ -159,14 +159,22 @@ class UserManagement(Component):
                 '''
                 args += (pid, pid)
         if perm_groups:
+            perm_groups = tuple(perm_groups)
             query = '''
             ( %s )
             INTERSECT
-            SELECT username
-            FROM permission
+            SELECT username FROM (
+                SELECT username, action
+                FROM permission
+                UNION
+                SELECT username, action
+                FROM project_permissions
+                WHERE project_id=%%s
+            ) AS uniperm
             WHERE action in %%s
             ''' % (query,)
-            args.append(tuple(perm_groups))
+            args.append(pid)
+            args.append(perm_groups)
 
         db = self.env.get_read_db()
         cursor = db.cursor()

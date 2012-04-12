@@ -128,6 +128,10 @@ class IResourceManager(Interface):
         """Return a tuple of columns used as primary key."""
 
 
+def project(pid):
+    return Resource('project', pid, pid=pid)
+
+
 class Resource(object):
     """Resource identifier.
 

@@ -85,7 +85,7 @@ class VirtualTicketPermissionsPolicy(Component):
 
     # IPermissionPolicy
 
-    def check_permission(self, action, username, resource, perm):
+    def check_permission(self, action, username, resource, perm, req):
         if username == 'anonymous' or \
            not action in self.virtual_permissions:
             # In these two cases, checking makes no sense

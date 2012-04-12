@@ -226,6 +226,9 @@ class Request(object):
         }
         self.redirect_listeners = []
 
+        # dict to store misc data for components
+        self.data = {}
+
         self.base_url = self.environ.get('trac.base_url')
         if not self.base_url:
             self.base_url = self._reconstruct_url()

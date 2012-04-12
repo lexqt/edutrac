@@ -207,6 +207,7 @@ class RequestDispatcher(Component):
                     # TODO: interface for request init?
                     ps.init_request(req)
                     us.init_request(req)
+                    req.data['project_perm_cache'] = {}
                     for handler in self.handlers:
                         try:
                             if handler.match_request(req):
@@ -317,7 +318,7 @@ class RequestDispatcher(Component):
         if isinstance(req.session, FakeSession):
             return FakePerm()
         else:
-            return PermissionCache(self.env, self.authenticate(req))
+            return PermissionCache(self.env, self.authenticate(req), req=req)
 
     def _get_session(self, req):
         try:

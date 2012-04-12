@@ -87,34 +87,6 @@ schema = [
         ForeignKey('gid', 'teams', 'id', on_delete='CASCADE'),
     ],
 
-    # Permissions, authentication, session
-    Table('permission', key=('username', 'action'))[
-        Column('username', type='varchar (255)'),
-        Column('action', type='varchar (255)'),
-    ],
-    Table('auth_cookie', key=('cookie', 'ipnr', 'name'))[
-        Column('cookie', type='varchar (255)'),
-        Column('name', type='varchar (255)'),
-        Column('ipnr', type='varchar (255)'),
-        Column('time', type='int'),
-        ForeignKey('name', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
-    ],
-    Table('session', key=('sid', 'authenticated'))[
-        Column('sid', type='varchar (255)'),
-        Column('authenticated', type='int'),
-        Column('last_visit', type='int'),
-        ForeignKey('sid', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
-        Index(['last_visit']),
-        Index(['authenticated']),
-    ],
-    Table('session_attribute', key=('sid', 'authenticated', 'name'))[
-        Column('sid', type='varchar (255)'),
-        Column('authenticated', type='int'),
-        Column('name', type='varchar (255)'),
-        Column('value'),
-        ForeignKey('sid', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
-    ],
-
     # Project system
     Table('projects', key=('id',))[
         Column('id', auto_increment=True),
@@ -148,6 +120,47 @@ schema = [
         Column('syllabus_id', type='int', null=False),
         ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
         ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
+    ],
+
+    # Permissions, authentication, session
+    Table('permission', key=('username', 'action'))[
+        Column('username', type='varchar (255)'),
+        Column('action', type='varchar (255)'),
+    ],
+    Table('project_permissions', key=('username', 'project_id', 'action'))[
+        Column('username', type='varchar (255)'),
+        Column('project_id', type='int', null=False),
+        Column('action', type='varchar (255)'),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
+        ForeignKey('username', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+    ],
+    Table('syllabus_permissions', key=('permgroup', 'syllabus_id', 'action'))[
+        Column('permgroup', type='varchar (255)'),
+        Column('syllabus_id', type='int', null=False),
+        Column('action', type='varchar (255)'),
+        ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
+    ],
+    Table('auth_cookie', key=('cookie', 'ipnr', 'name'))[
+        Column('cookie', type='varchar (255)'),
+        Column('name', type='varchar (255)'),
+        Column('ipnr', type='varchar (255)'),
+        Column('time', type='int'),
+        ForeignKey('name', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+    ],
+    Table('session', key=('sid', 'authenticated'))[
+        Column('sid', type='varchar (255)'),
+        Column('authenticated', type='int'),
+        Column('last_visit', type='int'),
+        ForeignKey('sid', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
+        Index(['last_visit']),
+        Index(['authenticated']),
+    ],
+    Table('session_attribute', key=('sid', 'authenticated', 'name'))[
+        Column('sid', type='varchar (255)'),
+        Column('authenticated', type='int'),
+        Column('name', type='varchar (255)'),
+        Column('value'),
+        ForeignKey('sid', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
     ],
 
     # Attachments
