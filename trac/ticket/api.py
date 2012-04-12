@@ -375,9 +375,14 @@ class TicketFieldsStore(object):
         # Apply syllabus config
         config = self.ts.configs.syllabus(self.syllabus_id)['ticket-fields']
         for field in fields:
-            name = field['name']
-            default = field['optional']
-            field['optional'] = config.getbool(name + '.optional', default)
+            for param, func in {
+                        'optional': config.getbool,
+                        'value': config.get,
+                        }.iteritems():
+                val = func(field['name'] + '.' + param, field.get(param))
+                if val is None:
+                    continue
+                field[param] = val
 
         fields.extend(self._prepare_custom_fields())
 

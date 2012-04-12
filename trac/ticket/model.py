@@ -122,8 +122,10 @@ class Ticket(object):
                 # Ignore for new - only change through workflow etc
                 pass
             elif not field.get('custom'):
-                default = self.env.config.get('ticket',
-                                              'default_' + field['name'])
+                default = field.get('value')
+                if default is None:
+                    default = self.env.config.get('ticket',
+                                                  'default_' + field['name'])
             else:
                 default = field.get('value')
                 options = field.get('options')
