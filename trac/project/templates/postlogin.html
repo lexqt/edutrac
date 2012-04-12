@@ -26,7 +26,10 @@
 						<option py:for="project_id, project_name in projects" value="${project_id}">${project_name}</option>
 					</select>
 				</fieldset>
-				<input type="submit" value="${_('Continue')}" />
+				<input id="postlogin-submit" type="submit" value="${_('Continue')}" />
+				<script type="text/javascript">
+          document.getElementById('postlogin-submit').focus();
+        </script>
 			</form>
 		</div>
 	</body>
