@@ -9,5 +9,5 @@ class UserSystem(Component):
     # Request init methods
 
     def init_request(self, req):
-        req._user_fullname_cache = {}
+        req.data['user_fullname_cache'] = {}
 

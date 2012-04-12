@@ -184,9 +184,9 @@ class UserManagement(Component):
 
     def get_user_fullname(self, username, req=None):
         if req is not None:
-            if username not in req._user_fullname_cache:
-                req._user_fullname_cache[username] = self._get_user_fullname(username)
-            return req._user_fullname_cache[username]
+            if username not in req.data['user_fullname_cache']:
+                req.data['user_fullname_cache'][username] = self._get_user_fullname(username)
+            return req.data['user_fullname_cache'][username]
         return self._get_user_fullname(username)
 
     def _get_user_fullname(self, username):
