@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: Trac 0.12.3\n"
 "Report-Msgid-Bugs-To: trac-dev@googlegroups.com\n"
 "POT-Creation-Date: 2012-04-09 22:45+0400\n"
-"PO-Revision-Date: 2012-04-09 22:49+0400\n"
+"PO-Revision-Date: 2012-04-13 13:57+0400\n"
 "Last-Translator: Aleksey A. Porfirov <lexqt@yandex.ru>\n"
 "Language-Team: Russian <>\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
@@ -1501,7 +1501,7 @@ msgstr "Подсветка синтаксиса"
 
 #: trac/mimeview/pygments.py:135 trac/prefs/web_ui.py:149
 msgid "Your preferences have been saved."
-msgstr "Ваши предпочтения сохранены."
+msgstr "Ваши настройки сохранены."
 
 #: trac/mimeview/rst.py:123 trac/mimeview/rst.py:146
 #, python-format
@@ -1510,11 +1510,11 @@ msgstr "%(link)s - это неправильная ссылка TracLink"
 
 #: trac/prefs/web_ui.py:56 trac/prefs/templates/prefs.html:16
 msgid "Preferences"
-msgstr "Предпочтения"
+msgstr "Настройки"
 
 #: trac/prefs/web_ui.py:81
 msgid "Unknown preference panel"
-msgstr "Неизвестная панель предпочтений"
+msgstr "Неизвестная панель настроек"
 
 #: trac/prefs/web_ui.py:93 trac/prefs/templates/prefs_datetime.html:10
 msgid "Date & Time"
@@ -1538,7 +1538,7 @@ msgstr "Сеанс загружен."
 
 #: trac/prefs/templates/prefs.html:10
 msgid "Preferences:"
-msgstr "Предпочтения:"
+msgstr "Настройки:"
 
 #: trac/prefs/templates/prefs.html:17
 msgid ""
@@ -4243,7 +4243,7 @@ msgstr "Дата в формате ГГГГ-ММ-ДД"
 msgid "E-mail address and user name can be saved in the [1:Preferences]."
 msgstr ""
 "Адрес электронной почты и имя могут быть сохранены в разделе "
-"[1:Предпочтения]."
+"[1:Настройки]."
 
 #: trac/ticket/templates/ticket.html:390
 msgid "I have files to attach to this ticket"
