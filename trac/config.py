@@ -785,14 +785,19 @@ class OrderedExtensionsOption(ListOption):
     Can be empty.
 
     If `include_missing` is true (the default) all components implementing the
-    interface are returned, with those specified by the option ordered first."""
+    interface are returned, with those specified by the option ordered first.
+    `always_first` is None or list of component names that will be prepended
+    to the ordered list from config. So these components will always be first.
+    """
 
     def __init__(self, section, name, interface, default=None,
-                 include_missing=True, doc='', syllabus_switcher=False):
+                 include_missing=True, doc='', syllabus_switcher=False,
+                 always_first=None):
         ListOption.__init__(self, section, name, default, doc=doc, switcher=syllabus_switcher)
         EPClass = SyllabusExtensionPoint if syllabus_switcher else ExtensionPoint
         self.xtnpt = EPClass(interface)
         self.include_missing = include_missing
+        self.always_first = always_first
 
     def __get__(self, instance, owner):
         if instance is None:
@@ -811,20 +816,24 @@ class OrderedExtensionsOption(ListOption):
 
     def _get_components(self, component, order, syllabus=None):
         components = []
+        if self.always_first:
+            order = self.always_first + order
         exts = self.xtnpt.extensions(component)
         if syllabus is not None:
             exts = exts(syllabus)
         for impl in exts:
             if self.include_missing or impl.__class__.__name__ in order:
                 components.append(impl)
-        def compare(x, y):
-            x, y = x.__class__.__name__, y.__class__.__name__
-            if x not in order:
-                return int(y in order)
-            if y not in order:
-                return -int(x in order)
-            return cmp(order.index(x), order.index(y))
-        components.sort(compare)
+
+        other_num = len(order)
+        def key(comp):
+            name = comp.__class__.__name__
+            if name in order:
+                return order.index(name)
+            else:
+                return other_num
+        components.sort(key=key)
+
         return components
 
 
