@@ -425,7 +425,8 @@ def get_resource_url(env, resource, href=None, **kwargs):
     '/trac.cgi/generic/Main?action=diff&version=5'
     
     """
-    if href is None:
+    is_partial = href is None
+    if is_partial:
         href = HrefPart()
     manager = ResourceSystem(env).get_resource_manager(resource.realm)
     if manager and hasattr(manager, 'get_resource_url'):
@@ -439,8 +440,11 @@ def get_resource_url(env, resource, href=None, **kwargs):
         else:
             res = res.parent
     if res.pid is not None and res.need_pid:
-        # 'project' at first
-        args0 = [u'project', res.pid] + args0
+        if is_partial:
+            # 'project' at first
+            args0 = [u'project', res.pid] + args0
+        else:
+            href = href.copy_for_project(res.pid)
     args = {'version': resource.version}
     args.update(kwargs)
     return href(*args0, **args)

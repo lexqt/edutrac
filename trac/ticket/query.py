@@ -228,8 +228,8 @@ class Query(object):
                                            []).extend(processed_values)
         constraints = filter(None, constraints)
         report = kw.pop('report', report)
-        session_pid = kw.pop('session_pid', None)
-        kw.setdefault('project', session_pid)
+        current_project = kw.pop('current_project', None)
+        kw.setdefault('project', current_project)
         return cls(env, report, constraints=constraints, cols=cols, **kw)
 
     def get_columns(self):
@@ -1045,7 +1045,8 @@ class QueryModule(Component):
                 pid = pid_arg
             else:
                 pid = pm.get_current_project(req)
-            pm.check_session_project(req, pid, allow_multi=True)
+            # just check, do not redirect
+            pm.check_session_project(req, pid)
 
         constraints = self._get_constraints(req, pid=pid)
         if not constraints and not 'order' in req.args:
@@ -1371,7 +1372,7 @@ class QueryModule(Component):
                          href=formatter.href.query() + query)
         else:
             try:
-                query = Query.from_string(self.env, query, session_pid=formatter.session_pid)
+                query = Query.from_string(self.env, query, current_project=formatter.current_project)
                 return tag.a(label,
                              href=query.get_href(formatter.context.href),
                              class_='query')
@@ -1486,7 +1487,7 @@ class TicketQueryMacro(WikiMacroBase):
             query_string += '&'
         query_string += '&'.join('%s=%s' % item
                                  for item in kwargs.iteritems())
-        query = Query.from_string(self.env, query_string, session_pid=formatter.session_pid)
+        query = Query.from_string(self.env, query_string, current_project=formatter.current_project)
 
         if format == 'count':
             cnt = query.count(req)
@@ -1522,7 +1523,7 @@ class TicketQueryMacro(WikiMacroBase):
         def ticket_groups():
             groups = []
             for v, g in groupby(tickets, lambda t: t[query.group]):
-                q = Query.from_string(self.env, query_string, session_pid=formatter.session_pid)
+                q = Query.from_string(self.env, query_string, current_project=formatter.current_project)
                 # produce the hint for the group
                 q.group = q.groupdesc = None
                 order = q.order

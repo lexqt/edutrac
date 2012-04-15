@@ -110,11 +110,10 @@ class WikiModule(Component):
         old_version = req.args.get('old_version')
 
         pm = ProjectManagement(self.env)
-        session_pid = pm.get_session_project(req, fail_on_none=False)
+        pid = pm.get_current_project(req, fail_on_none=False)
 
-        if not pagename and session_pid:
-            syllabus_id = pm.get_project_syllabus(session_pid)
-            pagename = self._get_syllabus_page(syllabus_id)
+        if not pagename and pid:
+            pagename = self._get_syllabus_page(req.data['syllabus_id'])
         if not pagename:
             pagename = 'WikiStart'
 
@@ -144,7 +143,8 @@ class WikiModule(Component):
                 if action in ('edit', 'delete', 'rename'):
                     req.perm(versioned_page.resource).require('WIKI_GLOBAL_ACTION')
             else:
-                pm.check_session_project(req, versioned_page.pid, allow_multi=True)
+                # just check, do not redirect
+                pm.check_session_project(req, versioned_page.pid)
 
         if req.method == 'POST':
             if action == 'edit':
@@ -159,7 +159,7 @@ class WikiModule(Component):
                 versioned_page.text = req.args.get('text')
                 valid = self._validate(req, versioned_page)
                 if action == 'edit' and not has_collision and valid:
-                    return self._do_save(req, versioned_page, session_pid)
+                    return self._do_save(req, versioned_page, pid)
                 else:
                     return self._render_editor(req, page, action, has_collision)
             elif action == 'delete':
@@ -189,7 +189,7 @@ class WikiModule(Component):
                 Mimeview(self.env).send_converted(req, 'text/x-trac-wiki',
                                                   versioned_page.text,
                                                   format, versioned_page.name)
-            return self._render_view(req, versioned_page, session_pid)
+            return self._render_view(req, versioned_page, pid)
 
     # ITemplateProvider methods
 

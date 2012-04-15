@@ -1,11 +1,9 @@
 import re
 
 from trac.core import Component, implements, ExtensionPoint, TracError
-from trac.perm import IPermissionRequestor
 from trac.web.main import IRequestHandler, IRequestFilter
 
 from trac.web import chrome
-from trac.web.chrome import INavigationContributor
 from genshi.core import Markup
 from genshi.builder import tag
 from trac.util.translation import _, tag_
@@ -18,17 +16,17 @@ class ProjectSystem(Component):
     Project Management core component
     """
 
-    implements(IPermissionRequestor)
+#    implements(IPermissionRequestor)
 
-    permissions = ('MULTIPROJECT_ACTION',)
+#    permissions = ('MULTIPROJECT_ACTION',)
 
     def __init__(self):
-        pass
+        self.pm = ProjectManagement(self.env)
 
     # IPermissionRequestor methods
 
-    def get_permission_actions(self):
-        return self.permissions
+#    def get_permission_actions(self):
+#        return self.permissions
 
     # Request init methods
 
@@ -47,7 +45,7 @@ class ProjectSystem(Component):
 #            if pre and post:
 #                # 'project' in the middle
 #                return False
-            req.args['__pid__'] = int(pid)
+            req.data['project_id'] = int(pid)
             req.environ['PATH_INFO'] = unicode('/' + post).rstrip('/').encode('utf-8')
             return True
         return False
@@ -55,13 +53,33 @@ class ProjectSystem(Component):
     # Request callbacks methods
 
     def get_session_user_projects(self, req):
+        if req.data.get('force_httpauth'):
+            return [req.session_project]
         return [int(pid) for pid in req.session.get('projects', '').split()]
 
     def get_session_project(self, req):
+        '''Return current session project ID'''
+        if req.data.get('force_httpauth'):
+            return req.data['project_id']
         s = req.session
         if 'project' not in s:
             return None
         return int(s['project'])
+
+    # API
+
+    def set_request_data(self, req, project_id):
+        '''Set project info data for current request.
+        Other components consider this data as reliable and
+        can use it directly without preliminary check.
+        But they must check if 'project_id' in req.data.
+        If True, then all project info keys are in data.
+        '''
+        if not req.session.authenticated:
+            return False
+        info = self.pm.get_project_info(project_id, fail_on_none=True)
+        # see `ProjectManagement.get_project_info` for list of info keys
+        req.data.update(info)
 
 
 STEP_SET_ROLE    = 1
@@ -77,36 +95,14 @@ class PostloginModule(Component):
 
     project_switch_listeners = ExtensionPoint(IProjectSwitchListener)
 
-    implements(INavigationContributor, IRequestHandler, IRequestFilter)
+    implements(IRequestHandler, IRequestFilter)
 
     def __init__(self):
         self.pm = ProjectManagement(self.env)
+        self.ps = ProjectSystem(self.env)
     
-#    # IResourceManager methods
-#
-#    def get_resource_realms(self):
-#        yield 'project'
-#
-#    def get_resource_description(self, resource, format=None, **kwargs):
-#        return 'Project %s' % resource.id
-#
-#    def resource_exists(self, resource):
-#        db = self.env.get_read_db()
-#        cursor = db.cursor()
-#        cursor.execute('SELECT 1 FROM projects WHERE id=%s LIMIT 1',
-#                       (resource.id,))
-#        return bool(cursor.rowcount)
-
-    #INavigationContributor
-
-    def get_active_navigation_item(self, req):
-        pass
-
-    def get_navigation_items(self, req):
-        if req.session.authenticated:
-            yield ('metanav', 'changeproject',
-                   tag.a(tag_('Change project'), href=req.href.postlogin(step=STEP_SET_PROJECT))
-                  )
+    def project_switch_url(self, href):
+        return href.postlogin(step=STEP_SET_PROJECT)
 
     # IRequestFilter methods
 
@@ -119,9 +115,43 @@ class PostloginModule(Component):
         if not s.authenticated:
             return handler
 
-        if self._postlogin_passed(req) or\
-                req.path_info == '/login' or\
-                req.path_info == '/postlogin':
+        if req.data.get('force_httpauth'):
+            return handler
+
+        if self._postlogin_passed(req):
+            # session user project and projects are ready
+
+            # set and check project_id
+            spid = req.session_project
+            pid = spid
+            check = True
+            if 'project_id' in req.data:
+                # project extracted from URL
+                upid = req.data['project_id']
+                if spid != upid:
+                    # check user rights
+                    check = self.pm.check_session_project(req, upid, fail_on_false=False)
+                    # substitute session project, force url rewrite
+                    pid = upid
+                    if check:
+                        req.href = req.project_href
+            # else use session project
+
+            if not check:
+                # revert pid to session
+                failed_pid = pid
+                pid = spid
+
+            # set project data
+            self.ps.set_request_data(req, pid)
+            req.data['role'] = s['role']
+
+            if not check:
+                # now raise exception
+                self.pm.check_session_project(req, failed_pid, fail_on_false=True)
+
+            return handler
+        if req.path_info in ('/login', '/postlogin'):
             return handler
         if req.path_info == '/logout':
             for key in ('postlogin', 'postlogin_step'):
@@ -193,17 +223,10 @@ class PostloginModule(Component):
                 if project_id not in [pid for pid, pname in data['projects']]:
                     chrome.add_warning(req, _('Select project from availables only!'))
                     req.redirect(req.href.postlogin())
-                info = self.pm.get_project_info(project_id, fail_on_none=True)
                 old_project_id = s.get('project') if not s.get('postlogin_change_param') else None
                 old_project_id = int(old_project_id) if old_project_id is not None else None
                 s['project']  = project_id
-                s['syllabus'] = info['syllabus_id']
-                s['project_team']      = info['team_id']
-                s['project_studgroup'] = info['studgroup_id']
-                s['project_metagroup'] = info['metagroup_id']
-                multiproject = 'MULTIPROJECT_ACTION' in req.perm
-                if multiproject:
-                    s['projects'] = ' '.join([str(p[0]) for p in data['projects']])
+                s['projects'] = ' '.join([str(p[0]) for p in data['projects']])
                 data['finalize'] = True
                 for listener in self.project_switch_listeners:
                     listener.project_switched(req, project_id, old_project_id)
@@ -215,6 +238,7 @@ class PostloginModule(Component):
         if data['finalize']:
             s['postlogin'] = req.incookie['trac_auth'].value
             s.pop('postlogin_step', None)
+            req.href.project_id = None
             req.redirect(req.href())
 
         # next POST request will be the last

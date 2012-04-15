@@ -232,7 +232,8 @@ class Request(object):
         self.base_url = self.environ.get('trac.base_url')
         if not self.base_url:
             self.base_url = self._reconstruct_url()
-        self.href = Href(self.base_path)
+        self.href     = Href(self.base_path) # may be substituded by project_href
+        self.std_href = Href(self.base_path)
         self.abs_href = Href(self.base_url)
 
     def __getattr__(self, name):
@@ -673,9 +674,9 @@ class Request(object):
             self._outheaders.append(('Set-Cookie', cookie.strip()))
 
     def _project_href(self):
-        if '__pid__' not in self.args:
+        if 'project_id' not in self.data:
             return self.href
-        return Href(self.href+'/project/'+str(self.args['__pid__']))
+        return Href(self.base_path, project_id=self.data['project_id'])
 
 
 class IAuthenticator(Interface):

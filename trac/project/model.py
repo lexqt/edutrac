@@ -1,5 +1,5 @@
 from trac.core import TracError
-from trac.resource import Resource, ResourceNotFound
+from trac.resource import ResourceNotFound
 from trac.util.translation import _
 
 
@@ -9,24 +9,6 @@ def simplify_whitespace(name):
         return ' '.join(name.split())
     return name
 
-
-
-class ProjectNotSet(TracError):
-    """Exception that indicates project hasn't set for session"""
-
-    def __init__(self, msg):
-        super(ProjectNotSet, self).__init__(msg, 'Current project is not set for session')
-
-
-class ResourceProjectMismatch(TracError):
-    """Exception that indicates suppressed access to resource of another project"""
-
-    def __init__(self, msg):
-        super(ResourceProjectMismatch, self).__init__(msg, 'No access to resources of requested project')
-
-
-class ProjectNotFound(ResourceNotFound):
-    """Thrown when a non-existent project is requested"""
 
 
 class Project(object):
@@ -129,17 +111,3 @@ class Project(object):
             from trac.ticket.api import TicketSystem
             TicketSystem(self.env).reset_ticket_fields(self.id)
 
-#    @classmethod
-#    def select(cls, env, user=None, db=None):
-#        if not db:
-#            db = env.get_read_db()
-#        cursor = db.cursor()
-#        cursor.execute("""
-#            SELECT name,owner,description FROM component ORDER BY name
-#            """)
-#        for name, owner, description in cursor:
-#            component = cls(env)
-#            component.name = component._old_name = name
-#            component.owner = owner or None
-#            component.description = description or ''
-#            yield component

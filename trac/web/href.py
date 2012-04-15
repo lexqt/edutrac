@@ -153,14 +153,17 @@ class Href(object):
     '/milestone/<look,here%3E?param=%3Chere,too>'
     """
 
-    def __init__(self, base, path_safe="/!~*'()", query_safe="!~*'()"):
+    def __init__(self, base, path_safe="/!~*'()", query_safe="!~*'()", project_id=None):
         self.base = base.rstrip('/')
         self.path_safe = path_safe
         self.query_safe = query_safe
+        self.project_id = project_id
         self._derived = {}
 
     def __call__(self, *args, **kw):
         href = self.base
+        if self.project_id is not None:
+            href += self._get_project_prefix()
         params = []
 
         def add_param(name, value):
@@ -213,12 +216,20 @@ class Href(object):
         return self._derived[name]
 
     def __add__(self, rhs):
+        base = self.base
+        if self.project_id is not None:
+            base += self._get_project_prefix()
         if rhs.startswith('/'):
-            return self.base + rhs
+            return base + rhs
         if rhs:
-            return self.base + '/' + rhs
-        return self.base or '/'
+            return base + '/' + rhs
+        return base or '/'
 
+    def _get_project_prefix(self):
+        return '/project/'+str(self.project_id)
+
+    def copy_for_project(self, project_id):
+        return Href(self.base, self.path_safe, self.query_safe, project_id)
 
 if __name__ == '__main__':
     import doctest, sys

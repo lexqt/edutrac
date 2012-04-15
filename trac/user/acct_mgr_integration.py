@@ -1,10 +1,12 @@
 import re
+from base64 import b64decode
 
-from trac.config import Option, ExtensionOption
+from trac.config import ListOption, ExtensionOption
 from trac.core import Component, implements, TracError
 from trac.db import with_transaction
 from trac.admin import IAdminCommandProvider
-from trac.perm import PermissionSystem
+from trac.web.api import IRequestFilter, RequestDone, IAuthenticator
+from trac.project.sys import ProjectSystem
 
 from genshi.builder import tag
 from trac.util.translation import _
@@ -308,3 +310,102 @@ class AccountManagerIntegration(Component):
                                    username=username))
         self.acctmgr.delete_user(username)
 
+
+
+# Author of original HTTPAuthFilter component:
+# Noah Kantrowitz (noah@coderanger.net)
+# Modificated by Aleksey A. Porfirov, 2012
+
+class HTTPAuthFilter(Component):
+    """Request filter and handler to provide HTTP authentication."""
+
+    paths = ListOption('httpauth', 'paths', default='/login/xmlrpc',
+                       doc='Paths to force HTTP authentication on.')
+
+    formats = ListOption('httpauth', 'formats', default='rss',
+                         doc='Request formats to force HTTP authentication on')
+
+    implements(IRequestFilter, IAuthenticator)
+
+    def __init__(self):
+        self.ps = ProjectSystem(self.env)
+
+    # IRequestFilter
+
+    def pre_process_request(self, req, handler):
+        '''HTTPAuthFilter preprocess request before PostloginModule.
+        HTTP Auth request must be processed autonomously and must not
+        use/change req.session variables (like current session project).
+        To indicate this special request it sets req.data['force_httpauth'] flag,
+        that other essential components must respect'''
+        check = False
+        for path in self.paths:
+            if req.path_info.startswith(path):
+                check = True
+                break
+        else:
+            check = req.args.get('format') in self.formats
+
+        if check:
+            if not self._check_password(req):
+                self.log.info('HTTPAuthFilter: Authentication required. Returing HTTP 401')
+                return self
+            if 'project_id' not in req.data:
+                raise TracError('Can not continue process request with no project ID. '
+                                'Insert "/project/<id>/" in your URL.')
+
+            # TODO: check project.
+            # If fail set some flag in req.data, raise PermissionError(msg='...')
+            # Check flag and reraise it in post_process_request
+            del req.data['project_id']
+            raise NotImplementedError
+
+            self.ps.set_request_data(req, req.data['project_id'])
+            # TODO: what about user role?
+            req.data['role'] = None
+            # authentication and request data preparation done
+            req.data['force_httpauth'] = True
+        return handler
+
+    def post_process_request(self, req, template, content_type):
+        return template, content_type
+
+    # IRequestHandler
+    # (for handler substitution by pre_process_request)
+
+    def process_request(self, req):
+        if req.session:
+            req.session.save() # Just in case
+
+        auth_req_msg = 'Authentication required'
+        req.send_response(401)
+        req.send_header('WWW-Authenticate', 'Basic realm="EduTrac"')
+        req.send_header('Content-Type', 'text/plain')
+        req.send_header('Pragma', 'no-cache')
+        req.send_header('Cache-control', 'no-cache')
+        req.send_header('Expires', 'Fri, 01 Jan 1999 00:00:00 GMT')
+        req.send_header('Content-Length', str(len(auth_req_msg)))
+        req.end_headers()
+
+        if req.method != 'HEAD':
+            req.write(auth_req_msg)
+        raise RequestDone
+
+    # IAuthenticator
+
+    def authenticate(self, req):
+        user = self._check_password(req)
+        if user:
+            req.environ['REMOTE_USER'] = user
+            self.log.debug('HTTPAuthFilter: Authentication passed for %s', user)
+            return user
+
+    # Internal methods
+
+    def _check_password(self, req):
+        header = req.get_header('Authorization')
+        if header:
+            token = header.split()[1]
+            user, passwd = b64decode(token).split(':', 1)
+            if AccountManager(self.env).check_password(user, passwd):
+                return user

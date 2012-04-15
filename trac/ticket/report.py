@@ -40,7 +40,7 @@ from trac.web.chrome import add_ctxtnav, add_link, add_notice, add_script, \
                             INavigationContributor, Chrome
 from trac.wiki import IWikiSyntaxProvider, WikiParser
 
-from trac.project.api import ProjectManagement
+from trac.project.api import ProjectManagement, SyllabusMismatch
 
 def cell_value(v):
     """Normalize a cell value for display.
@@ -102,14 +102,14 @@ class ReportModule(Component):
         id = int(req.args.get('id', -1))
         action = req.args.get('action', 'view')
 
+        # check if pid defined
         self.pm = ProjectManagement(self.env)
         pid = self.pm.get_current_project(req)
-        self.pm.check_session_project(req, pid, allow_multi=True)
 
         data = {}
         if req.method == 'POST':
             if action == 'new':
-                self._do_create(req, pid)
+                self._do_create(req)
             elif action == 'delete':
                 self._do_delete(req, id)
             elif action == 'edit':
@@ -122,11 +122,11 @@ class ReportModule(Component):
             template = 'report_delete.html'
             data = self._render_confirm_delete(req, id)
         elif id == -1:
-            template, data, content_type = self._render_list(req, pid)
+            template, data, content_type = self._render_list(req)
             if content_type: # i.e. alternate format
                 return template, data, content_type
         else:
-            template, data, content_type = self._render_view(req, id, pid)
+            template, data, content_type = self._render_view(req, id)
             if content_type: # i.e. alternate format
                 return template, data, content_type
 
@@ -158,7 +158,7 @@ class ReportModule(Component):
         if is_sql_query:
             req.perm.require('REPORT_SQL_CREATE')
 
-    def _do_create(self, req, pid):
+    def _do_create(self, req):
         req.perm.require('REPORT_CREATE')
 
         if 'cancel' in req.args:
@@ -173,7 +173,7 @@ class ReportModule(Component):
         def do_create(db):
             cursor = db.cursor()
             cursor.execute("INSERT INTO report (title,query,description,project_id) "
-                           "VALUES (%s,%s,%s,%s)", (title, query, description, pid))
+                           "VALUES (%s,%s,%s,%s)", (title, query, description, req.data['project_id']))
             report_id[0] = db.get_last_id(cursor, 'report')
         add_notice(req, _('The report has been created.'))
         req.redirect(req.href.report(report_id[0]))
@@ -260,13 +260,14 @@ class ReportModule(Component):
                           'sql': query, 'description': description}
         return data
 
-    def _render_list(self, req, pid):
+    def _render_list(self, req):
         """Render the list of available reports."""
         sort = req.args.get('sort', 'report')
         asc = bool(int(req.args.get('asc', 1)))
         format = req.args.get('format')
 
-        syllabus_id = self.pm.get_project_syllabus(pid)
+        project_id  = req.data['project_id']
+        syllabus_id = req.data['syllabus_id']
 
         orderby_clause = ' ORDER BY %s%s' % (
                           sort == 'title' and 'title' or 'id',
@@ -287,7 +288,7 @@ class ReportModule(Component):
         reports_syllabus = list(cursor)
         cursor.execute(query_tmpl_ext.format(
                        prefix='[PROJECT] ', table='project_reports', filter='project_id'),
-                       (pid,))
+                       (project_id,))
         reports_project = list(cursor)
 
         rows = reports_global + reports_syllabus + reports_project
@@ -325,8 +326,11 @@ class ReportModule(Component):
     _html_cols = set(['__style__', '__color__', '__fgcolor__',
                          '__bgcolor__', '__grouplink__'])
 
-    def _render_view(self, req, id, cur_pid):
+    def _render_view(self, req, id):
         """Retrieve the report results and pre-process them for rendering."""
+        cur_pid = req.data['project_id']
+        cur_sid = req.data['syllabus_id']
+
         db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute("SELECT title,query,description,project_id,syllabus_id from report "
@@ -341,13 +345,16 @@ class ReportModule(Component):
         if project_id is not None:
             area = self.AREA_PROJECT
             if project_id != cur_pid:
-                self.pm.check_session_project(req, project_id, allow_multi=True)
-            syllabus_id = self.pm.get_project_syllabus(project_id)
+                self.pm.redirect_to_project(project_id)
+            syllabus_id = cur_sid
         elif syllabus_id is not None:
             area = self.AREA_SYLLABUS
+            if syllabus_id != cur_sid:
+                raise SyllabusMismatch(_('Can not view reports of another syllabus. '
+                                         'Try to switch current project.'))
         else:
             area = self.AREA_GLOBAL
-            syllabus_id = self.pm.get_project_syllabus(cur_pid)
+            syllabus_id = cur_sid
 
         if project_id is None:
             project_id = cur_pid
@@ -484,9 +491,7 @@ class ReportModule(Component):
         #  * _col_ means fullrow, i.e. a group with one header
         #  * col_ means finish the current group and start a new one
 
-        pm = ProjectManagement(self.env)
-        pid = pm.get_session_project(req)
-        field_labels = TicketSystem(self.env).get_ticket_field_labels(pid)
+        field_labels = TicketSystem(self.env).get_ticket_field_labels(cur_pid)
 
         header_groups = [[]]
         for idx, col in enumerate(cols):

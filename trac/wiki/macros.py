@@ -116,7 +116,7 @@ class TitleIndexMacro(WikiMacroBase):
         if area == 'global':
             pid = None
         else:
-            pid = formatter.session_pid
+            pid = formatter.current_project
 
         wiki = formatter.wiki
 
@@ -311,7 +311,7 @@ class RecentChangesMacro(WikiMacroBase):
             sql += ' IS NULL'
         else:
             sql += '=%s'
-            args.append(formatter.session_pid)
+            args.append(formatter.current_project)
         if prefix:
             sql += ' AND name LIKE %s'
             args.append(prefix + '%')

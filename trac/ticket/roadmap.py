@@ -341,7 +341,6 @@ class RoadmapModule(Component):
 
         pm = ProjectManagement(self.env)
         pid = pm.get_current_project(req)
-        pm.check_session_project(req, pid, allow_multi=True)
 
         show = req.args.getlist('show')
         hide = req.args.getlist('hide')
@@ -371,7 +370,7 @@ class RoadmapModule(Component):
         total_weight = Milestone.get_total_weight(self.env, pid)
 
         if req.args.get('format') == 'ics':
-            self.render_ics(req, pid, db, milestones)
+            self.render_ics(req, db, milestones)
             return
 
         # FIXME should use the 'webcal:' scheme, probably
@@ -395,14 +394,14 @@ class RoadmapModule(Component):
 
     # Internal methods
 
-    def render_ics(self, req, pid, db, milestones):
+    def render_ics(self, req, db, milestones):
         req.send_response(200)
         req.send_header('Content-Type', 'text/calendar;charset=utf-8')
         buf = StringIO()
 
         from trac.ticket import Priority
         priorities = {}
-        for priority in Priority.select(self.env, pid=pid):
+        for priority in Priority.select(self.env, pid=req.data['project_id']):
             priorities[priority.name] = float(priority.value)
         def get_priority(ticket):
             value = priorities.get(ticket['priority'])
@@ -612,8 +611,6 @@ class MilestoneModule(Component):
         pm = ProjectManagement(self.env)
         self.pm = pm
         pid = pm.get_current_project(req)
-        pm.check_session_project(req, pid, allow_multi=True)
-        milestone_pid = pid
 
         req.perm('milestone', milestone_id).require('MILESTONE_VIEW')
         
@@ -621,11 +618,11 @@ class MilestoneModule(Component):
 
         db = self.env.get_db_cnx() # TODO: db can be removed
         try:
-            milestone = Milestone(self.env, milestone_pid, milestone_id, db)
+            milestone = Milestone(self.env, pid, milestone_id, db)
         except ResourceNotFound:
             if 'MILESTONE_CREATE' not in req.perm('milestone', milestone_id):
                 raise
-            milestone = Milestone(self.env, milestone_pid, None, db)
+            milestone = Milestone(self.env, pid, None, db)
             milestone.name = milestone_id
             action = 'edit' # rather than 'new' so that it works for POST/save
 
@@ -909,7 +906,7 @@ class MilestoneModule(Component):
             pid_ready, pid = formatter.extract_pid(parts[1:3])
             name = parts[0]
         if not pid_ready:
-            pid  = formatter.session_pid
+            pid  = formatter.current_project
         return self._render_link(formatter.context, pid, name, label,
                                  query + fragment)
 

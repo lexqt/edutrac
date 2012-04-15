@@ -144,6 +144,7 @@ class RequestDispatcher(Component):
 
     filters = OrderedExtensionsOption('trac', 'request_filters',
                                       IRequestFilter,
+        always_first=['HTTPAuthFilter', 'PostloginModule'],
         doc="""Ordered list of filters to apply to all requests
             (''since 0.10'').""")
 

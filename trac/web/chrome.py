@@ -553,9 +553,9 @@ class Chrome(Component):
 
         from trac.project.api import ProjectManagement
         pm = ProjectManagement(self.env)
-        pid = pm.get_session_project(req, fail_on_none=False)
+        pid = pm.get_current_project(req, fail_on_none=False)
         if pid is not None:
-            syllabus_id = pm.get_project_syllabus(pid)
+            syllabus_id = req.data['syllabus_id']
             navigation_contributors = self.navigation_contributors_syllabus(syllabus_id)
         else:
             navigation_contributors = self.navigation_contributors
@@ -693,6 +693,8 @@ class Chrome(Component):
             req.hdf['chrome.nav.%s' % category] = items
 
     def populate_data(self, req, data):
+        '''Populate context data available in templates.
+        `req` may be None'''
         d = self._default_context_data.copy()
         d['trac'] = {
             'version': VERSION,
@@ -700,6 +702,7 @@ class Chrome(Component):
         }
         
         href = req and req.href
+        project_href = req and req.project_href
         abs_href = req and req.abs_href or self.env.abs_href
         admin_href = None
         if self.env.project_admin_trac_url == '.':
@@ -769,6 +772,7 @@ class Chrome(Component):
             'req': req,
             'abs_href': abs_href,
             'href': href,
+            'project_href': project_href,
             'perm': req and req.perm,
             'authname': req and req.authname or '<trac>',
             'user_fullname': partial(user_management.get_user_fullname, req=req),

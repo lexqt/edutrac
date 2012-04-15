@@ -333,7 +333,7 @@ class BrowserModule(Component):
         if presel and (presel + '/').startswith(req.href.browser() + '/'):
             req.redirect(presel)
 
-        pid = self.pm.get_session_project(req)
+        pid = self.pm.get_current_project(req)
 
         path = req.args.get('path', '/')
         rev = req.args.get('rev', '')
@@ -365,8 +365,8 @@ class BrowserModule(Component):
         reponame = repos and repos.reponame or None
 
         if repos:
-            pid = repos.pid
-            self.pm.check_session_project(req, pid, allow_multi=True)
+            if pid != repos.pid:
+                self.pm.redirect_to_project(req, repos.pid)
 
         # Find node for the requested path/rev
         context = Context.from_request(req)
@@ -840,7 +840,7 @@ class BrowserModule(Component):
 
         rm = RepositoryManager(self.env)
         all_repos = dict(rdata for rdata in rm.get_all_repositories(
-                         project_id=formatter.session_pid).items()
+                         project_id=formatter.current_project).items()
                          if fnmatchcase(rdata[0], glob))
 
         if format == 'table':

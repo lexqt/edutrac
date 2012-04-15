@@ -171,7 +171,7 @@ class TicketModule(Component):
             if req.path_info == '/newticket':
                 raise TracError(_("id can't be set for a new ticket request."))
             return self._process_ticket_request(req)
-        pid = self.pm.get_session_project(req, err_msg='Can not create new tickets without setting current session project')
+        pid = self.pm.get_current_project(req, _('Can not create new tickets without setting current project'))
         return self._process_newticket_request(req, pid)
 
     # ITemplateProvider methods
@@ -462,7 +462,9 @@ class TicketModule(Component):
         req.perm('ticket', id, version).require('TICKET_VIEW')
         ticket = Ticket(self.env, id, version=version)
 
-        self.pm.check_session_project(req, ticket.pid, allow_multi=True)
+        cur_pid = self.pm.get_current_project(req)
+        if cur_pid != ticket.pid:
+            self.pm.redirect_to_project(req, ticket.pid)
 
         action = req.args.get('action', ('history' in req.args and 'history' or
                                          'view'))

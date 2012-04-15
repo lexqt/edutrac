@@ -252,8 +252,9 @@ class ChangesetModule(Component):
                                   "repository configured."))
 
         pm = ProjectManagement(self.env)
-        pid = repos.pid
-        pm.check_session_project(req, pid, allow_multi=True)
+        cur_pid = pm.get_current_project(req)
+        if cur_pid != repos.pid:
+            pm.redirect_to_project(req, repos.pid)
 
         # -- normalize and check for special case
         try:
@@ -1185,7 +1186,7 @@ class AnyDiffModule(Component):
     def process_request(self, req):
         rm = RepositoryManager(self.env)
         pm = ProjectManagement(self.env)
-        pid = pm.get_session_project(req)
+        pid = pm.get_current_project(req)
 
         if req.get_header('X-Requested-With') == 'XMLHttpRequest':
             dirname, prefix = posixpath.split(req.args.get('q'))
@@ -1197,8 +1198,8 @@ class AnyDiffModule(Component):
 
             entries = []
             if repos:
-                pid = repos.pid
-                pm.check_session_project(req, pid, allow_multi=True)
+                if pid != repos.pid:
+                    pm.redirect_to_project(req, repos.pid)
                 entries.extend((e.isdir, e.name, 
                                 '/' + pathjoin(repos.reponame, e.path))
                                for e in repos.get_node(path).get_entries()

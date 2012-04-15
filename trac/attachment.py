@@ -506,6 +506,18 @@ class AttachmentModule(Component):
 #        url = '/'.join((parent_realm, parent_id))
         real_rsc = get_real_resource_from_url(self.env, parent_url, req.args)
         parent = real_rsc.resource
+        res_pid = parent.pid
+
+        # TODO: check if check is OK (pid, global, ...)
+        # e.g. global wiki attachment - how to check WIKI_GLOBAL_ACTION
+
+        # project check
+        if res_pid is not None:
+            pm = ProjectManagement(self.env)
+            cur_pid = pm.get_current_project(req)
+            if res_pid != cur_pid:
+                pm.redirect_to_project(req, res_pid)
+
         
         # Link the attachment page to parent resource
         parent_name = get_resource_name(self.env, parent)

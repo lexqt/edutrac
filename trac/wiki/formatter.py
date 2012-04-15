@@ -375,8 +375,8 @@ class Formatter(object):
             self._safe_schemes = set(self.wiki.safe_schemes)
 
     @lazy
-    def session_pid(self):
-        return self.projman.get_session_project(self.req, fail_on_none=False)
+    def current_project(self):
+        return self.projman.get_current_project(self.req, fail_on_none=False)
 
     def split_link(self, target):
         return split_url_into_path_query_fragment(target)

@@ -1,13 +1,35 @@
 import threading
 
 from trac.core import Component, Interface, TracError
-from trac.resource import GLOBAL_PID
+from trac.resource import GLOBAL_PID, ResourceNotFound
 
-from trac.project.model import ProjectNotSet, ResourceProjectMismatch
 from trac.user.api import UserManagement, GroupLevel
 
 from trac.config import ComponentDisabled
-from trac.util.translation import _
+from trac.util.translation import _, N_
+
+
+
+class ProjectNotSet(TracError):
+    """Exception that indicates project hasn't set"""
+
+    title = N_('Can not determine current project')
+
+
+class ProjectMismatch(TracError):
+    """Exception that indicates suppressed access to resource of another project"""
+
+    title = N_('No access to resources of requested project')
+
+
+class SyllabusMismatch(TracError):
+    """Exception that indicates suppressed access to resource of another syllabus"""
+
+    title = N_('No access to resources of requested syllabus')
+
+
+class ProjectNotFound(ResourceNotFound):
+    """Thrown when a non-existent project is requested"""
 
 
 
@@ -129,45 +151,36 @@ class ProjectManagement(Component):
         users.sort()
         return users
 
-    def get_current_project(self, req, err_msg=None, fail_on_none=True, _return_is_session=False):
-        pid = req.args.getint('__pid__')
-        is_session = False # is pid got from session
+    def get_current_project(self, req, err_msg=None, fail_on_none=True):
+        '''Wrapper func to get project_id from req.data or optionally raise error on None'''
 
-        if pid is None:
-            msg = err_msg or _('Can not get neither request, nor session project variable')
-            pid = self.get_session_project(req, err_msg=msg, fail_on_none=fail_on_none)
-            is_session = True
+        pid = req.data.get('project_id')
 
-        if _return_is_session:
-            return pid, is_session
+        if fail_on_none and pid is None:
+            msg = err_msg or _('Project ID is undefined (neither URL, nor session)')
+            raise ProjectNotSet(msg)
+
         return pid
 
     def get_session_project(self, req, err_msg=None, fail_on_none=True):
-        if req.session_project is None:
-            if fail_on_none:
-                msg = err_msg or _('Can not get session project variable')
-                raise ProjectNotSet(msg)
-            else:
-                return None
+        '''Wrapper func to get project_id from session or optionally raise error on None'''
+        if fail_on_none and req.session_project is None:
+            msg = err_msg or _('Can not get project ID from session. Are you logged on?')
+            raise ProjectNotSet(msg)
         return req.session_project
 
-    def check_session_project(self, req, pid, allow_multi=False, fail_on_false=True):
+    def check_session_project(self, req, pid, allow_multi=True, fail_on_false=True):
         pid = int(pid)
         if pid == GLOBAL_PID:
             return True
-        if allow_multi and 'MULTIPROJECT_ACTION' in req.perm:
+#        if allow_multi and 'MULTIPROJECT_ACTION' in req.perm:
+        if allow_multi:
             check = pid in req.user_projects
         else:
             check = pid == self.get_session_project(req)
         if fail_on_false and not check:
-            raise ResourceProjectMismatch(_('You have not enough rights in project #%(pid)s.', pid=pid))
+            raise ProjectMismatch(_('You have not enough rights in project #%(pid)s.', pid=pid))
         return check
-
-    def get_and_check_current_project(self, req, err_msg_on_get=None, allow_multi=False):
-        pid, is_session = self.get_current_project(req, err_msg=err_msg_on_get, fail_on_none=True, _return_is_session=True)
-        if not is_session:
-            self.check_session_project(req, pid, allow_multi=allow_multi, fail_on_false=True)
-        return pid
 
     def get_project_syllabus(self, pid, fail_on_none=True):
         pid = int(pid)
@@ -201,12 +214,14 @@ class ProjectManagement(Component):
         return s
 
     def get_project_info(self, pid, fail_on_none=True):
-        """Returns dict (active, team_id, studgroup_id, metagroup_id, syllabus_id)
+        """Returns dict (project_id, project_active, project_name, project_description,
+                         team_id, studgroup_id, metagroup_id, syllabus_id)
         """
         db = self.env.get_read_db()
         cursor = db.cursor()
         query = '''
-            SELECT active, team_id, studgroup_id, metagroup_id, syllabus_id
+            SELECT project_id, active AS project_active, project_name, project_description,
+                   team_id, studgroup_id, metagroup_id, syllabus_id
             FROM project_info
             WHERE project_id=%s
         '''
@@ -247,6 +262,14 @@ class ProjectManagement(Component):
                                     cname=component.__name__, sid=syllabus_id))
         return res
 
+    def redirect_to_project(self, req, project_id):
+        q = req.query_string
+        if q:
+            q = req.path_info+'?'+q
+        else:
+            q = req.path_info
+        url = req.href.copy_for_project(project_id) + q
+        req.redirect(url)
 
     # Internal methods
 

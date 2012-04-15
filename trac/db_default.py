@@ -345,7 +345,9 @@ WHERE id != 0
 ''',
 '''
 CREATE OR REPLACE VIEW project_info AS
-SELECT p.id project_id, mg.active active, msr.syllabus_id syllabus_id, tpr.team_id team_id, tgr.studgroup_id studgroup_id, gmr.metagroup_id metagroup_id
+SELECT p.id project_id, p.name project_name, p.description as project_description,
+       mg.active active, msr.syllabus_id syllabus_id,
+       tpr.team_id team_id, tgr.studgroup_id studgroup_id, gmr.metagroup_id metagroup_id
 FROM real_projects p JOIN
 team_project_rel tpr ON p.id=tpr.project_id
 JOIN teamgroup_rel tgr ON tgr.team_id=tpr.team_id
