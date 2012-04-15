@@ -171,14 +171,15 @@ class DefaultTicketGroupStatsProvider(Component):
         {'name': 'active', 'status': '*', 'css_class': 'open'}
         ]
 
-    def _get_ticket_groups(self):
+    def _get_ticket_groups(self, syllabus_id):
         """Returns a list of dict describing the ticket groups
         in the expected order of appearance in the milestone progress bars.
         """
-        if 'milestone-groups' in self.config:
+        config = self.configs.syllabus(syllabus_id)
+        if 'milestone-groups' in config:
             groups = {}
             order = 0
-            for groupname, value in self.config.options('milestone-groups'):
+            for groupname, value in config.options('milestone-groups'):
                 qualifier = 'status'
                 if '.' in groupname:
                     groupname, qualifier = groupname.split('.', 1)
@@ -202,14 +203,16 @@ class DefaultTicketGroupStatsProvider(Component):
             cursor = db.cursor()
             str_ids = [str(x) for x in sorted(ticket_ids)]
             cursor.execute("SELECT status, count(status) FROM ticket "
-                           "WHERE id IN (%s) GROUP BY status" %
-                           ",".join(str_ids))
+                           "WHERE project_id=%s AND id IN %s "
+                           "GROUP BY status",
+                           (pid, tuple(str_ids)))
             for s, cnt in cursor:
                 status_cnt[s] = cnt
 
         stat = TicketGroupStats(_('ticket status'), _('tickets'))
         remaining_statuses = set(all_statuses)
-        groups =  self._get_ticket_groups()
+        syllabus_id = ProjectManagement(self.env).get_project_syllabus(pid)
+        groups =  self._get_ticket_groups(syllabus_id)
         catch_all_group = None
         # we need to go through the groups twice, so that the catch up group
         # doesn't need to be the last one in the sequence
