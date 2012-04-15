@@ -20,7 +20,16 @@
         <a py:when="chrome.logo.src" id="logo" href="${chrome.logo.link or href.wiki('TracIni')+'#header_logo-section'}"><img
           src="${chrome.logo.src}" alt="${chrome.logo.alt}"
           height="${chrome.logo.height or None}" width="${chrome.logo.width or None}" /></a>
-        <h1 py:otherwise=""><a href="${chrome.logo.link}">${project.name}</a></h1>
+        <div py:otherwise="" class="header-title">
+          <h1><a href="${href()}">${project.name}</a></h1>
+          <py:if test="project.id">
+            <a class="header-mini" href="${project.url}" title="Permanent project URL">(#${project.id})</a>
+            <span class="header-mini"><a href="${project.switch_url}">Change project</a></span>
+            <py:if test="project.id != project.id_session">
+              <div class="header-mini" i18n:msg="">[ Project switched by URL. <a href="${req.std_href()}">Return to original</a>. ]</div>
+            </py:if>
+          </py:if>
+        </div>
       </div>
       <form id="search" action="${href.search()}" method="get">
         <div py:if="not defined('trac_error_rendering') and 'SEARCH_VIEW' in perm">

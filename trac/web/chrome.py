@@ -718,6 +718,20 @@ class Chrome(Component):
             'admin_href': admin_href,
             'admin_trac_url': self.env.project_admin_trac_url,
         }
+
+        from trac.project.api import ProjectManagement
+        from trac.project.sys import PostloginModule
+        project_man = ProjectManagement(self.env)
+        if req and 'project_id' in req.data:
+            dp = d['project']
+            rd = req.data
+            rpid = rd['project_id']
+            spid = project_man.get_session_project(req, fail_on_none=False)
+            dp['name'] = u'{0} :: {1}'.format(dp['name'], rd['project_name'])
+            dp['url'] = project_href()
+            dp['id'] = rpid
+            dp['id_session'] = spid
+            dp['switch_url'] = PostloginModule(self.env).project_switch_url(href)
         d['chrome'] = {
             'footer': Markup(translation.gettext(self.env.project_footer))
         }
