@@ -293,6 +293,8 @@ class TicketFieldsStore(object):
             self.pid = None
             self.syllabus_id = syllabus_id
             fields_cache_level = 'sid'
+        else:
+            raise ValueError('pid or syllabus_id must be set')
         self.id_ = id_
         modname = TicketFieldsStore.__module__
         clsname = TicketFieldsStore.__name__

@@ -827,7 +827,7 @@ class Repository(object):
         self.params = params
         self.reponame = params['name']
         self.id = params['id']
-        self.pid = params['project_id']
+        self.pid = int(params['project_id'])
         self.log = log
         self.resource = Resource('repository', self.reponame, pid=self.pid)
 
