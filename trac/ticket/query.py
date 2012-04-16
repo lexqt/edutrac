@@ -137,6 +137,7 @@ class Query(object):
         if self.area == 'project':
             fields = TicketSystem(self.env).get_ticket_fields(self.pid)
             self.all_fields = fields.copy()
+            self.all_fields['id'] = {'name': 'id', 'type': 'id', 'label': _("Ticket")}
             del fields['project_id']
             self.fields = fields
 
