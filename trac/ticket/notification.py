@@ -45,6 +45,12 @@ class TicketNotificationSystem(Component):
         """Always send notifications to the person who causes the ticket 
         property change and to any previous updater of that ticket.""")
         
+    notify_own_changes = BoolOption('notification', 'notify_own_changes',
+                                    'false',
+        """Send notifications even if it was triggered by the user itself. If
+        this option is "false" all recipients will only be notified about
+        changes made by other users.""")
+
     ticket_subject_template = Option('notification', 'ticket_subject_template', 
                                      '$prefix #$ticket.id: $summary',
         """A Genshi text template snippet used to get the notification subject.
@@ -353,6 +359,8 @@ class TicketNotifyEmail(NotifyEmail):
                                            'always_notify_owner')
         notify_updater = self.config.getbool('notification', 
                                              'always_notify_updater')
+        notify_own_changes = self.config.getbool('notification',
+                                                 'notify_own_changes')
 
         ccrecipients = self.prev_cc
         torecipients = []
@@ -403,6 +411,10 @@ class TicketNotifyEmail(NotifyEmail):
 
         for rcpt in self.extra_recipients:
             torecipients.append(rcpt)
+
+        if not notify_own_changes and updater:
+            torecipients = [r for r in torecipients if r != updater]
+            ccrecipients = [r for r in ccrecipients if r != updater]
 
         return (torecipients, ccrecipients)
 
