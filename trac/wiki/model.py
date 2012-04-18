@@ -39,6 +39,9 @@ class WikiPage(object):
         else:
             if version:
                 version = int(version) # must be a number or None
+                self.spec_vers = True
+            else:
+                self.spec_vers = False
             if pid:
                 pid = int(pid) # must be a number or None
         self.name = name
@@ -55,7 +58,8 @@ class WikiPage(object):
 
     @property
     def resource(self):
-        return Resource('wiki', self.name, self.version, pid=self.pid)
+        version = self.version if self.spec_vers else None
+        return Resource('wiki', self.name, version, pid=self.pid)
 
     def _fetch(self, name, version=None, db=None):
         if not db:
