@@ -546,6 +546,7 @@ class WikiSystem(Component):
         if realm == 'wiki':
             from trac.wiki.model import WikiPage
             version = args.get('version')
+            # pid = args.get('project_id') # no need at time
             return WikiPage(self.env, rsc_id, version=version)
 
     def get_realm_info(self):

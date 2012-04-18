@@ -33,15 +33,14 @@ class WikiPage(object):
     def __init__(self, env, name=None, version=None, pid=None, db=None):
         self.env = env
         if isinstance(name, Resource):
-            self.resource = name
-            name = self.resource.id
-            pid  = self.resource.pid
+            resource = name
+            name = resource.id
+            pid  = resource.pid
         else:
             if version:
                 version = int(version) # must be a number or None
             if pid:
                 pid = int(pid) # must be a number or None
-            self.resource = Resource('wiki', name, version, pid=pid)
         self.name = name
         if name:
             self._fetch(name, version, db)
@@ -53,6 +52,10 @@ class WikiPage(object):
             self.pid = pid
         self.old_text = self.text
         self.old_readonly = self.readonly
+
+    @property
+    def resource(self):
+        return Resource('wiki', self.name, self.version, pid=self.pid)
 
     def _fetch(self, name, version=None, db=None):
         if not db:
@@ -145,7 +148,6 @@ class WikiPage(object):
                           author, remote_addr, self.text, comment,
                           self.readonly, self.pid != GLOBAL_PID and self.pid or None))
                 self.version += 1
-                self.resource = self.resource(version=self.version)
             else:
                 cursor.execute("UPDATE wiki SET readonly=%s WHERE name=%s",
                                (self.readonly, self.name))
