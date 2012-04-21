@@ -291,6 +291,8 @@ jQuery(function($){
         $('#columns > div').html($("#columns > div", data).contents());
         $('#content > .buttons').html($("#content > .buttons", data).contents());
         $('#content > h1 > span.numrows').html($("#content > h1 > span.numrows", data).contents());
+        $('#content > h1 > a').attr('href', $("#content > h1 > a", data).attr('href'));
+        $('#altlinks').html($("#altlinks", data).contents());
         $('#loader').removeClass('ajax-loader-small');
       }
     });

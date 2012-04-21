@@ -29,6 +29,7 @@
     <div id="content" class="query">
       <h1>$title
         <span class="numrows">(${ngettext('%(num)s match', '%(num)s matches', query.num_items)})</span>
+        <a href="${query.get_href(project_href)}" title="Permanent URL">#</a>
       </h1>
 
       <div py:if="description" id="description" xml:space="preserve">
