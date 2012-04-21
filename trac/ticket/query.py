@@ -21,6 +21,7 @@ from math import ceil
 from datetime import datetime, timedelta
 import re
 from StringIO import StringIO
+from collections import OrderedDict
 
 from genshi.builder import tag
 
@@ -65,18 +66,23 @@ class Query(object):
     def __init__(self, env, report=None, constraints=None, cols=None,
                  order=None, desc=0, group=None, groupdesc=0, verbose=0,
                  rows=None, page=None, max=None, format=None,
-                 area='project', project=None, studgroup=None, syllabus=None):
+                 area='project', project=None, group_id=None, syllabus=None):
         self.env = env
         self.id = report # if not None, it's the corresponding saved query
         self.area = area
+        pm = ProjectManagement(self.env)
         if area == 'project':
             if project is None:
                 raise TracError(_('Project must be defined for project area query'))
             self.pid = int(project)
-            self.syllabus_id = ProjectManagement(self.env).get_project_syllabus(self.pid)
+            self.syllabus_id = pm.get_project_syllabus(self.pid)
         elif area == 'group':
-            raise NotImplementedError
-            self.studgroup_id = studgroup
+            if group_id is None:
+                raise TracError(_('Group must be defined for group area query'))
+            self.gid = int(group_id)
+            self.syllabus_id = pm.get_group_syllabus(self.gid)
+            self.projects = pm.get_group_projects(self.gid, with_names=True)
+            self.project_ids = [r[0] for r in self.projects]
         elif area == 'syllabus':
             raise NotImplementedError
             self.syllabus_id = syllabus
@@ -134,26 +140,39 @@ class Query(object):
 
         constraint_cols = {}
 
+        ts_kwargs = {}
         if self.area == 'project':
-            fields = TicketSystem(self.env).get_ticket_fields(self.pid)
-            self.all_fields = fields.copy()
-            self.all_fields['id'] = {'name': 'id', 'type': 'id', 'label': _("Ticket")}
-            del fields['project_id']
-            self.fields = fields
+            ts_kwargs['pid'] = self.pid
+            pids = [str(self.pid)]
+        elif self.area == 'group':
+            ts_kwargs['syllabus_id'] = self.syllabus_id
+            pids = [str(pid) for pid in self.project_ids]
 
-            include_column = lambda c: c in field_names or c == 'id'
+        for clause in self.constraints:
+            clause.update({'project_id': pids})
 
-            self.constraints[0].update({'project_id': [str(self.pid)]})
-#            constraint_cols.update({'project_id': [str(self.pid)]})
+        fields = TicketSystem(self.env).get_ticket_fields(**ts_kwargs)
+        self.all_fields = fields.copy()
+        self.all_fields['id'] = {'name': 'id', 'type': 'id', 'label': _("Ticket")}
+        del fields['project_id']
+        self.fields = fields
 
         self.time_fields = set(n for n, f in self.fields.iteritems()
                                if f['type'] == 'time')
         field_names = set(self.fields)
+        include_column = lambda c: c in field_names or c == 'id'
+
+        # columns to show in table
         self.cols = [c for c in cols or [] if include_column(c)]
+
+        # which columns should be expanded in rows
         self.rows = [c for c in rows if c in field_names]
+
+        # a column to sort by
         if self.order != 'id' and self.order not in field_names:
             self.order = 'priority'
 
+        # a column to group by
         if self.group not in field_names:
             self.group = None
 
@@ -163,6 +182,7 @@ class Query(object):
                     constraint_cols.setdefault(k, []).append(v)
                 else:
                     clause.pop(k)
+        # columns found in constraints
         self.constraint_cols = constraint_cols
 
     _clause_splitter = re.compile(r'(?<!\\)&')
@@ -173,7 +193,7 @@ class Query(object):
         kw_strs = ['order', 'group', 'page', 'max', 'format', 'area']
         kw_arys = ['rows']
         kw_bools = ['desc', 'groupdesc', 'verbose']
-        kw_ints = ['project', 'studgroup', 'syllabus']
+        kw_ints = ['project', 'group_id', 'syllabus']
         kw_synonyms = {'row': 'rows'}
         # i18n TODO - keys will be unicode
         synonyms = TicketSystem(env).get_field_synonyms()
@@ -229,8 +249,9 @@ class Query(object):
                                            []).extend(processed_values)
         constraints = filter(None, constraints)
         report = kw.pop('report', report)
-        current_project = kw.pop('current_project', None)
-        kw.setdefault('project', current_project)
+        if 'area' not in kw or kw['area'] == 'project':
+            current_project = kw.pop('current_project', None)
+            kw.setdefault('project', current_project)
         return cls(env, report, constraints=constraints, cols=cols, **kw)
 
     def get_columns(self):
@@ -244,29 +265,30 @@ class Query(object):
     def get_all_textareas(self):
         return [n for n, f in self.fields.iteritems() if f['type'] == 'textarea']
 
-    def get_all_columns(self):
+    def get_all_columns(self, respect_args=False):
+        '''Get sorted list of all available query columns.
+        `respect_args` - respect current query arguments while ordering columns.
+        '''
         # Prepare the default list of columns
         cols = ['id']
         cols += [n for n, f in self.fields.iteritems()
                     if f['type'] != 'textarea' and not f.get('hide_view')]
-        for col in ('reporter', 'keywords', 'cc'):
-            if col in cols:
-                cols.remove(col)
-                cols.append(col)
 
-        def sort_columns(col1, col2):
-            constrained_fields = self.constraint_cols.keys()
-            if 'id' in (col1, col2):
-                # Ticket ID is always the first column
-                return col1 == 'id' and -1 or 1
-            elif 'summary' in (col1, col2):
-                # Ticket summary is always the second column
-                return col1 == 'summary' and -1 or 1
-            elif col1 in constrained_fields or col2 in constrained_fields:
-                # Constrained columns appear before other columns
-                return col1 in constrained_fields and -1 or 1
-            return 0
-        cols.sort(sort_columns)
+        def column_prio(col):
+            if col == 'id':
+                return 0
+            elif col == 'summary':
+                return 1
+            elif respect_args and col in self.cols:
+                return 5 + self.cols.index(col)
+            elif col in self.constraint_cols:
+                return 50
+            elif col in ('reporter', 'keywords', 'cc'):
+                return 100
+            else:
+                return 45
+
+        cols.sort(key=column_prio)
         return cols
 
     def get_default_columns(self):
@@ -274,7 +296,7 @@ class Query(object):
         
         # Semi-intelligently remove columns that are restricted to a single
         # value by a query constraint.
-        for col in [k for k in self.constraint_cols.keys()
+        for col in [k for k in self.constraint_cols
                     if k != 'id' and k in cols]:
             constraints = self.constraint_cols[col]
             for constraint in constraints:
@@ -595,7 +617,17 @@ class Query(object):
                             (end, ))
                 else:
                     return None
-                
+
+            if mode == '' and (
+                    value is None or value == ''):
+                clauses = ['%s IS%s NULL' % (col, ' NOT' if neg else '')]
+                if type_ not in ('int', 'float'):
+                    clauses.append("%s %s= ''" % (col, '!' if neg else ''))
+                return (
+                        '(' + ' OR '.join(clauses) + ')',
+                        ()
+                    )
+
             if mode == '~' and name == 'keywords':
                 words = value.split()
                 clauses, args = [], []
@@ -694,10 +726,15 @@ class Query(object):
                         col = 't.' + k
                     else:
                         col = '%s.value' % db.quote(k)
-                    clauses.append("COALESCE(%s,'') %sIN (%s)"
-                                   % (col, neg and 'NOT ' or '',
-                                      ','.join(['%s' for val in v])))
-                    args.extend([val[neg:] for val in v])
+                    # for group area query
+                    if k == 'project_id':
+                        clauses.append('%s IN %%s' % col)
+                        args.append(tuple(v))
+                    else:
+                        clauses.append("COALESCE(%s,'') %sIN (%s)"
+                                       % (col, neg and 'NOT ' or '',
+                                          ','.join(['%s' for val in v])))
+                        args.extend([val[neg:] for val in v])
                 elif v:
                     constraint_sql = [get_constraint_sql(k, val, mode, neg)
                                       for val in v]
@@ -725,6 +762,8 @@ class Query(object):
                            (','.join([str(id) for id in cached_ids])))
             
         sql.append("\nORDER BY ")
+        if self.area == 'group':
+            sql.append('t.project_id, ')
         order_cols = [(self.order, self.desc)]
         if self.group and self.group != self.order:
             order_cols.insert(0, (self.group, self.groupdesc))
@@ -834,8 +873,14 @@ class Query(object):
                 constraints[k] = constraint
             clauses.append(constraints)
 
+        ts_kwargs = {}
+        if self.area == 'project':
+            ts_kwargs['pid'] = self.pid
+        elif self.area == 'group':
+            ts_kwargs['syllabus_id'] = self.syllabus_id
+
         cols = self.get_columns()
-        labels = TicketSystem(self.env).get_ticket_field_labels(pid=self.pid)
+        labels = TicketSystem(self.env).get_ticket_field_labels(**ts_kwargs)
         wikify = set(n for n, f in self.fields.iteritems()
                      if f['type'] == 'text' and f.get('format') == 'wiki')
 
@@ -856,8 +901,11 @@ class Query(object):
                 field['options'].insert(0, '$USER')
             fields[name] = field
 
-        groups = {}
-        groupsequence = []
+        is_group_area = self.area == 'group'
+        groups = OrderedDict()
+        if is_group_area:
+            for pid in self.project_ids:
+                groups[pid] = OrderedDict()
         for ticket in tickets:
             if orig_list:
                 # Mark tickets added or changed since the query was first
@@ -866,25 +914,52 @@ class Query(object):
                     ticket['added'] = True
                 elif ticket['changetime'] > orig_time:
                     ticket['changed'] = True
+            if is_group_area:
+                tpid = ticket['project_id']
+                groups_ = groups[tpid]
+                if not self.group:
+                    groups_.setdefault(None, []).append(ticket)
+            else:
+                groups_ = groups
             if self.group:
-                group_key = ticket[self.group]
-                groups.setdefault(group_key, []).append(ticket)
-                if not groupsequence or group_key not in groupsequence:
-                    groupsequence.append(group_key)
-        groupsequence = [(value, groups[value]) for value in groupsequence]
+                group_key = ticket[self.group] or ''
+                groups_.setdefault(group_key, []).append(ticket)
+        if is_group_area:
+            # remove empty projects
+            empty_projects = []
+            for pid in self.project_ids:
+                if not groups[pid]:
+                    del groups[pid]
+                    empty_projects.append(pid)
+            # move empty to the beginning if first page shown
+            if self.page == self.default_page and empty_projects:
+                gs = groups
+                groups = OrderedDict()
+                for p in empty_projects:
+                    groups[p] = {None: []}
+                for g in gs:
+                    groups[g] = gs[g]
+            
+            groupsequence = [(pid, groups[pid].items()) for pid in groups]
+            groupsequence_ = groupsequence[-1][1]
+            data_group_key = 'project_groups'
+        else:
+            groupsequence = groups.items() or [(None, tickets)]
+            groupsequence_ = groupsequence
+            data_group_key = 'groups'
 
         # detect whether the last group continues on the next page,
         # by checking if the extra (max+1)th ticket is in the last group
         last_group_is_partial = False
-        if groupsequence and self.max and len(tickets) == self.max + 1:
+        if groupsequence_[-1][0] and self.max and len(tickets) == self.max + 1:
             del tickets[-1]
-            if len(groupsequence[-1][1]) == 1: 
+            if len(groupsequence_[-1][1]) == 1: 
                 # additional ticket started a new group
-                del groupsequence[-1] # remove that additional group
+                del groupsequence_[-1] # remove that additional group
             else:
                 # additional ticket stayed in the group 
                 last_group_is_partial = True
-                del groupsequence[-1][1][-1] # remove the additional ticket
+                del groupsequence_[-1][1][-1] # remove the additional ticket
 
         results = Paginator(tickets,
                             self.page - 1,
@@ -920,7 +995,8 @@ class Query(object):
         pmin, pmax =  Priority.get_min_max(env=self.env, syllabus_id=self.syllabus_id)
         priorities = {'min': pmin, 'max': pmax}
 
-        return {'query': self,
+        data = {
+                'query': self,
                 'context': context,
                 'col': cols,
                 'row': self.rows,
@@ -930,9 +1006,13 @@ class Query(object):
                 'priorities': priorities,
                 'modes': self.get_modes(),
                 'tickets': tickets,
-                'groups': groupsequence or [(None, tickets)],
+                'groups': [],
                 'last_group_is_partial': last_group_is_partial,
                 'paginator': results}
+        data[data_group_key] = groupsequence
+        if is_group_area:
+            data['project_names'] = dict(self.projects)
+        return data
 
     @classmethod
     def substitute_dyn_vars(cls, var_list, values, del_undefined=False):
@@ -1023,10 +1103,13 @@ class QueryModule(Component):
 
         args = req.args
 
-        if args.get('area', 'project') != 'project':
-            raise NotImplementedError
+        area = args.get('area', 'project')
+        if area not in ('project', 'group'):
+            raise TracError(_('Unknown area "%(area)s" specified for query', area=area))
+
         pid = None
         pid_arg = args.getint('project')
+
         if 'report' in args:
             report_id = args.getint('report')
             # FIXME: create Report model
@@ -1036,18 +1119,33 @@ class QueryModule(Component):
                            (report_id,))
             row = cursor.fetchone()
             if row:
+                if area != 'project':
+                    raise TracError(_('Can not use project reports for group area query'))
                 pid = row[0]
                 if pid_arg is not None and pid != pid_arg:
                     add_warning(req, _('Can not change "project" param to "%(ppid)s" '
                                        'for project #%(rpid)s report', ppid=pid_arg, rpid=pid))
-        if pid is None:
-            pm = ProjectManagement(self.env)
-            if pid_arg is not None:
-                pid = pid_arg
-            else:
-                pid = pm.get_current_project(req)
-            # just check, do not redirect
-            pm.check_session_project(req, pid)
+
+        pm = ProjectManagement(self.env)
+        query_area_args = {'area': area}
+        ts_kwargs = {}
+        if area == 'project':
+            if pid is None:
+                if pid_arg is not None:
+                    pid = pid_arg
+                else:
+                    pid = pm.get_current_project(req)
+                # just check, do not redirect
+                pm.check_session_project(req, pid)
+            query_area_args['project'] = pid
+            ts_kwargs['pid'] = pid
+        elif area == 'group':
+            req.perm.require('TICKET_VIEW_GROUP_AREA')
+            # check if data ready
+            pid = pm.get_current_project(req)
+            gid = req.data['group_id']
+            query_area_args['group_id'] = gid
+            ts_kwargs['syllabus_id'] = pm.get_group_syllabus(gid)
 
         constraints = self._get_constraints(req, pid=pid)
         if not constraints and not 'order' in req.args:
@@ -1068,7 +1166,7 @@ class QueryModule(Component):
                 args = arg_list_to_args(arg_list)
                 constraints = self._get_constraints(arg_list=arg_list, pid=pid)
             else:
-                query = Query.from_string(self.env, qstring, project=pid)
+                query = Query.from_string(self.env, qstring, **query_area_args)
                 args = {'order': query.order, 'group': query.group,
                         'col': query.cols, 'max': query.max}
                 if query.desc:
@@ -1091,19 +1189,22 @@ class QueryModule(Component):
                     else:
                         del clause[field]
 
-        fields = TicketSystem(self.env).get_ticket_fields(pid=pid)
+        fields = TicketSystem(self.env).get_ticket_fields(**ts_kwargs)
         has_date = False
         for n, f in fields.iteritems():
             if f['type'] == 'date':
                 has_date = True
                 break
 
+        add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.core.css')
+        add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.theme.css')
+        add_script(req, 'common/js/jquery.ui.core.js')
+        add_script(req, 'common/js/jquery.ui.widget.js')
+        add_script(req, 'common/js/jquery.ui.mouse.js')
+        add_script(req, 'common/js/jquery.ui.sortable.js')
+
         if has_date:
-            add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.core.css')
             add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.datepicker.css')
-            add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.theme.css')
-            add_script(req, 'common/js/jquery.ui.core.js')
-            add_script(req, 'common/js/jquery.ui.widget.js')
             add_script(req, 'common/js/jquery.ui.datepicker.js')
             add_script(req, 'common/js/datepicker.js')
 
@@ -1128,7 +1229,7 @@ class QueryModule(Component):
                       rows,
                       args.get('page'), 
                       max,
-                      project=pid)
+                      **query_area_args)
 
         if 'update' in req.args:
             # Reset session vars
@@ -1156,8 +1257,15 @@ class QueryModule(Component):
     remove_re = re.compile(r'rm_filter_\d+_(.+)_(\d+)$')
     add_re = re.compile(r'add_(\d+)$')
 
-    def _get_constraints(self, req=None, arg_list=[], pid=None):
-        fields = TicketSystem(self.env).get_ticket_fields(pid)
+    def _get_constraints(self, req=None, arg_list=[], pid=None, syllabus_id=None):
+        ts_kwargs = {}
+        if pid is not None:
+            ts_kwargs['pid'] = pid
+        elif syllabus_id is not None:
+            ts_kwargs['syllabus_id'] = syllabus_id
+        else:
+            raise ValueError
+        fields = TicketSystem(self.env).get_ticket_fields(**ts_kwargs)
         synonyms = TicketSystem(self.env).get_field_synonyms()
         fields['id'] = {'type': 'id'}
         fields.update((k, fields[v]) for k, v in synonyms.iteritems())
@@ -1269,8 +1377,9 @@ class QueryModule(Component):
             ro_kwargs = {}
             if query.area == 'project':
                 ro_kwargs['pid'] = query.pid
+            if query.area == 'group':
+                ro_kwargs['gid'] = query.gid
             TicketSystem(self.env).eventually_restrict_owner(owner_field, **ro_kwargs)
-        # FIXME: valid for area 'project' only
         data = query.template_data(context, tickets, orig_list, orig_time, req)
 
         req.session['query_href'] = query.get_href(context.href)
@@ -1302,7 +1411,7 @@ class QueryModule(Component):
         data.setdefault('description', None)
         data['title'] = title
 
-        data['all_columns'] = query.get_all_columns()
+        data['all_columns'] = query.get_all_columns(respect_args=True)
         # Don't allow the user to remove the id column        
         data['all_columns'].remove('id')
         data['all_textareas'] = query.get_all_textareas()

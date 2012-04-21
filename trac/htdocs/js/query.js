@@ -272,3 +272,51 @@
   }
 
 })(jQuery);
+
+jQuery(function($){
+
+  function update_filter(urlget){
+    $('#loader').addClass('ajax-loader-small');
+
+    var dataString = urlget && {}     || $('#query').serialize();
+    var url        = urlget && urlget || $('#query').attr('action');
+    var type       = urlget && 'GET'  || 'POST';
+
+    $.ajax({
+      type: type,
+      url: url,
+      data: dataString,
+      success: function(data) {
+        $('#content .listing').parent().html($("#content .listing", data).parent().contents());
+        $('#columns > div').html($("#columns > div", data).contents());
+        $('#content > .buttons').html($("#content > .buttons", data).contents());
+        $('#content > h1 > span.numrows').html($("#content > h1 > span.numrows", data).contents());
+        $('#loader').removeClass('ajax-loader-small');
+      }
+    });
+  }
+
+  $('#query').submit(function() {
+    update_filter();
+    return false;
+  });
+  $("#content").delegate('table.listing tr.trac-columns th a', 'click', function() {
+    update_filter($(this).attr('href'));
+    return false;
+  });
+  $("#content").delegate('div.paging a', 'click', function() {
+    update_filter($(this).attr('href'));
+    return false;
+  });
+
+  $('#columns-sortable').sortable({
+    placeholder: "ui-state-highlight"
+  });
+
+  $('input[name=area]').change(function(){
+    // force reload
+    var url = $('#query').attr('action') + '?area=' + $(this).val();
+    window.location = url;
+  });
+
+});

@@ -39,13 +39,9 @@
       </th>
     </tr>
   </py:def>
-  ${groups and group_heading(*groups[0]) or None}
-  <table class="listing tickets">
-    <thead py:strip="group_index">
-      ${column_headers()}
-    </thead>
+  <py:def function="list_tickets(groups)">
     <py:for each="group_index, (groupname, results) in enumerate(groups)">
-      <tbody py:if="group_index">
+      <tbody>
         <tr py:if="groupname is not None" class="trac-group">
           <th colspan="${len(headers)}">
             ${group_heading(groupname, results)}
@@ -116,6 +112,27 @@
         </tr>
       </tbody>
     </py:for>
+  </py:def>
+  <table class="listing tickets">
+    <py:choose>
+      <py:when test="project_groups">
+        <py:for each="pid, pgroups in project_groups">
+          <tbody>
+            <tr class="trac-group" py:with="phref = href.copy_for_project(pid)">
+              <th colspan="${len(headers)}">
+                <h2 class="report-result project-group">
+                  Project: <a href="${phref.report()}" target="_blank">${project_names[pid]}</a>
+                </h2>
+              </th>
+            </tr>
+          </tbody>
+          ${list_tickets(pgroups)}
+        </py:for>
+      </py:when>
+      <py:otherwise>
+        ${list_tickets(groups)}
+      </py:otherwise>
+    </py:choose>
   </table>
   <xi:include py:if="paginator.show_index" href="page_index.html" />
 </div>

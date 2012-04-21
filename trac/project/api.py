@@ -215,13 +215,13 @@ class ProjectManagement(Component):
 
     def get_project_info(self, pid, fail_on_none=True):
         """Returns dict (project_id, project_active, project_name, project_description,
-                         team_id, studgroup_id, metagroup_id, syllabus_id)
+                         team_id, group_id, metagroup_id, syllabus_id)
         """
         db = self.env.get_read_db()
         cursor = db.cursor()
         query = '''
             SELECT project_id, active AS project_active, project_name, project_description,
-                   team_id, studgroup_id, metagroup_id, syllabus_id
+                   team_id, studgroup_id AS group_id, metagroup_id, syllabus_id
             FROM project_info
             WHERE project_id=%s
         '''
@@ -245,10 +245,29 @@ class ProjectManagement(Component):
             SELECT project_id
             FROM project_info
             WHERE syllabus_id=%s
+            ORDER BY project_id
         '''
         cursor.execute(query, (syllabus_id,))
         rows = cursor.fetchall()
         return [r[0] for r in rows]
+
+    def get_group_projects(self, gid, with_names=False):
+        '''Return all projects connected with specified group'''
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+        query = '''
+            SELECT project_id{0}
+            FROM project_info
+            WHERE studgroup_id=%s
+            ORDER BY project_id
+        '''
+        query = query.format(', project_name' if with_names else '')
+        cursor.execute(query, (gid,))
+        rows = cursor.fetchall()
+        if with_names:
+            return [(r[0], r[1]) for r in rows]
+        else:
+            return [r[0] for r in rows]
 
     def check_component_enabled(self, component, pid=None, syllabus_id=None, raise_on_disabled=True):
         if pid is not None:

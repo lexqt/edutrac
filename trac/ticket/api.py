@@ -34,7 +34,7 @@ from trac.util.translation import _, N_, gettext
 from trac.wiki import IWikiSyntaxProvider, WikiParser
 
 from trac.project.api import ProjectManagement
-from trac.user.api import UserManagement
+from trac.user.api import UserManagement, GroupLevel
 
 
 
@@ -251,7 +251,7 @@ class TicketFieldsStore(object):
             (+) - value is defined always
     `name` (+): should be valid python identifier
                 and can not be one of reserved names (TicketSystem.reserved_field_names)
-    `type` (+): field type (id, int, float, text, textarea, username, time, checkbox, select, radio)
+    `type` (+): field type (id, int, float, text, textarea, username, time, date, checkbox, select, radio)
     `label` (+): field label to render in templates
     `optional` (+): is field optional
     `auto` (base only): field is out of user control,
@@ -605,15 +605,19 @@ class TicketSystem(Component):
         # i18n TODO - translated keys
         return {'created': 'time', 'modified': 'changetime'}
 
-    def eventually_restrict_owner(self, field, ticket=None, pid=None):
-        """Restrict given owner field to be a list of users having
-        the TICKET_MODIFY permission (for the given ticket)
+    def eventually_restrict_owner(self, field, ticket=None, pid=None, gid=None):
+        """Restrict given owner field to be a list of users
+        from specified project or group.
         """
         if ticket:
             pid = ticket.pid
-        skip = pid is None
+        skip = pid is None and gid is None
         if not skip and self.restrict_owner:
-            possible_owners = UserManagement(self.env).get_project_users(pid, ('team',))
+            um = UserManagement(self.env)
+            if pid is not None:
+                possible_owners = um.get_project_users(pid, ('team',))
+            else:
+                possible_owners = um.get_group_users(gid, group_lvl=GroupLevel.STUDGROUP)
             if possible_owners:
                 possible_owners.sort()
                 field['type'] = 'select'
@@ -624,12 +628,13 @@ class TicketSystem(Component):
 
     def get_permission_actions(self):
         return ['TICKET_APPEND', 'TICKET_CREATE', 'TICKET_CHGPROP',
-                'TICKET_VIEW', 'TICKET_EDIT_CC', 'TICKET_EDIT_DESCRIPTION',
+                'TICKET_VIEW', 'TICKET_VIEW_GROUP_AREA',
+                'TICKET_EDIT_CC', 'TICKET_EDIT_DESCRIPTION',
                 'TICKET_EDIT_COMMENT', 'TICKET_SET_REPORTER',
                 ('TICKET_MODIFY', ['TICKET_APPEND', 'TICKET_CHGPROP']),
                 ('TICKET_ADMIN', ['TICKET_CREATE', 'TICKET_MODIFY',
-                                  'TICKET_VIEW', 'TICKET_EDIT_CC',
-                                  'TICKET_EDIT_DESCRIPTION',
+                                  'TICKET_VIEW', 'TICKET_VIEW_GROUP_AREA',
+                                  'TICKET_EDIT_CC', 'TICKET_EDIT_DESCRIPTION',
                                   'TICKET_EDIT_COMMENT', 'TICKET_SET_REPORTER'])]
 
     # IWikiSyntaxProvider methods

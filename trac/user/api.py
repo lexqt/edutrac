@@ -267,8 +267,8 @@ class UserManagement(Component):
 
         db = self.env.get_read_db()
         cursor = db.cursor()
-        res = cursor.execute(query, (gid))
-        row = res.fetchone()
+        cursor.execute(query, (gid,))
+        row = cursor.fetchone()
         return row[0]
 
     def get_group_users(self, gid, group_lvl=GroupLevel.TEAM):
@@ -283,8 +283,8 @@ class UserManagement(Component):
 
         db = self.env.get_read_db()
         cursor = db.cursor()
-        res = cursor.execute(query, (gid))
-        rows = res.fetchall()
+        cursor.execute(query, (gid,))
+        rows = cursor.fetchall()
         return [r[0] for r in rows]
 
     def get_group_user_count(self, gid, group_lvl=GroupLevel.TEAM):
@@ -298,8 +298,8 @@ class UserManagement(Component):
 
         db = self.env.get_read_db()
         cursor = db.cursor()
-        res = cursor.execute(query, (gid))
-        row = res.fetchone()
+        cursor.execute(query, (gid,))
+        row = cursor.fetchone()
         return row[0]
 
     def get_user_group(self, user, group_lvl=GroupLevel.TEAM):

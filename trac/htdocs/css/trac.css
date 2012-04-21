@@ -647,3 +647,12 @@ div.system-message p.system-message-title { font-weight: bold; }
  }
  form.printableform { display: block }
 }
+
+/* AJAX loader image styles */
+
+.ajax-loader-small {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: url('../ajax-loader-small.gif') 0 0 transparent;
+}
