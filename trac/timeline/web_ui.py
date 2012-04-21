@@ -215,7 +215,7 @@ class TimelineModule(Component):
             data['context'] = html_context
 
         add_stylesheet(req, 'common/css/timeline.css')
-        rss_href = req.href.timeline([(f, 'on') for f in filters],
+        rss_href = req.project_href.timeline([(f, 'on') for f in filters],
                                      daysback=90, max=50, authors=authors,
                                      format='rss')
         add_link(req, 'alternate', rss_href, _('RSS Feed'),

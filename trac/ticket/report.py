@@ -305,7 +305,7 @@ class ReportModule(Component):
                            filename='reports.tsv')
 
         def report_href(**kwargs):
-            return req.href.report(sort=req.args.get('sort'),
+            return req.project_href.report(sort=req.args.get('sort'),
                                    asc=asc and '1' or '0', **kwargs)
 
         add_link(req, 'alternate', 
@@ -435,8 +435,9 @@ class ReportModule(Component):
             if max:
                 params['max'] = max
             params.update(kwargs)
-            params['asc'] = params.get('asc', asc) and '1' or '0'            
-            return req.href.report(id, params)
+            params['asc'] = params.get('asc', asc) and '1' or '0'
+            href = kwargs.pop('href', req.href)
+            return href.report(id, params)
 
         data = {'action': 'view',
                 'report': {
@@ -640,11 +641,11 @@ class ReportModule(Component):
         else:
             p = max is not None and page or None
             add_link(req, 'alternate', 
-                     report_href(format='rss', page=None),
+                     report_href(format='rss', page=None, href=req.project_href),
                      _('RSS Feed'), 'application/rss+xml', 'rss')
-            add_link(req, 'alternate', report_href(format='csv', page=p),
+            add_link(req, 'alternate', report_href(format='csv', page=p, href=req.project_href),
                      _('Comma-delimited Text'), 'text/plain')
-            add_link(req, 'alternate', report_href(format='tab', page=p),
+            add_link(req, 'alternate', report_href(format='tab', page=p, href=req.project_href),
                      _('Tab-delimited Text'), 'text/plain')
             if 'REPORT_SQL_VIEW' in req.perm:
                 add_link(req, 'alternate', 

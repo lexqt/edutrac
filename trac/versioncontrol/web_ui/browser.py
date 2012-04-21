@@ -612,7 +612,7 @@ class BrowserModule(Component):
             path = repos.reponame + '/' + path
         if any(fnmatchcase(path, p.strip('/'))
                for p in self.downloadable_paths):
-            zip_href = req.href.changeset(rev or repos.youngest_rev, 
+            zip_href = req.project_href.changeset(rev or repos.youngest_rev,
                                           repos.reponame or None, node.path,
                                           old=rev,
                                           old_path=repos.reponame or '/',
@@ -672,13 +672,13 @@ class BrowserModule(Component):
 
             # add ''Plain Text'' alternate link if needed
             if not is_binary(chunk) and mime_type != 'text/plain':
-                plain_href = req.href.browser(repos.reponame or None,
+                plain_href = req.project_href.browser(repos.reponame or None,
                                               node.path, rev=rev, format='txt')
                 add_link(req, 'alternate', plain_href, _('Plain Text'),
                          'text/plain')
 
             # add ''Original Format'' alternate link (always)
-            raw_href = req.href.export(rev or repos.youngest_rev, 
+            raw_href = req.project_href.export(rev or repos.youngest_rev,
                                        repos.reponame or None, node.path)
             add_link(req, 'alternate', raw_href, _('Original Format'),
                      mime_type)

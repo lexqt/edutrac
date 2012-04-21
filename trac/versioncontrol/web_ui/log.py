@@ -208,7 +208,8 @@ class LogModule(Component):
             params.update(args)
             if verbose:
                 params['verbose'] = verbose
-            return req.href.log(repos.reponame or None, path, **params)
+            href = args.pop('href', req.href)
+            return href.log(repos.reponame or None, path, **params)
 
         if format in ('rss', 'changelog'):
             info = [i for i in info if i['change']] # drop separators
@@ -295,11 +296,11 @@ class LogModule(Component):
             add_link(req, 'up', path_links[-2]['href'], _('Parent directory'))
 
         rss_href = make_log_href(path, format='rss', revs=revs,
-                                 stop_rev=stop_rev)
+                                 stop_rev=stop_rev, href=req.project_href)
         add_link(req, 'alternate', rss_href, _('RSS Feed'),
                  'application/rss+xml', 'rss')
         changelog_href = make_log_href(path, format='changelog', revs=revs,
-                                       stop_rev=stop_rev)
+                                       stop_rev=stop_rev, href=req.project_href)
         add_link(req, 'alternate', changelog_href, _('ChangeLog'), 'text/plain')
 
         add_ctxtnav(req, _('View Latest Revision'), 

@@ -380,7 +380,7 @@ class RoadmapModule(Component):
         username = None
         if req.authname and req.authname != 'anonymous':
             username = req.authname
-        icshref = req.href.roadmap(show=show, user=username, format='ics')
+        icshref = req.project_href.roadmap(show=show, user=username, format='ics')
         add_link(req, 'alternate', icshref, _('iCalendar'), 'text/calendar',
                  'ics')
 

@@ -903,18 +903,19 @@ class AttachmentModule(Component):
                     mime_type = mime_type + '; charset=' + charset
                 req.send_file(attachment.path, mime_type)
 
+            href = req.project_href if attachment.resource.pid is not None else req.href
             # add ''Plain Text'' alternate link if needed
             if (self.render_unsafe_content and 
                 mime_type and not mime_type.startswith('text/plain')):
                 plaintext_href = get_resource_url(self.env,
                                                   attachment.resource,
-                                                  req.href, format='txt')
+                                                  href, format='txt')
                 add_link(req, 'alternate', plaintext_href, _('Plain Text'),
                          mime_type)
 
             # add ''Original Format'' alternate link (always)
             raw_href = get_resource_url(self.env, attachment.resource,
-                                        req.href, format='raw')
+                                        href, format='raw')
             add_link(req, 'alternate', raw_href, _('Original Format'),
                      mime_type)
 

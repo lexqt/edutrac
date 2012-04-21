@@ -645,7 +645,7 @@ class TicketModule(Component):
         for conversion in mime.get_supported_conversions('trac.ticket.Ticket'):
             format = conversion[0]
             conversion_href = get_resource_url(self.env, ticket.resource,
-                                               req.href, format=format)
+                                               req.project_href, format=format)
             add_link(req, 'alternate', conversion_href, conversion[1],
                      conversion[4], format)
                      
