@@ -6,7 +6,10 @@ from trac.core import Component, implements, TracError
 from trac.db import with_transaction
 from trac.admin import IAdminCommandProvider
 from trac.web.api import IRequestFilter, RequestDone, IAuthenticator
+from trac.perm import PermissionError
 from trac.project.sys import ProjectSystem
+from trac.project.api import ProjectManagement
+from trac.user.api import UserManagement
 
 from genshi.builder import tag
 from trac.util.translation import _
@@ -329,6 +332,7 @@ class HTTPAuthFilter(Component):
 
     def __init__(self):
         self.ps = ProjectSystem(self.env)
+        self.pm = ProjectManagement(self.env)
 
     # IRequestFilter
 
@@ -353,21 +357,29 @@ class HTTPAuthFilter(Component):
             if 'project_id' not in req.data:
                 raise TracError('Can not continue process request with no project ID. '
                                 'Insert "/project/<id>/" in your URL.')
+            pid = req.data['project_id']
 
-            # TODO: check project.
-            # If fail set some flag in req.data, raise PermissionError(msg='...')
-            # Check flag and reraise it in post_process_request
-            del req.data['project_id']
-            raise NotImplementedError
-
-            self.ps.set_request_data(req, req.data['project_id'])
+            # check project
             # TODO: what about user role?
             req.data['role'] = None
+            for role in (UserManagement.USER_ROLE_DEVELOPER, UserManagement.USER_ROLE_MANAGER):
+                pids = self.pm.get_user_projects(req.authname, role=role, pid_only=True)
+                if pid in pids:
+                    req.data['role'] = role
+                    self.ps.set_request_data(req, pid)
+                    break
+            else:
+                del req.data['project_id']
+                req.data['http_auth_fail_project_check'] = True
+                raise PermissionError(msg='You have no access to requested project')
+
             # authentication and request data preparation done
             req.data['force_httpauth'] = True
         return handler
 
     def post_process_request(self, req, template, content_type):
+        if 'http_auth_fail_project_check' in req.data:
+            raise PermissionError(msg='You have no access to requested project')
         return template, content_type
 
     # IRequestHandler
