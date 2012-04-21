@@ -237,13 +237,11 @@ class TicketFieldFilters(Component):
                 for l in row:
                     if isinstance(l,list):
                         for t in l:
-                            id = t["id"]
                             for cell_group in t["cell_groups"]:
-                                for group in cell_group:
-                                    for field in cell_group:
-                                        c = field["header"]["col"].lower()
-                                        if c in dfields:
-                                            field["value"] = ''
+                                for cell in cell_group:
+                                    c = cell["header"]["col"].lower()
+                                    if c in dfields:
+                                        cell["value"] = ''
 
         #query page                                                            
         elif template == "query.html":
@@ -300,7 +298,7 @@ class TicketFieldFilters(Component):
     def filter_stream(self, req, method, filename, stream, data):
         #remove matches from custom queries due to the fact ticket permissions are checked after this stream is manipulated so the count cannot be updated.
         if filename == "query.html":
-            stream |= Transformer('//div[@class="query"]/h1/span[@class="numrows"]/text()').replace("")
+            pass
 
 #            def make_col_helper(field):
 #                def column_helper (column_stream):
@@ -323,14 +321,6 @@ class TicketFieldFilters(Component):
 #                    '//fieldset[@id="columns"]/div/label'
 #                    ).filter(make_col_helper(field))
 #                        
-#                # remove from the results table
-#                stream = stream | Transformer(
-#                    '//th[@class="%s"]' % field
-#                    ).replace(" ")
-#                stream = stream | Transformer(
-#                    '//td[@class="%s"]' % field
-#                    ).replace(" ")
-#                
 #                # remove from the filters
 #                stream = stream | Transformer(
 #                    '//tr[@class="%s"]' % field
