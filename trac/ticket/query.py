@@ -896,8 +896,11 @@ class Query(object):
             if field.get('hide_view'):
                 continue
             if name == 'owner' and field['type'] == 'select':
-                # Make $USER work when restrict_owner = true
                 field = field.copy()
+                # Add current user to list
+                if req and req.authname not in field['options']:
+                    field['options'].insert(0, req.authname)
+                # Make $USER work when restrict_owner = true
                 field['options'].insert(0, '$USER')
             fields[name] = field
 
@@ -1377,6 +1380,7 @@ class QueryModule(Component):
             ro_kwargs = {}
             if query.area == 'project':
                 ro_kwargs['pid'] = query.pid
+                ro_kwargs['include_manager'] = True
             if query.area == 'group':
                 ro_kwargs['gid'] = query.gid
             TicketSystem(self.env).eventually_restrict_owner(owner_field, **ro_kwargs)

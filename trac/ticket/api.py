@@ -605,9 +605,10 @@ class TicketSystem(Component):
         # i18n TODO - translated keys
         return {'created': 'time', 'modified': 'changetime'}
 
-    def eventually_restrict_owner(self, field, ticket=None, pid=None, gid=None):
+    def eventually_restrict_owner(self, field, ticket=None, pid=None, gid=None, include_manager=False):
         """Restrict given owner field to be a list of users
         from specified project or group.
+        `include_manager` - add managers to project users.
         """
         if ticket:
             pid = ticket.pid
@@ -615,7 +616,10 @@ class TicketSystem(Component):
         if not skip and self.restrict_owner:
             um = UserManagement(self.env)
             if pid is not None:
-                possible_owners = um.get_project_users(pid, ('team',))
+                realms = ['team']
+                if include_manager:
+                    realms.append('manager')
+                possible_owners = um.get_project_users(pid, realms)
             else:
                 possible_owners = um.get_group_users(gid, group_lvl=GroupLevel.STUDGROUP)
             if possible_owners:
