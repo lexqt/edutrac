@@ -262,8 +262,8 @@ class TicketModule(Component):
 
         field_labels = TicketSystem(self.env).get_ticket_field_labels(**ts_kwargs)
 
-        def produce_event((id, ts, author, type, summary, description),
-                          status, fields, comment, cid, project_id=None):
+        def produce_event((id, ts, project_id, author, type, summary, description),
+                          status, fields, comment, cid):
             ticket = ticket_realm(id=id, pid=project_id)
             if 'TICKET_VIEW' not in req.perm(ticket):
                 return None
@@ -310,44 +310,40 @@ class TicketModule(Component):
                 (ts_start, ts_stop, pid))
             data = None
             for vals in cursor:
-                project_id = vals[0]
-                vals = vals[1:]
-                id,t,author,type,summary,field,oldvalue,newvalue = vals
+                project_id,id,t,author,type,summary,field,oldvalue,newvalue = vals
                 if not (oldvalue or newvalue):
                     # ignore empty change from custom field created or deleted
                     continue 
                 if not data or (id, t) != data[:2]:
                     if data:
-                        ev = produce_event(data, status, fields, comment, cid, project_id)
+                        ev = produce_event(data, status, fields, comment, cid)
                         if ev:
                             yield ev
                     status, fields, comment, cid = 'edit', {}, '', None
-                    data = (id, t, author, type, summary, None)
+                    data = (id, t, project_id, author, type, summary, None)
                 if field == 'comment':
                     comment = newvalue
                     cid = oldvalue and oldvalue.split('.')[-1]
                     # Always use the author from the comment field
-                    data = data[:2] + (author,) + data[3:]
+                    data = data[:3] + (author,) + data[4:]
                 elif field == 'status' and newvalue in ('reopened', 'closed'):
                     status = newvalue
                 elif field[0] != '_': # properties like _comment{n} are hidden
                     fields[field] = newvalue
             if data:
-                ev = produce_event(data, status, fields, comment, cid, project_id)
+                ev = produce_event(data, status, fields, comment, cid)
                 if ev:
                     yield ev
 
             # New tickets
             if 'ticket' in filters:
                 cursor.execute("""
-                    SELECT project_id,id,time,reporter,type,summary,description
+                    SELECT id,time,project_id,reporter,type,summary,description
                     FROM ticket WHERE project_id {where_pid} AND time>=%s AND time<=%s
                     """.format(where_pid=where_pid),
                     (pid, ts_start, ts_stop))
                 for row in cursor:
-                    project_id = row[0]
-                    row = row[1:]
-                    ev = produce_event(row, 'new', {}, None, None, project_id)
+                    ev = produce_event(row, 'new', {}, None, None)
                     if ev:
                         yield ev
 
