@@ -21,7 +21,21 @@
         and <label><input type="text" size="3" name="daysback" value="$daysback" /> days back</label><br />
         <label>done by <input type="text" size="16" name="authors" value="$authors" /></label>
        </div>
+       <py:choose test="'TIMELINE_VIEW_GROUP_AREA' in perm">
+         <fieldset py:when="True">
+           <legend>Query area</legend>
+           <label>
+             <input type="radio" name="area" value="project" checked="${area == 'project' or None}" />Project
+           </label>
+           <label>
+             <input type="radio" name="area" value="group" checked="${area == 'group' or None}" />All projects of the group within the scope of same syllabus
+           </label>
+         </fieldset>
+         <input py:otherwise="" type="hidden" name="area" value="project" />
+       </py:choose>
+
        <fieldset>
+        <legend>Filters</legend>
         <label py:for="filter in filters">
           <input type="checkbox" name="${filter.name}"
                  checked="${filter.enabled or None}"/> ${filter.label}
@@ -32,8 +46,8 @@
        </div>
       </form>
 
-      <py:for each="day, events in groupby(events, key=lambda e: format_date(e.date))">
-        <h2>${day}: ${day == today and _("Today") or day == yesterday and _("Yesterday") or None}</h2>
+      <py:def function="show_timeline(day, events)">
+        <h3>${day}: ${day == today and _("Today") or day == yesterday and _("Yesterday") or None}</h3>
         <dl>
           <py:for each="event in events"
             py:with="highlight = precision and precisedate and timedelta(0) &lt;= (event.date - precisedate) &lt; precision">
@@ -53,6 +67,13 @@
             </dd>
           </py:for>
         </dl>
+      </py:def>
+
+      <py:for each="project_id, pevents in groupby(events, key=lambda e: e.project_id)">
+        <h2 class="project-group">${project_info[project_id]}</h2>
+        <py:for each="day, events in groupby(pevents, key=lambda e: format_date(e.date))">
+          ${show_timeline(day, events)}
+        </py:for>
       </py:for>
 
       <div id="help" i18n:msg="">

@@ -548,47 +548,41 @@ class MilestoneModule(Component):
         if 'MILESTONE_VIEW' in req.perm:
             yield ('milestone', _('Milestones reached'))
 
-    def get_timeline_events(self, req, start, stop, filters, pid):
+    def get_timeline_events(self, req, start, stop, filters, pid, syllabus_id):
         if 'milestone' in filters:
-            is_global = pid is None
+            if pid is None:
+                return
+            is_multi = isinstance(pid, (list, tuple))
             milestone_realm = Resource('milestone')
             db = self.env.get_read_db()
             cursor = db.cursor()
             # TODO: creation and (later) modifications should also be reported
             query = '''
-                SELECT {sel_pid} completed,name,description FROM milestone
-                WHERE completed>=%s AND completed<=%s {and_pid}
+                SELECT project_id,completed,name,description FROM milestone
+                WHERE completed>=%s AND completed<=%s AND project_id {where_pid}
             '''
             sql_args = [to_utimestamp(start), to_utimestamp(stop)]
-            if is_global:
-                sel_pid = 'project_id,'
-                and_pid = ''
+            if is_multi:
+                where_pid = 'IN %s'
+                sql_args.append(tuple(pid))
             else:
-                sel_pid = ''
-                and_pid = 'AND project_id=%s'
+                where_pid = '= %s'
                 sql_args.append(pid)
-            query = query.format(sel_pid=sel_pid, and_pid=and_pid)
+            query = query.format(where_pid=where_pid)
             cursor.execute(query, sql_args)
-            if is_global:
-                for project_id, completed, name, description in cursor:
-                    milestone = milestone_realm(id=name, pid=project_id)
-                    if 'MILESTONE_VIEW' in req.perm(milestone):
-                        yield('milestone', project_id, from_utimestamp(completed),
-                              '', (milestone, description)) # FIXME: author?
-            else:
-                for completed, name, description in cursor:
-                    milestone = milestone_realm(id=name, pid=pid)
-                    if 'MILESTONE_VIEW' in req.perm(milestone):
-                        yield('milestone', from_utimestamp(completed),
-                              '', (milestone, description)) # FIXME: author?
+            for project_id, completed, name, description in cursor:
+                milestone = milestone_realm(id=name, pid=project_id)
+                if 'MILESTONE_VIEW' in req.perm(milestone):
+                    yield('milestone', project_id, from_utimestamp(completed),
+                          '', (milestone, description)) # FIXME: author?
 
             # Attachments
             for event in AttachmentModule(self.env).get_timeline_events(
-                req, milestone_realm, start, stop, pid):
+                req, milestone_realm, start, stop, pid, syllabus_id):
                 yield event
                 
     def render_timeline_event(self, context, field, event):
-        milestone, description = event[3]
+        milestone, description = event[4]
         if field == 'url':
             return get_resource_url(self.env, milestone, context.href)
         elif field == 'title':

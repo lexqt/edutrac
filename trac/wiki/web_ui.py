@@ -720,43 +720,51 @@ class WikiModule(Component):
             yield ('wiki_global', _('Wiki changes (global)'))
             yield ('wiki_project', _('Wiki changes (project)'))
 
-    def get_timeline_events(self, req, start, stop, filters, pid):
-        db = self.env.get_read_db()
+    def get_timeline_events(self, req, start, stop, filters, pid, syllabus_id):
         is_global = 'wiki_global' in filters
         is_project = 'wiki_project' in filters
+        is_multi = isinstance(pid, (list, tuple))
         if not is_global and not is_project:
             return
 
         q = '''
-            SELECT time,name,comment,author,version
+            SELECT COALESCE(project_id,0),time,name,comment,author,version
             FROM wiki WHERE time>=%s AND time<=%s AND ({glob} {op} {proj})
         '''
         args = [to_utimestamp(start), to_utimestamp(stop)]
         glob = is_global and 'project_id IS NULL' or ''
         if is_project:
-            proj = 'project_id=%s'
+            if is_multi:
+                proj = 'project_id IN %s'
+                pid = tuple(pid)
+            else:
+                proj = 'project_id=%s'
             args.append(pid)
         else:
             proj = ''
         op = is_global and is_project and 'OR' or ''
 
         wiki_realm = Resource('wiki')
+        db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute(q.format(glob=glob, op=op, proj=proj), args)
-        for ts, name, comment, author, version in cursor:
-            wiki_page = wiki_realm(id=name, version=version)
+        for vals in cursor:
+            project_id = vals[0]
+            vals = vals[1:]
+            ts, name, comment, author, version = vals
+            wiki_page = wiki_realm(id=name, version=version, pid=project_id)
             if 'WIKI_VIEW' not in req.perm(wiki_page):
                 continue
-            yield ('wiki', from_utimestamp(ts), author,
-                   (wiki_page, comment))
+            data_ = (wiki_page, comment)
+            yield ('wiki', project_id, from_utimestamp(ts), author, data_)
 
         # Attachments
         for event in AttachmentModule(self.env).get_timeline_events(
-            req, wiki_realm, start, stop, pid):
+            req, wiki_realm, start, stop, pid, syllabus_id):
             yield event
 
     def render_timeline_event(self, context, field, event):
-        wiki_page, comment = event[3]
+        wiki_page, comment = event[4]
         if field == 'url':
             return context.href.wiki(wiki_page.id, version=wiki_page.version)
         elif field == 'title':

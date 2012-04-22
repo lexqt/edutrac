@@ -892,10 +892,14 @@ class ChangesetModule(Component):
         else:
             return []
 
-    def get_timeline_events(self, req, start, stop, filters, pid):
+    def get_timeline_events(self, req, start, stop, filters, pid, syllabus_id):
         all_repos = 'changeset' in filters
         repo_filters = set(f for f in filters if f.startswith('repo-'))
         if all_repos or repo_filters:
+            if pid is None:
+                return
+            is_multi = isinstance(pid, (list, tuple))
+
             show_files = self.timeline_show_files
             show_location = show_files == 'location'
             if show_files in ('-1', 'unlimited'):
@@ -931,12 +935,17 @@ class ChangesetModule(Component):
                                                         repos_for_uid))
                     if viewable_changesets:
                         cset = viewable_changesets[-1][0]
-                        yield ('changeset', cset.date, cset.author,
-                               (viewable_changesets, 
-                                show_location, show_files))
+                        data_ = (viewable_changesets, show_location, show_files)
+                        yield ('changeset', repos.pid, cset.date, cset.author, data_)
 
             rm = RepositoryManager(self.env)
-            for repos in sorted(rm.get_real_repositories(project_id=pid),
+            if is_multi:
+                repositories = set()
+                for project_id in pid:
+                    repositories |= rm.get_real_repositories(project_id=project_id)
+            else:
+                repositories = rm.get_real_repositories(project_id=pid)
+            for repos in sorted(repositories,
                                 key=lambda repos: repos.reponame):
                 if all_repos or ('repo-' + repos.reponame) in repo_filters:
                     try:
@@ -948,7 +957,7 @@ class ChangesetModule(Component):
                                        repos.reponame, exception_to_unicode(e))
 
     def render_timeline_event(self, context, field, event):
-        changesets, show_location, show_files = event[3]
+        changesets, show_location, show_files = event[4]
         cset, cset_resource, repos_for_uid = changesets[0]
         older_cset = changesets[-1][0]
         message = cset.message or ''

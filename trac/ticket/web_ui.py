@@ -237,7 +237,19 @@ class TicketModule(Component):
             if self.timeline_details:
                 yield ('ticket_details', _("Ticket updates"), False)
 
-    def get_timeline_events(self, req, start, stop, filters, pid):
+    def get_timeline_events(self, req, start, stop, filters, pid, syllabus_id):
+        if pid is None:
+            return
+        is_multi = isinstance(pid, (list, tuple))
+        ts_kwargs = {}
+        if is_multi:
+            where_pid = 'IN %s'
+            pid = tuple(pid)
+            ts_kwargs['pid'] = pid[0]
+        else:
+            where_pid = '=%s'
+            ts_kwargs['pid'] = pid
+
         ts_start = to_utimestamp(start)
         ts_stop = to_utimestamp(stop)
 
@@ -248,11 +260,11 @@ class TicketModule(Component):
 
         ticket_realm = Resource('ticket')
 
-        field_labels = TicketSystem(self.env).get_ticket_field_labels(pid)
+        field_labels = TicketSystem(self.env).get_ticket_field_labels(**ts_kwargs)
 
         def produce_event((id, ts, author, type, summary, description),
-                          status, fields, comment, cid):
-            ticket = ticket_realm(id=id)
+                          status, fields, comment, cid, project_id=None):
+            ticket = ticket_realm(id=id, pid=project_id)
             if 'TICKET_VIEW' not in req.perm(ticket):
                 return None
             resolution = fields.get('resolution')
@@ -277,9 +289,9 @@ class TicketModule(Component):
             else:
                 return None
             kind, verb = status_map[status]
-            return (kind, from_utimestamp(ts), author,
-                    (ticket, verb, info, summary, status, resolution, type,
-                     description, comment, cid))
+            data_ = (ticket, verb, info, summary, status, resolution, type,
+                     description, comment, cid)
+            return (kind, project_id, from_utimestamp(ts), author, data_)
 
         # Ticket changes
         db = self.env.get_read_db()
@@ -287,22 +299,26 @@ class TicketModule(Component):
             cursor = db.cursor()
 
             cursor.execute("""
-                SELECT t.id,tc.time,tc.author,t.type,t.summary, 
+                SELECT t.project_id,t.id,tc.time,tc.author,t.type,t.summary, 
                        tc.field,tc.oldvalue,tc.newvalue 
                 FROM ticket_change tc 
                     INNER JOIN ticket t ON t.id = tc.ticket 
                         AND tc.time>=%s AND tc.time<=%s 
-                WHERE t.project_id=%s
+                WHERE t.project_id {where_pid}
                 ORDER BY tc.time
-                """ % (ts_start, ts_stop, pid))
+                """.format(where_pid=where_pid),
+                (ts_start, ts_stop, pid))
             data = None
-            for id,t,author,type,summary,field,oldvalue,newvalue in cursor:
+            for vals in cursor:
+                project_id = vals[0]
+                vals = vals[1:]
+                id,t,author,type,summary,field,oldvalue,newvalue = vals
                 if not (oldvalue or newvalue):
                     # ignore empty change from custom field created or deleted
                     continue 
                 if not data or (id, t) != data[:2]:
                     if data:
-                        ev = produce_event(data, status, fields, comment, cid)
+                        ev = produce_event(data, status, fields, comment, cid, project_id)
                         if ev:
                             yield ev
                     status, fields, comment, cid = 'edit', {}, '', None
@@ -317,30 +333,33 @@ class TicketModule(Component):
                 elif field[0] != '_': # properties like _comment{n} are hidden
                     fields[field] = newvalue
             if data:
-                ev = produce_event(data, status, fields, comment, cid)
+                ev = produce_event(data, status, fields, comment, cid, project_id)
                 if ev:
                     yield ev
 
             # New tickets
             if 'ticket' in filters:
                 cursor.execute("""
-                    SELECT id,time,reporter,type,summary,description
-                    FROM ticket WHERE project_id=%s AND time>=%s AND time<=%s
-                    """, (pid, ts_start, ts_stop))
+                    SELECT project_id,id,time,reporter,type,summary,description
+                    FROM ticket WHERE project_id {where_pid} AND time>=%s AND time<=%s
+                    """.format(where_pid=where_pid),
+                    (pid, ts_start, ts_stop))
                 for row in cursor:
-                    ev = produce_event(row, 'new', {}, None, None)
+                    project_id = row[0]
+                    row = row[1:]
+                    ev = produce_event(row, 'new', {}, None, None, project_id)
                     if ev:
                         yield ev
 
             # Attachments
             if 'ticket_details' in filters:
                 for event in AttachmentModule(self.env).get_timeline_events(
-                    req, ticket_realm, start, stop, pid):
+                    req, ticket_realm, start, stop, pid, syllabus_id):
                     yield event
 
     def render_timeline_event(self, context, field, event):
         ticket, verb, info, summary, status, resolution, type, \
-                description, comment, cid = event[3]
+                description, comment, cid = event[4]
         if field == 'url':
             href = context.href.ticket(ticket.id)
             if cid:

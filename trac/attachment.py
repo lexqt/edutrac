@@ -580,7 +580,7 @@ class AttachmentModule(Component):
         """Return an iterable of tuples describing changes to attachments on
         a particular object realm.
 
-        The tuples are in the form (change, realm, id, filename, time,
+        The tuples are in the form (change, project_id, realm, id, filename, time,
         description, author). `change` can currently only be `created`.
         """
         is_global = pid is None
@@ -589,57 +589,62 @@ class AttachmentModule(Component):
         has_project = self.rs.has_project_resources(realm)
         if not is_global and not has_project:
             return
-        need_pid = Resource(realm).need_pid
         # Traverse attachment directory
         db = self.env.get_read_db()
         cursor = db.cursor()
         query = '''
             SELECT {sel_pid} a.type, a.id, a.filename, a.time, a.description, a.author
             FROM attachment a
-            LEFT JOIN "{rsc_tab}" r ON CAST(r."{rsc_id}" AS varchar)=a.id
+            LEFT JOIN {rsc_tab} r ON CAST(r.{rsc_id} AS varchar)=a.id
             WHERE a.time > %s AND a.time < %s AND a.type = %s {and_pid}
         '''
-        rsc_tab = self.rs.get_realm_table(realm)
-        rsc_id  = self.rs.get_realm_id(realm)
+        rsc_tab = db.quote(self.rs.get_realm_table(realm))
+        rsc_id  = db.quote(self.rs.get_realm_id(realm))
         sql_args = [to_utimestamp(start), to_utimestamp(stop), realm]
         if has_project:
+            sel_pid = 'r.project_id,'
             if is_global:
-                sel_pid = 'r.project_id,'
                 and_pid = ''
             else:
-                sel_pid = ''
                 and_pid = 'AND r.project_id=%s'
                 sql_args.append(pid)
         else:
-            sel_pid = ''
+            sel_pid = '0,' # global pid
             and_pid = ''
         query = query.format(sel_pid=sel_pid, rsc_tab=rsc_tab, rsc_id=rsc_id, and_pid=and_pid)
         cursor.execute(query, sql_args)
-        if is_global:
-            raise NotImplementedError
-            if has_project:
-                for project_id, realm, id, filename, ts, description, author in cursor:
-                    time = from_utimestamp(ts)
-                    yield ('created', project_id, realm, id, filename, time, description, author)
-        else:
-            for realm, id, filename, ts, description, author in cursor:
-                time = from_utimestamp(ts)
-                yield ('created', realm, id, filename, time, description, author)
+        for project_id, realm, id, filename, ts, description, author in cursor:
+            time = from_utimestamp(ts)
+            yield ('created', project_id, realm, id, filename, time, description, author)
 
-    def get_timeline_events(self, req, resource_realm, start, stop, pid):
+    def get_timeline_events(self, req, resource_realm, start, stop, pid, syllabus_id):
         """Return an event generator suitable for ITimelineEventProvider.
 
         Events are changes to attachments on resources of the given
         `resource_realm.realm`.
         """
-        for change, realm, id, filename, time, descr, author in \
-                self.get_history(start, stop, resource_realm.realm, pid):
-            attachment = resource_realm(id=id, pid=pid).child('attachment', filename)
-            if 'ATTACHMENT_VIEW' in req.perm(attachment):
-                yield ('attachment', time, author, (attachment, descr), self)
+        is_multi = isinstance(pid, (list, tuple))
+        def generate_event(pid):
+            for change, project_id, realm, id, filename, time, descr, author in \
+                    self.get_history(start, stop, resource_realm.realm, pid, syllabus_id):
+                attachment = resource_realm(id=id, pid=project_id).child('attachment', filename)
+                if 'ATTACHMENT_VIEW' in req.perm(attachment):
+                    data_ = (attachment, descr)
+                    yield ('attachment', project_id, time, author, data_, self)
+
+        if is_multi:
+            for project_id in pid:
+                generate_event(project_id)
+        else:
+            generate_event(pid)
+        # and global
+        generate_event(None)
+
+        if False:
+            yield None # show that func is generator
 
     def render_timeline_event(self, context, field, event):
-        attachment, descr = event[3]
+        attachment, descr = event[4]
         if field == 'url':
             return self.get_resource_url(attachment, context.href)
         elif field == 'title':

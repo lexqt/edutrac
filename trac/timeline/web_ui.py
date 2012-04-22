@@ -67,6 +67,8 @@ class TimelineModule(Component):
 
     _authors_pattern = re.compile(r'(-)?(?:"([^"]*)"|\'([^\']*)\'|([^\s]+))')
 
+    EV_AUTHOR_OFFSET = 3
+
     # INavigationContributor methods
 
     def get_active_navigation_item(self, req):
@@ -80,7 +82,7 @@ class TimelineModule(Component):
     # IPermissionRequestor methods
 
     def get_permission_actions(self):
-        return ['TIMELINE_VIEW']
+        return ['TIMELINE_VIEW', 'TIMELINE_VIEW_GROUP_AREA']
 
     # IRequestHandler methods
 
@@ -92,10 +94,27 @@ class TimelineModule(Component):
 
         format = req.args.get('format')
         maxrows = int(req.args.get('max', format == 'rss' and 50 or 0))
+        area = req.args.get('area', 'project')
+        is_group = area == 'group'
+        if is_group:
+            req.perm.require('TIMELINE_VIEW_GROUP_AREA')
 
         pm = ProjectManagement(self.env)
         pid = pm.get_current_project(req)
         syllabus_id = req.data['syllabus_id']
+        project_info = {
+            0: tag_('Global resources'),
+        }
+        if is_group:
+            gid = req.data['group_id']
+            projects = pm.get_group_projects(gid, with_names=True)
+            pid = [pid for pid, pname in projects]
+        else:
+            projects = [(pid, req.data['project_name'])]
+        for pid_, pname in projects:
+            url = req.href.copy_for_project(pid_).timeline()
+            project_info[pid_] = tag(_('Project:'), ' ',
+                                     tag.a(pname, href=url, target='_blank'))
 
         # Parse the from date and adjust the timestamp to the last second of
         # the day
@@ -140,6 +159,7 @@ class TimelineModule(Component):
                 'yesterday': format_date(today - timedelta(days=1),
                                          tzinfo=req.tz),
                 'precisedate': precisedate, 'precision': precision,
+                'area': area, 'project_info': project_info,
                 'events': [], 'filters': [],
                 'abbreviated_messages': self.abbreviated_messages,
                 'syllabus_id': syllabus_id}
@@ -183,9 +203,8 @@ class TimelineModule(Component):
         for provider in self.event_providers(syllabus_id):
             try:
                 for event in provider.get_timeline_events(req, start, stop,
-                                                          filters, pid) or []:
-                    # Check for 0.10 events
-                    author = (event[len(event) < 6 and 2 or 4] or '').lower()
+                                                          filters, pid, syllabus_id) or []:
+                    author = (event[self.EV_AUTHOR_OFFSET] or '').lower()
                     if (not include or author in include) \
                        and not author in exclude:
                         events.append(self._event_data(provider, event))
@@ -197,6 +216,7 @@ class TimelineModule(Component):
         events = sorted(events, key=lambda e: e['date'], reverse=True)
         if maxrows:
             events = events[:maxrows]
+        events = sorted(events, key=lambda e: (e['project_id'], e['date']), reverse=True)
 
         data['events'] = events
         
@@ -308,21 +328,17 @@ class TimelineModule(Component):
     def _event_data(self, provider, event):
         """Compose the timeline event date from the event tuple and prepared
         provider methods"""
-        if len(event) == 6: # 0.10 events
-            kind, url, title, date, author, markup = event
-            data = {'url': url, 'title': title, 'description': markup}
-            render = lambda field, context: data.get(field)
-        else: # 0.11 events
-            if len(event) == 5: # with special provider
-                kind, date, author, data, provider = event
-            else:
-                kind, date, author, data = event
-            render = lambda field, context: \
-                    provider.render_timeline_event(context, field, event)
+        if len(event) == 6: # with special provider
+            kind, project_id, date, author, data, provider = event
+        else:
+            kind, project_id, date, author, data = event
+        render = lambda field, context: \
+                provider.render_timeline_event(context, field, event)
         if not isinstance(date, datetime):
             date = datetime.fromtimestamp(date, utc)
         dateuid = to_utimestamp(date)
-        return {'kind': kind, 'author': author, 'date': date,
+        return {'kind': kind, 'project_id': project_id,
+                'author': author, 'date': date,
                 'dateuid': dateuid, 'render': render, 'event': event,
                 'data': data, 'provider': provider}
 
