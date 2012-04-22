@@ -20,6 +20,8 @@
 from datetime import datetime, timedelta
 import pkg_resources
 import re
+from collections import OrderedDict
+from itertools import groupby
 
 from genshi.builder import tag
 
@@ -34,7 +36,7 @@ from trac.util.datefmt import format_date, format_datetime, parse_date, \
 from trac.util.text import exception_to_unicode, to_unicode
 from trac.util.translation import _, tag_
 from trac.web import IRequestHandler, IRequestFilter
-from trac.web.chrome import add_link, add_stylesheet, prevnext_nav, Chrome, \
+from trac.web.chrome import add_link, add_stylesheet, add_script, prevnext_nav, Chrome, \
                             INavigationContributor, ITemplateProvider
                             
 from trac.wiki.api import IWikiSyntaxProvider
@@ -101,10 +103,14 @@ class TimelineModule(Component):
 
         pm = ProjectManagement(self.env)
         pid = pm.get_current_project(req)
+        current_project = pid
         syllabus_id = req.data['syllabus_id']
-        project_info = {
-            0: tag_('Global resources'),
-        }
+        project_info = OrderedDict({
+            0: {
+                'name': _('Global resources'),
+                'tag': tag_('Global resources'),
+                }
+        })
         if is_group:
             gid = req.data['group_id']
             projects = pm.get_group_projects(gid, with_names=True)
@@ -113,8 +119,10 @@ class TimelineModule(Component):
             projects = [(pid, req.data['project_name'])]
         for pid_, pname in projects:
             url = req.href.copy_for_project(pid_).timeline()
-            project_info[pid_] = tag(_('Project:'), ' ',
-                                     tag.a(pname, href=url, target='_blank'))
+            project_info[pid_] = {
+                'name': pname,
+                'tag': tag(_('Project:'), ' ', tag.a(pname, href=url, target='_blank'))
+            }
 
         # Parse the from date and adjust the timestamp to the last second of
         # the day
@@ -159,7 +167,8 @@ class TimelineModule(Component):
                 'yesterday': format_date(today - timedelta(days=1),
                                          tzinfo=req.tz),
                 'precisedate': precisedate, 'precision': precision,
-                'area': area, 'project_info': project_info,
+                'area': area,
+                'project_info': project_info, 'current_project': current_project,
                 'events': [], 'filters': [],
                 'abbreviated_messages': self.abbreviated_messages,
                 'syllabus_id': syllabus_id}
@@ -218,7 +227,13 @@ class TimelineModule(Component):
             events = events[:maxrows]
         events = sorted(events, key=lambda e: (e['project_id'], e['date']), reverse=True)
 
+        nonempty_projects = set()
+        for project_id, _pevents in groupby(events, key=lambda e: e['project_id']):
+            nonempty_projects.add(project_id)
+        empty_projects = set(project_info) - nonempty_projects
+
         data['events'] = events
+        data['empty_projects'] = empty_projects
         
         if format == 'rss':
             data['email_map'] = Chrome(self.env).get_email_map()
@@ -261,6 +276,13 @@ class TimelineModule(Component):
                      _('Next Period'))
         prevnext_nav(req, _('Previous Period'), _('Next Period'))
         
+        add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.core.css')
+        add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.tabs.css')
+        add_stylesheet(req, 'common/css/jquery-ui/jquery.ui.theme.css')
+        add_script(req, 'common/js/jquery.ui.core.js')
+        add_script(req, 'common/js/jquery.ui.widget.js')
+        add_script(req, 'common/js/jquery.ui.tabs.js')
+
         return 'timeline.html', data, None
 
     # ITemplateProvider methods

@@ -8,12 +8,50 @@
   <xi:include href="layout.html" />
   <head>
     <title>Timeline</title>
+    <script type="text/javascript">/*<![CDATA[*/
+      jQuery(function($){
+        $('#timeline-tabs').tabs()
+          .tabs('select', '#timeline-project-${current_project}');
+      });
+    /*]]>*/</script>
   </head>
 
   <body>
     <div id="content" class="timeline">
 
       <h1>Timeline</h1>
+
+      <py:def function="show_timeline(day, events)">
+        <h3>${day}: ${day == today and _("Today") or day == yesterday and _("Yesterday") or None}</h3>
+        <dl>
+          <py:for each="event in events"
+            py:with="highlight = precision and precisedate and timedelta(0) &lt;= (event.date - precisedate) &lt; precision">
+            <dt class="${classes(event.kind, highlight=highlight)}">
+              <a href="${event.render('url', context)}" py:choose="">
+                <py:when test="event.author"><i18n:msg params="time, title, author">
+                  <span class="time">${format_time(event.date, str('%H:%M'))}</span> ${event.render('title', context)}
+                  by <span class="author">${format_author(event.author)}</span>
+                </i18n:msg></py:when>
+                <py:otherwise>
+                  <span class="time">${format_time(event.date, str('%H:%M'))}</span> ${event.render('title', context)}
+                </py:otherwise>
+              </a>
+            </dt>
+            <dd class="${classes(event.kind, highlight=highlight)}">
+              ${event.render('description', context)}
+            </dd>
+          </py:for>
+        </dl>
+      </py:def>
+
+      <div id="timeline-tabs">
+
+        <!-- Tabs buttons -->
+        <ul>
+          <li py:for="project_id in project_info">
+            <a href="#timeline-project-${project_id}">${project_info[project_id].name}</a>
+          </li>
+        </ul>
 
       <form id="prefs" method="get" action="">
        <div i18n:msg="">
@@ -46,35 +84,21 @@
        </div>
       </form>
 
-      <py:def function="show_timeline(day, events)">
-        <h3>${day}: ${day == today and _("Today") or day == yesterday and _("Yesterday") or None}</h3>
-        <dl>
-          <py:for each="event in events"
-            py:with="highlight = precision and precisedate and timedelta(0) &lt;= (event.date - precisedate) &lt; precision">
-            <dt class="${classes(event.kind, highlight=highlight)}">
-              <a href="${event.render('url', context)}" py:choose="">
-                <py:when test="event.author"><i18n:msg params="time, title, author">
-                  <span class="time">${format_time(event.date, str('%H:%M'))}</span> ${event.render('title', context)}
-                  by <span class="author">${format_author(event.author)}</span>
-                </i18n:msg></py:when>
-                <py:otherwise>
-                  <span class="time">${format_time(event.date, str('%H:%M'))}</span> ${event.render('title', context)}
-                </py:otherwise>
-              </a>
-            </dt>
-            <dd class="${classes(event.kind, highlight=highlight)}">
-              ${event.render('description', context)}
-            </dd>
-          </py:for>
-        </dl>
-      </py:def>
 
-      <py:for each="project_id, pevents in groupby(events, key=lambda e: e.project_id)">
-        <h2 class="project-group">${project_info[project_id]}</h2>
-        <py:for each="day, events in groupby(pevents, key=lambda e: format_date(e.date))">
-          ${show_timeline(day, events)}
-        </py:for>
-      </py:for>
+        <!-- Tabs panels -->
+        <div py:for="project_id, pevents in groupby(events, key=lambda e: e.project_id)"
+          py:attrs="{'id': 'timeline-project-%s' % project_id}">
+          <h2 class="project-group">${project_info[project_id].tag}</h2>
+          <py:for each="day, events in groupby(pevents, key=lambda e: format_date(e.date))">
+            ${show_timeline(day, events)}
+          </py:for>
+        </div>
+        <div py:for="project_id in empty_projects"
+          py:attrs="{'id': 'timeline-project-%s' % project_id}">
+          <h2 class="project-group">${project_info[project_id].tag}</h2>
+          <p>No events found for selected time range.</p>
+        </div>
+      </div>
 
       <div id="help" i18n:msg="">
         <strong>Note:</strong> See <a href="${href.wiki('TranslationRu', 'TracTimeline')}">TracTimeline</a>
