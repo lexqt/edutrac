@@ -212,13 +212,17 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
             filtered_actions.append((0, '_reset'))
         return filtered_actions
 
-    def _is_action_allowed(self, ticket_perm, required_perms):
+    def _is_action_allowed(self, perm, required_perms):
         if not required_perms:
             return True
         # modified to assume required_perms as AND-values list not OR-values
         for permission in required_perms:
-            if permission not in ticket_perm:
-                return False
+            if permission.startswith('!'):
+                if permission[1:] in perm:
+                    return False
+            else:
+                if permission not in perm:
+                    return False
         return True
 
     def get_all_status(self, syllabus_id):
@@ -451,15 +455,9 @@ Read TracWorkflow for more information (don't forget to 'wiki upgrade' as well)
     # Internal methods
 
     def _has_perms_for_action(self, req, action, resource):
+        perm = req.perm(resource)
         required_perms = action['permissions']
-        if required_perms:
-            for permission in required_perms:
-                if permission in req.perm(resource):
-                    break
-            else:
-                # The user does not have any of the listed permissions
-                return False
-        return True
+        return self._is_action_allowed(perm, required_perms)
 
     def _prepare_actions(self, actions):
         if not '_reset' in actions:
