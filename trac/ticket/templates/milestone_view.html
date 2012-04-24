@@ -20,36 +20,8 @@
 
   <body>
     <div id="content" class="milestone">
+
       <h1>Milestone ${milestone.name}</h1>
-      <div class="info">
-        <div class="weight">
-            Weight: ${milestone.weight}
-            <py:if test="total_weight">
-              <xi:include href="simple_progress_bar.html" py:with="current=milestone.weight; total=total_weight; show_percent=True;"/>
-            </py:if>
-        </div>
-        <py:choose>
-          <p py:when="milestone.completed" class="date">
-            <i18n:msg params="duration, date">
-              Completed ${dateinfo(milestone.completed)} ago (${format_datetime(milestone.completed)})
-            </i18n:msg>
-          </p>
-          <p py:when="milestone.is_late" class="date">
-            <i18n:msg params="duration, date">
-              <strong>${dateinfo(milestone.due)} late</strong> (${format_datetime(milestone.due)})
-            </i18n:msg>
-          </p>
-          <p py:when="milestone.due" class="date">
-            <i18n:msg params="duration, date">
-              Due in ${dateinfo(milestone.due)} (${format_datetime(milestone.due)})
-            </i18n:msg>
-          </p>
-          <p py:otherwise="" class="date">
-            No date set
-          </p>
-        </py:choose>
-        <xi:include href="progress_bar.html" py:if="stats.count"/>
-      </div>
 
       <form py:if="available_groups and stats.count" id="stats" action="">
         <fieldset>
@@ -90,6 +62,37 @@
         </fieldset>
       </form>
 
+      <div class="info">
+        <div class="weight">
+            Weight: ${milestone.weight}
+            <py:if test="total_weight">
+              <xi:include href="simple_progress_bar.html" py:with="current=milestone.weight; total=total_weight; show_percent=True;"/>
+            </py:if>
+        </div>
+        <p>Rating: ${milestone.rating}%</p>
+        <py:choose>
+          <p py:when="milestone.completed" class="date">
+            <i18n:msg params="duration, date">
+              Completed ${dateinfo(milestone.completed)} ago (${format_datetime(milestone.completed)})
+            </i18n:msg>
+          </p>
+          <p py:when="milestone.is_late" class="date">
+            <i18n:msg params="duration, date">
+              <strong>${dateinfo(milestone.due)} late</strong> (${format_datetime(milestone.due)})
+            </i18n:msg>
+          </p>
+          <p py:when="milestone.due" class="date">
+            <i18n:msg params="duration, date">
+              Due in ${dateinfo(milestone.due)} (${format_datetime(milestone.due)})
+            </i18n:msg>
+          </p>
+          <p py:otherwise="" class="date">
+            No date set
+          </p>
+        </py:choose>
+        <xi:include href="progress_bar.html" py:if="stats.count"/>
+      </div>
+
       <div class="description" xml:space="preserve">
         ${wiki_to_html(context, milestone.description)}
       </div>
@@ -97,11 +100,7 @@
       <xi:include href="list_of_attachments.html"
                   py:with="alist = attachments; compact = True; foldable = True"/>
 
-      <div py:if="'MILESTONE_MODIFY' in perm(milestone.resource) or
-                  'MILESTONE_DELETE' in perm(milestone.resource) or
-                  'EVAL_TEAM_MILESTONE' in perm(milestone.resource) or
-                  attachments.can_create"
-           class="buttons">
+      <div class="buttons">
         <form py:if="'MILESTONE_MODIFY' in perm(milestone.resource)" method="get" action="" id="editmilestone">
           <div>
             <input type="hidden" name="action" value="edit" />
@@ -114,8 +113,7 @@
             <input type="submit" value="${_('Delete milestone')}" />
           </div>
         </form>
-        <xi:include href="attach_file_form.html" py:with="alist = attachments"/>
-        <form py:if="'EVAL_TEAM_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalmilestone">
+        <form py:if="'EVAL_TEAM_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalteamwork">
           <div>
             <input type="hidden" name="action" value="teameval" />
             <input type="submit" value="${_('Evaluate teamwork')}" />

@@ -554,7 +554,7 @@ class Chrome(Component):
         from trac.project.api import ProjectManagement
         pm = ProjectManagement(self.env)
         pid = pm.get_current_project(req, fail_on_none=False)
-        if pid is not None:
+        if pid is not None and 'syllabus_id' in req.data:
             syllabus_id = req.data['syllabus_id']
             navigation_contributors = self.navigation_contributors_syllabus(syllabus_id)
         else:
