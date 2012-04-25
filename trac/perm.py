@@ -22,7 +22,7 @@ from trac.admin import AdminCommandError, IAdminCommandProvider
 from trac.config import ExtensionOption, OrderedExtensionsOption
 from trac.core import *
 from trac.resource import Resource, get_resource_name
-from trac.util.text import print_table, printout, wrap
+from trac.util.text import print_table, printout, wrap, exception_to_unicode
 from trac.util.translation import _
 
 __all__ = ['IPermissionRequestor', 'IPermissionStore',
@@ -699,16 +699,16 @@ class PermissionAdmin(Component):
             return self.get_user_list()
     
     def _complete_add(self, args):
-        if len(args) == 1:
+        if len(args) == 2:
             return self.get_user_list()
-        elif len(args) >= 2:
+        elif len(args) >= 3:
             return (set(PermissionSystem(self.env).get_actions())
                     - set(self.get_user_perms(args[0])) - set(args[1:-1]))
     
     def _complete_remove(self, args):
-        if len(args) == 1:
+        if len(args) == 2:
             return self.get_user_list()
-        elif len(args) >= 2:
+        elif len(args) >= 3:
             return set(self.get_user_perms(args[0])) - set(args[1:-1])
     
     def _do_list(self, user=None):
@@ -743,7 +743,10 @@ class PermissionAdmin(Component):
             raise AdminCommandError(_('All upper-cased tokens are reserved '
                                       'for permission names'))
         for action in actions:
-            permsys.grant_permission(user, action, **kwargs)
+            try:
+                permsys.grant_permission(user, action, **kwargs)
+            except Exception, e:
+                printout(exception_to_unicode(e))
     
     def _do_remove(self, area_id, user, *actions):
         kwargs = {}
@@ -754,18 +757,21 @@ class PermissionAdmin(Component):
         permsys = PermissionSystem(self.env)
         rows = permsys.get_all_permissions()
         for action in actions:
-            if action == '*':
-                for row in rows:
-                    if user != '*' and user != row[0]:
-                        continue
-                    permsys.revoke_permission(row[0], row[1], **kwargs)
-            else:
-                for row in rows:
-                    if action != row[1]:
-                        continue
-                    if user != '*' and user != row[0]:
-                        continue
-                    permsys.revoke_permission(row[0], row[1], **kwargs)
+            try:
+                if action == '*':
+                    for row in rows:
+                        if user != '*' and user != row[0]:
+                            continue
+                        permsys.revoke_permission(row[0], row[1], **kwargs)
+                else:
+                    for row in rows:
+                        if action != row[1]:
+                            continue
+                        if user != '*' and user != row[0]:
+                            continue
+                        permsys.revoke_permission(row[0], row[1], **kwargs)
+            except Exception, e:
+                printout(exception_to_unicode(e))
 
 
 
