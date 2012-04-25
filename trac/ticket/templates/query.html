@@ -235,9 +235,9 @@
       <xi:include href="query_results.html" />
 
       <div class="buttons"
-           py:with="edit = report_resource and 'REPORT_MODIFY' in perm(report_resource);
+           py:with="edit = report_resource and 'REPORT_MODIFY' in perm(report_resource) and report_rights;
                     new = 'REPORT_CREATE' in perm;
-                    delete = report_resource and 'REPORT_DELETE' in perm(report_resource)">
+                    delete = report_resource and 'REPORT_DELETE' in perm(report_resource) and report_rights">
         <form py:if="edit" method="get" action="${url_of(report_resource)}">
           <div>
             <input type="hidden" name="action" value="edit" />

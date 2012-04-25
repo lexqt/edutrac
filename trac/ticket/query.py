@@ -1397,6 +1397,7 @@ class QueryModule(Component):
         # Note that with saved custom queries, there will be some convergence
         # between the report module and the query module.
         from trac.ticket.report import ReportModule
+        report_pid = None
         if 'REPORT_VIEW' in req.perm and \
                self.env.is_component_enabled(ReportModule):
             data['report_href'] = req.href.report()
@@ -1404,16 +1405,18 @@ class QueryModule(Component):
             add_ctxtnav(req, _('Custom Query'))
             if query.id:
                 cursor = db.cursor()
-                cursor.execute("SELECT title,description FROM report "
+                cursor.execute("SELECT title,description,project_id FROM report "
                                "WHERE id=%s", (query.id,))
-                for title, description in cursor:
-                    data['report_resource'] = Resource('report', query.id)
+                for title, description, project_id in cursor:
+                    report_pid = project_id
+                    data['report_resource'] = Resource('report', query.id, pid=project_id)
                     data['description'] = description
         else:
             data['report_href'] = None
         data.setdefault('report', None)
         data.setdefault('description', None)
         data['title'] = title
+        data['report_rights'] = 'TRAC_ADMIN' in req.perm or report_pid == req.data['project_id']
 
         data['all_columns'] = query.get_all_columns(respect_args=True)
         # Don't allow the user to remove the id column        

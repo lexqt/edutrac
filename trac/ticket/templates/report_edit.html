@@ -21,6 +21,11 @@
             <label for="title">Report Title:</label><br />
             <input type="text" id="title" name="title" value="$report.title" size="50"/><br />
           </div>
+          <div py:if="'REPORT_GLOBAL_ACTION' in perm" class="field">
+            <label><input type="checkbox" name="globalreport" id="globalreport" checked="1" />
+              Report is global
+            </label>
+          </div>
           <div class="field">
             <label for="description" i18n:msg="">
               Description: (you may use <a tabindex="42" href="${href.wiki('TranslationRu','WikiFormatting')}">WikiFormatting</a> here)
@@ -33,9 +38,19 @@ $report.description</textarea>
             <div class="system-message" py:if="error">
               <strong>Error:</strong> $error
             </div>
-            <label for="query" i18n:msg="">Query for Report: (can be either SQL or, if starting with <tt>query:</tt>,
-              a <a tabindex="42" href="${href.wiki('TracQuery') + '#QueryLanguage'}">TracQuery</a> expression)
-            </label><br />
+            <py:choose test="'REPORT_SQL_CREATE' in perm">
+              <label for="query">
+                <i18n:msg py:when="True" params="">
+                  Query for Report: (can be either SQL or, if starting with <tt>query:</tt>,
+                  a <a tabindex="42" href="${href.wiki('TracQuery') + '#QueryLanguage'}">TracQuery</a> expression)
+                </i18n:msg>
+                <i18n:msg py:otherwise="" params="">
+                  Query for Report: (see
+                  a <a tabindex="42" href="${href.wiki('TracQuery') + '#QueryLanguage'}">TracQuery</a> expression)
+                </i18n:msg>
+              </label>
+              <br />
+            </py:choose>
             <textarea id="query" name="query" class="trac-resizable" cols="85" rows="20">
 $report.sql</textarea>
           </div>

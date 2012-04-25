@@ -29,6 +29,7 @@ from trac.mimeview import Context
 from trac.perm import IPermissionRequestor
 from trac.resource import Resource, ResourceNotFound
 from trac.ticket.api import TicketSystem
+from trac.ticket.query import Query
 from trac.util import as_int, content_disposition
 from trac.util.datefmt import format_datetime, format_time, from_utimestamp
 from trac.util.presentation import Paginator
@@ -83,7 +84,7 @@ class ReportModule(Component):
 
     def get_permission_actions(self):  
         actions = ['REPORT_CREATE', 'REPORT_DELETE', 'REPORT_MODIFY',  
-                   'REPORT_SQL_VIEW', 'REPORT_VIEW']  
+                   'REPORT_SQL_VIEW', 'REPORT_VIEW', 'REPORT_GLOBAL_ACTION']  
         return actions + [('REPORT_ADMIN', actions)]  
 
     # IRequestHandler methods
@@ -157,6 +158,7 @@ class ReportModule(Component):
 
         if is_sql_query:
             req.perm.require('REPORT_SQL_CREATE')
+        return is_sql_query
 
     def _do_create(self, req):
         req.perm.require('REPORT_CREATE')
@@ -164,22 +166,40 @@ class ReportModule(Component):
         if 'cancel' in req.args:
             req.redirect(req.href.report())
 
+        is_global = req.args.getbool('globalreport', False)
+        if is_global:
+            req.perm.require('REPORT_GLOBAL_ACTION')
+
         title = req.args.get('title', '')
         query = req.args.get('query', '')
         description = req.args.get('description', '')
-        self._check_if_sql(req, query)
+        is_sql = self._check_if_sql(req, query)
+        if not is_sql:
+            kwargs = {'report': None}
+            if not is_global:
+                kwargs.update({
+                    'area': 'project',
+                    'current_project': req.data['project_id'],
+                })
+            query = ''.join([line.strip() for line in query.splitlines()])
+            m = re.match(r'(\?|query:\??)', query)
+            query = query[(m and len(m.group(1)) or 0):]
+            q = Query.from_string(self.env, query, **kwargs)
+            query = q.to_string()
         report_id = [ None ]
+        pid = None if is_global else req.data['project_id']
         @self.env.with_transaction()
         def do_create(db):
             cursor = db.cursor()
             cursor.execute("INSERT INTO report (title,query,description,project_id) "
-                           "VALUES (%s,%s,%s,%s)", (title, query, description, req.data['project_id']))
+                           "VALUES (%s,%s,%s,%s)", (title, query, description, pid))
             report_id[0] = db.get_last_id(cursor, 'report')
         add_notice(req, _('The report has been created.'))
         req.redirect(req.href.report(report_id[0]))
 
     def _do_delete(self, req, id):
         req.perm.require('REPORT_DELETE')
+        self._check_if_allowed_project(req, id)
 
         if 'cancel' in req.args:
             req.redirect(req.href.report(id))
@@ -194,6 +214,7 @@ class ReportModule(Component):
     def _do_save(self, req, id):
         """Save report changes to the database"""
         req.perm.require('REPORT_MODIFY')
+        self._check_if_allowed_project(req, id)
 
         if 'cancel' not in req.args:
             title = req.args.get('title', '')
@@ -209,8 +230,24 @@ class ReportModule(Component):
             add_notice(req, _('Your changes have been saved.'))
         req.redirect(req.href.report(id))
 
+    def _check_if_allowed_project(self, req, id):
+        if 'TRAC_ADMIN' in req.perm:
+            return True
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT project_id FROM report WHERE id=%s", (id,))
+        for rpid, in cursor:
+            if req.data['project_id'] != rpid:
+                raise TracError(_('You can not modify or delete reports outside '
+                                  'current project.'))
+            break
+        else:
+            raise TracError(_('Report {%(num)s} does not exist.', num=id),
+                            _('Invalid Report Number'))
+
     def _render_confirm_delete(self, req, id):
         req.perm.require('REPORT_DELETE')
+        self._check_if_allowed_project(req, id)
 
         db = self.env.get_read_db()
         cursor = db.cursor()
@@ -227,6 +264,7 @@ class ReportModule(Component):
     def _render_editor(self, req, id, copy):
         if id != -1:
             req.perm.require('REPORT_MODIFY')
+            self._check_if_allowed_project(req, id)
             db = self.env.get_read_db()
             cursor = db.cursor()
             cursor.execute("SELECT title,description,query FROM report "
@@ -266,13 +304,13 @@ class ReportModule(Component):
         asc = bool(int(req.args.get('asc', 1)))
         format = req.args.get('format')
 
-        project_id  = req.data['project_id']
+        cur_project_id  = req.data['project_id']
         syllabus_id = req.data['syllabus_id']
 
         orderby_clause = ' ORDER BY %s%s' % (
                           sort == 'title' and 'title' or 'id',
                           not asc and ' DESC' or '')
-        select_clause   = "SELECT id, CONCAT('{prefix}', title) FROM {table}"
+        select_clause   = "SELECT id, CONCAT('{prefix}', title), {proj} FROM {table}"
 
         query_tmpl     = select_clause + orderby_clause
         query_tmpl_ext = select_clause + ' WHERE {filter}=%s' + orderby_clause
@@ -280,15 +318,15 @@ class ReportModule(Component):
         db = self.env.get_read_db()
         cursor = db.cursor()
 
-        cursor.execute(query_tmpl.format(prefix='[GLOBAL] ', table='global_reports'))
+        cursor.execute(query_tmpl.format(prefix='[GLOBAL] ', proj='0', table='global_reports'))
         reports_global = list(cursor)
         cursor.execute(query_tmpl_ext.format(
-                       prefix='[SYLLABUS] ', table='syllabus_reports', filter='syllabus_id'),
+                       prefix='[SYLLABUS] ', proj='NULL', table='syllabus_reports', filter='syllabus_id'),
                        (syllabus_id,))
         reports_syllabus = list(cursor)
         cursor.execute(query_tmpl_ext.format(
-                       prefix='[PROJECT] ', table='project_reports', filter='project_id'),
-                       (project_id,))
+                       prefix='[PROJECT] ', proj='project_id', table='project_reports', filter='project_id'),
+                       (cur_project_id,))
         reports_project = list(cursor)
 
         rows = reports_global + reports_syllabus + reports_project
@@ -297,10 +335,10 @@ class ReportModule(Component):
             data = {'rows': rows}
             return 'report_list.rss', data, 'application/rss+xml'
         elif format == 'csv':
-            self._send_csv(req, ['report', 'title'], rows, mimetype='text/csv',
+            self._send_csv(req, ['report', 'title', 'project_id'], rows, mimetype='text/csv',
                            filename='reports.csv')
         elif format == 'tab':
-            self._send_csv(req, ['report', 'title'], rows, '\t',
+            self._send_csv(req, ['report', 'title', 'project_id'], rows, '\t',
                            mimetype='text/tab-separated-values',
                            filename='reports.tsv')
 
@@ -315,10 +353,15 @@ class ReportModule(Component):
                  _('Comma-delimited Text'), 'text/plain')
         add_link(req, 'alternate', report_href(format='tab'),
                  _('Tab-delimited Text'), 'text/plain')
+
+        if 'TRAC_ADMIN' in req.perm:
+            check = lambda p: True
+        else:
+            check = lambda p: p == cur_project_id
         
-        reports = [(id, title, 'REPORT_MODIFY' in req.perm('report', id),
-                    'REPORT_DELETE' in req.perm('report', id))
-                   for id, title in rows]
+        reports = [(id, title, 'REPORT_MODIFY' in req.perm('report', id) and check(project_id),
+                    'REPORT_DELETE' in req.perm('report', id) and check(project_id))
+                   for id, title, project_id in rows]
         data = {'reports': reports, 'sort': sort, 'asc': asc}
 
         return 'report_list.html', data, None
@@ -391,10 +434,9 @@ class ReportModule(Component):
                 query += '&project=%s' % project_id
             req.redirect(req.href.query() + quote_query_string(query))
         elif query.startswith('query:'):
-            raise NotImplementedError('Fix project substitution!')
             try:
                 from trac.ticket.query import Query, QuerySyntaxError
-                query = Query.from_string(self.env, query[6:], report=id)
+                query = Query.from_string(self.env, query[6:], report=id, current_project=cur_pid)
                 req.redirect(query.get_href(req))
             except QuerySyntaxError, e:
                 req.redirect(req.href.report(id, action='edit',

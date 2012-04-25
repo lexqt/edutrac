@@ -14,7 +14,7 @@
     </image>
     <generator>Trac v${trac.version}</generator>
 
-    <item py:for="report, title in rows">
+    <item py:for="report, title, project_id in rows">
       <title>{$report}: $title</title>
       <link>${abs_href.report(report)}</link>
       <guid isPermaLink="false">${abs_href.report(report)}</guid>
