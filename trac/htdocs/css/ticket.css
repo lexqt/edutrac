@@ -81,6 +81,39 @@ h1 .status { color: #444; }
  margin-left: 0.2em;
 }
 
+#scroll-buttons {
+    position: fixed;
+    width: 50px;
+    margin-left: -60px;
+}
+#scroll-buttons a {
+    width: 32px;
+    height: 32px;
+    float: left;
+    clear: right;
+    margin-bottom: 8px;
+    background: transparent 0 0;
+    border: none;
+}
+#scroll-buttons a:hover {
+    background-color: #DDDDDD;
+}
+#scroll-buttons .up {
+    background-image: url(../top.png);
+}
+#scroll-buttons .down {
+    background-image: url(../bottom.png);
+}
+#scroll-buttons .refresh {
+    background-image: url(../refresh.png);
+}
+#scroll-buttons .edit-ticket {
+    background-image: url(../edit_ticket.png);
+}
+#scroll-buttons .select-action {
+    background-image: url(../gear.png);
+}
+
 #changelog { border: 1px outset #996; padding: 1em }
 .trac-shade { background-color: #eee }
 #trac-comment-editor { margin-left: 2em; margin-bottom: 1em }

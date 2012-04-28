@@ -36,7 +36,7 @@
             comment.hide();
         });
         $("#modify").parent().toggleClass("collapsed");
-        $(".trac-topnav a").click(function() { $("#modify").parent().removeClass("collapsed"); });
+        $("a.modify-link").click(function() { $("#modify").parent().removeClass("collapsed"); });
 
         /* only enable control elements for the currently selected action */
         var actions = $("#action input[name='action']");
@@ -76,8 +76,16 @@
                   has_edit_comment = 'TICKET_EDIT_COMMENT' in perm(ticket.resource);
                   has_property_editor = not version and version != 0 and not cnum_edit
                                         and (can_append or can_modify or can_edit or can_create)">
+      <div id="scroll-buttons" py:if="ticket.exists">
+        <a href="#content" class="up" title="${_('Up')}"></a>
+        <a href="#" class="refresh" title="${_('Reload page')}" onclick="window.location.reload()"></a>
+        <a href="#propertyform" class="modify-link edit-ticket" title="${_('Modify')}"></a>
+        <a href="#action" class="modify-link select-action" title="${_('Select action')}"></a>
+        <a href="#help" class="down" title="${_('Down')}"></a>
+      </div>
+
       <div class="trac-topnav" py:if="(ticket.exists or preview_mode) and has_property_editor">
-        <a href="#propertyform" title="Go to the ticket editor">Modify</a> &darr;
+        <a href="#propertyform" class="modify-link" title="Go to the ticket editor">Modify</a> &darr;
       </div>
       <h1 id="trac-ticket-title" py:choose="">
         <py:when test="ticket.exists">
