@@ -128,8 +128,8 @@
         </form>
         <form py:if="'MILESTONE_APPROVE' in perm(milestone.resource)" method="post" action="" id="approvemilestone">
           <div>
-            <input type="hidden" name="action" py:attrs="{'value': milestone.approved and 'disapprove' or 'approve'}" />
-            <input type="submit"  py:attrs="{'value': milestone.approved and _('Disapprove milestone') or _('Approve milestone')}" />
+            <input type="hidden" name="action" value="${milestone.approved and 'disapprove' or 'approve'}" />
+            <input type="submit" value="${milestone.approved and _('Disapprove milestone') or _('Approve milestone')}" />
           </div>
         </form>
         <form py:if="eval_view and 'EVAL_TEAM_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalteamwork">
