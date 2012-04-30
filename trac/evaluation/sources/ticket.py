@@ -1,26 +1,36 @@
 from operator import (
-    and_, or_, inv, add, mul, div, sub, mod, truediv, lt, le, ne, gt, ge, eq, neg
+    and_, or_, inv, add, mul, div, sub, mod, truediv, lt, le, ne, gt, ge, eq, neg, contains
     )
 
 #from inspect import currentframe
 from lazy import lazy
 
 from sqlalchemy import Integer, Numeric
-from sqlalchemy.sql import func, cast
+from sqlalchemy.sql import func, cast, bindparam
 
 from trac.ticket.api import TicketSystem
 from trac.project.api import ProjectManagement
+from trac.user.api import UserManagement
 
-from trac.evaluation.api import SubjectArea
+from trac.evaluation.api.model import ModelSource
+from trac.evaluation.api.area import SubjectArea
 
 __all__ = ['Query', 'Info',
            'Field', 'Resolution', 'Status',
-           'ExtraAttr',
-           'Count']
+           'ExtraAttr', 'TicketValue',
+           'Count', 'Sum'
+           ]
 
 
 
 class OpExpression(object):
+    '''Wrapper class for ticket query expression.
+    It MUST NOT store any dynamic data in self so that it can be
+    copied and reused safely for other ticket queries.
+    All real work takes place in `process` method, that manipulates
+    ticket query object and implements expression logic by changing
+    query state.
+    '''
 
     def __init__(self, operation=None, *args):
         self.op = operation
@@ -77,8 +87,8 @@ class OpExpression(object):
     def __truediv__(self, other):
         return OpExpression(truediv, self, other)
 
-    def __contains__(self, others):
-        return OpExpression(self.cur_method(), self, list(others))
+    def in_(self, others):
+        return OpExpression('in_', self, list(others))
 
     def compare(self, other):
         '''Compare two OpExpression objects'''
@@ -96,6 +106,9 @@ class OpExpression(object):
             return arg.process(ticket_query)
         return arg
 
+    def __call__(self, ticket_query):
+        return self.process(ticket_query)
+
     def process(self, ticket_query):
         '''Returns object of sqlalchemy.sql.expression.ClauseElement subclass.
         Applies side effects on ticket_query (adds columns, etc).
@@ -111,6 +124,26 @@ class OpExpression(object):
         method = getattr(arg1, self.op)
         return method(*arg2)
 
+
+
+class InProjectUsers(OpExpression):
+
+    def __init__(self, expr, role=None, allow_empty=False):
+        self.expr = expr
+        self.role = role
+        self.allow_empty = allow_empty
+
+    def compare(self, other):
+        return self.expr.compare(other.expr) and self.role == other.role \
+                                             and self.allow_empty == other.allow_empty
+
+    def process(self, ticket_query):
+        project_id = int(ticket_query._state['project_id'])
+        users = ticket_query.projman.get_project_users(project_id)
+        expr = self.expr.in_(users)
+        if self.allow_empty:
+            expr = expr | (self.expr == None)
+        return expr.process(ticket_query)
 
 
 class TicketAttribute(OpExpression):
@@ -190,6 +223,12 @@ class ExtraAttr(TicketAttribute):
         return col
 
 
+class TicketValue(ExtraAttr):
+
+    def __init__(self):
+        super(TicketValue, self).__init__('ticket_value')
+
+
 class Status(Field):
 
     def __init__(self):
@@ -200,6 +239,21 @@ class Resolution(Field):
 
     def __init__(self):
         super(Resolution, self).__init__('resolution')
+
+class Owner(Field):
+
+    def __init__(self):
+        super(Owner, self).__init__('owner')
+
+class Reporter(Field):
+
+    def __init__(self):
+        super(Reporter, self).__init__('reporter')
+
+class Milestone(Field):
+
+    def __init__(self):
+        super(Milestone, self).__init__('milestone')
 
 
 class FuncExpression(OpExpression):
@@ -214,7 +268,11 @@ class FuncExpression(OpExpression):
     def process(self, ticket_query):
         super(FuncExpression, self).process(ticket_query)
         sa_func = getattr(func, self.func_name)
-        res = sa_func(*self.args)
+        args = [arg(ticket_query)
+                    if isinstance(arg, OpExpression)
+                    else arg
+                for arg in self.args]
+        res = sa_func(*args)
         ticket_query._state['func_columns'].add(str(res))
         return res
 
@@ -223,19 +281,28 @@ class Count(FuncExpression):
     def __init__(self, *args):
         super(Count, self).__init__('count', *args)
 
+class Sum(FuncExpression):
+
+    def __init__(self, *args):
+        super(Sum, self).__init__('sum', *args)
 
 
-class Query(object):
 
-    def __init__(self, env):
-        self.env = env
-        self.info   = Info(env)
-        self.projman = ProjectManagement(env)
-        self.sa_metadata = env.get_sa_metadata()
-        self.sa_conn     = env.get_sa_connection()
+class Query(ModelSource):
+
+    def __init__(self, model):
+        super(Query, self).__init__(model)
+        self.info   = Info(self.model)
+        self.projman = ProjectManagement(self.env)
+        self.sa_metadata = self.env.get_sa_metadata()
+        self.sa_conn     = self.env.get_sa_connection()
+        self.reset_state()
+
+    def reset_state(self):
         self._state = {
             'area': None, # query subject area
-            'columns': set(), # columns to select
+            'user_area_field': Owner(), # field expr used for user area filtering
+            'columns': [], # columns to select (OpExpression objects)
             'attr_columns': set(), # all used attribute columns (names)
             'extra_columns': set(), # all used extra attribute columns (names)
             'func_columns': set(), # all used func columns (names)
@@ -247,9 +314,10 @@ class Query(object):
         }
         self._query_parts = {
             'joins': [], # {outer: bool, table: table_obj, on: on_expression}
-            'used_cols': {}, # all used columns (column objects)
+            'used_cols': {}, # all used columns (sqlalchemy column objects)
             'select_cols': set(), # columns to select (names)
         }
+        lazy.invalidate(self, '_ticket_fields')
 
     @lazy # init in execute()
     def _ticket_fields(self):
@@ -264,19 +332,18 @@ class Query(object):
 
     # Area setup methods
 
-    def project(self, pid):
-        s = self._state
-        if s['area'] != SubjectArea.USER:
-            s['area'] = SubjectArea.PROJECT
-        s['project_id'] = pid
-        return self
-
-    def user(self, username):
+    def user(self, username, field_expr=None):
+        if field_expr is None:
+            field_expr = self._state['user_area_field']
         self._state.update({
             'area': SubjectArea.USER,
-            'username': username
+            'username': username,
+            'user_field_expr': field_expr,
         })
         return self
+
+    def user_field(self, field_expr):
+        self._state['user_area_field'] = field_expr
 
     def group(self, gid):
         self._state.update({
@@ -298,6 +365,12 @@ class Query(object):
     def where(self, op_expr):
         self._state['where_exprs'].append(op_expr)
 
+    def limit_to_project_users(self, op_expr, role=None, allow_empty=False):
+        self.where(InProjectUsers(op_expr, role=role, allow_empty=allow_empty))
+
+    def milestone(self, name):
+        self.where(Milestone() == name)
+
     def period(self, begin=None, end=None):
         self._state['period'] = {
             'begin': begin,
@@ -316,24 +389,41 @@ class Query(object):
     # Columns control methods
 
     def only(self, *cols):
+        '''Retrieve only specified columns.
+        Columns m'''
         self._state.update({
-            'columns': set(cols)
+            'columns': list(cols)
         })
         return self
 
     # Terminal methods
 
     def count(self):
+        '''Return tickets count'''
         self._state.update({
             'aggregate': True,
-#            'aggregate_expr': Count
         })
         self.only(Count())
         if not self._state['group_by']:
             self._state['scalar'] = True
+            self._state['none_value'] = 0
+        return self.execute()
+
+    def sum(self, expr):
+        '''Return sum of `expr`'''
+        self._state.update({
+            'aggregate': True,
+        })
+        self.only(Sum(expr))
+        if not self._state['group_by']:
+            self._state['scalar'] = True
+            self._state['none_value'] = 0
         return self.execute()
 
     def execute(self):
+        '''Execute query and return rows matching to query state.
+        Return single value if state['scalar'] is True.
+        '''
         conn = self.sa_conn
         metadata = self.sa_metadata
         s  = self._state
@@ -342,6 +432,9 @@ class Query(object):
 
         tickets      = metadata.tables['ticket']
         project_info = metadata.tables['project_info']
+
+        if area == SubjectArea.USER:
+            self.where(s['user_field_expr'] == s['username'])
 
         cols = OpExpression.process_args(s['columns'], self)
         where_exprs = OpExpression.process_args(s['where_exprs'], self)
@@ -361,8 +454,6 @@ class Query(object):
 
         if area == SubjectArea.USER or area == SubjectArea.PROJECT:
             q = q.where(tickets.c.project_id==s['project_id'])
-        if area == SubjectArea.USER:
-            q = q.where(tickets.c.owner==s['username'])
         elif area == SubjectArea.SYLLABUS:
             q = q.where(project_info.c.syllabus_id==s['syllabus_id'])
         elif area == SubjectArea.GROUP:
@@ -377,18 +468,21 @@ class Query(object):
 
         res = conn.execute(q)
         if s['scalar']:
-            return res.scalar()
+            val = res.scalar()
+            if val is None and 'none_value' in s:
+                return s['none_value']
+            return val
         rows = res.fetchall()
 #        r = reduce(lambda s,a: s+a[0], ids, 0)
         return rows
 
 
 
+# TODO: refactor in area methods style
+class Info(ModelSource):
 
-class Info(object):
-
-    def __init__(self, env):
-        self.env = env
+    def __init__(self, model):
+        super(Info, self).__init__(model)
         self.ts = TicketSystem(self.env)
 
     def get_ticket_fields(self, project_id=None, syllabus_id=None):

@@ -1171,6 +1171,8 @@ class Milestone(object):
             self.due = self.completed = None
             self.description = ''
             self.weight = None
+            self.rating = None
+            self.approved = None
             self._to_old()
 
     @property
@@ -1184,7 +1186,7 @@ class Milestone(object):
             db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute("""
-            SELECT project_id,name,due,completed,description,weight
+            SELECT project_id,name,due,completed,description,weight,rating,approved
             FROM milestone WHERE project_id=%s AND name=%s
             """, (pid, name))
         row = cursor.fetchone()
@@ -1199,20 +1201,23 @@ class Milestone(object):
                                     self.due < datetime.now(utc))
 
     def _from_database(self, row):
-        pid, name, due, completed, description, weight = row
+        pid, name, due, completed, description, weight, rating, approved = row
         self.pid = pid
         self.name = name
         self.due = due and from_utimestamp(due) or None
         self.completed = completed and from_utimestamp(completed) or None
         self.description = description or ''
         self.weight = weight
+        self.rating = rating
+        self.approved = approved
         self._to_old()
 
     def _to_old(self):
         self._old = {'pid': self.pid, 'name': self.name, 'due': self.due,
                      'completed': self.completed,
                      'description': self.description,
-                     'weight': self.weight}
+                     'weight': self.weight, 'rating': self.rating,
+                     'approved': self.approved}
 
     def has_tickets(self):
         '''Return True if there are tickets associated with this milestone.'''
@@ -1277,10 +1282,11 @@ class Milestone(object):
             cursor = db.cursor()
             self.env.log.debug("Creating new milestone '%s' in project #%s" % (self.name, self.pid))
             cursor.execute("""
-                INSERT INTO milestone (project_id,name,due,completed,description,weight) 
-                VALUES (%s,%s,%s,%s,%s,%s)
+                INSERT INTO milestone (project_id,name,due,completed,description,weight,rating,approved) 
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                 """, (self.pid, self.name, to_utimestamp(self.due),
-                      to_utimestamp(self.completed), self.description, self.weight or 0))
+                      to_utimestamp(self.completed), self.description,
+                      self.weight or 0, self.rating or 0, self.approved or False))
             self._to_old()
             TicketSystem(self.env).reset_ticket_fields(self.pid)
 
@@ -1304,10 +1310,12 @@ class Milestone(object):
             self.env.log.info('Updating milestone "%s"' % self.name)
             cursor.execute("""
                 UPDATE milestone
-                SET name=%s,due=%s,completed=%s,description=%s,weight=%s WHERE project_id=%s AND name=%s
+                SET name=%s,due=%s,completed=%s,description=%s,weight=%s,rating=%s,approved=%s
+                WHERE project_id=%s AND name=%s
                 """, (self.name, to_utimestamp(self.due),
                       to_utimestamp(self.completed),
-                      self.description, self.weight, self.pid, old_name))
+                      self.description, self.weight, self.rating, self.approved,
+                      self.pid, old_name))
 
             if self.name != old_name:
                 # Update milestone field in tickets
@@ -1332,7 +1340,9 @@ class Milestone(object):
     def select(cls, env, pid, include_completed=True, db=None, **kwargs):
         if not db:
             db = env.get_read_db()
-        sql = "SELECT project_id,name,due,completed,description,weight FROM milestone WHERE project_id=%s"
+        sql = '''
+            SELECT project_id,name,due,completed,description,weight,rating,approved
+            FROM milestone WHERE project_id=%s'''
         if not include_completed:
             sql += " AND COALESCE(completed,0)=0 "
         cursor = db.cursor()

@@ -37,14 +37,16 @@ GL_MAP = {
 }
 
 
+class UserRole(object):
+    DEVELOPER = 1
+    MANAGER   = 2
+    ADMIN     = 3
+
+
 class UserManagement(Component):
     """
     This class implements API to manage teams and groups.
     """
-
-    USER_ROLE_DEVELOPER = 1
-    USER_ROLE_MANAGER   = 2
-    USER_ROLE_ADMIN     = 3
 
     VALID_PROJECT_USER_REALMS = ('team', 'manager')
 

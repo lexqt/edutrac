@@ -1,0 +1,234 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:i18n="http://genshi.edgewall.org/i18n"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="layout.html" />
+  <head>
+    <title>Teamwork evaluation</title>
+  </head>
+
+  <py:def function="show_results_table(results, user, completed_on, approved)">
+    <p>
+      <i18n:msg params="when, user">
+      Form completed ${format_datetime(completed_on)} by ${user_fullname(user)}
+      </i18n:msg>
+      <span py:if="approved" class="approved" title="${_('Approved evaluation results')}"></span>
+    </p>
+    <table class="wiki">
+      <thead>
+        <tr>
+          <th>Team member</th>
+          <th>Earned amount</th>
+          <th>Public comment</th>
+          <th>Private comment</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr py:for="row in results"
+          py:attrs="{'class': row.target==user and 'highlight' or None}">
+          <td>${user_fullname(row.target)}</td>
+          <td>${row.value}</td>
+          <td xml:space="preserve">${wiki_to_html(context, row.public_comment)}</td>
+          <td xml:space="preserve">${wiki_to_html(context, row.private_comment)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </py:def>
+
+  <py:def function="show_results_matrix(forms, users)">
+    <table class="wiki">
+      <tr>
+        <th>Who evaluated (vert.) \ Whom was evaluated (hor.)</th>
+        <th py:for="user in users">${user_fullname(user)}</th>
+      </tr>
+      <tr py:for="user in users">
+        <th>${user_fullname(user)}</th>
+        <py:choose test="forms[user] is None">
+          <td py:when="True" py:for="target in users"
+            py:attrs="{'class': target==user and 'highlight' or None}">X</td>
+          <td py:otherwise="" py:for="row in forms[user].devs"
+            py:attrs="{'class': row.target==user and 'highlight' or None}">${row.value}</td>
+        </py:choose>
+      </tr>
+    </table>
+  </py:def>
+
+  <py:def function="show_results_form(targets)">
+    <table class="wiki">
+      <thead>
+        <tr>
+          <th>Team member</th>
+          <th>Earned amount</th>
+          <th>Public comment</th>
+          <th>Private comment</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr py:for="idx, target in enumerate(targets)">
+          <td>
+            <input name="devs-${idx}.target" type="hidden" value="$target" />
+            <strong>${user_fullname(target)}</strong>
+          </td>
+          <td>
+            <input name="devs-${idx}.value" type="text" value="${req.args.get('devs-%i.value'%idx) or 0}" size="3" />
+          </td>
+          <td>
+            <textarea name="devs-${idx}.public_comment" rows="5" cols="40" class="wikitext trac-resizable"
+              py:content="req.args.get('devs-%i.public_comment'%idx)"></textarea>
+          </td>
+          <td>
+            <textarea name="devs-${idx}.private_comment" rows="5" cols="40" class="wikitext trac-resizable"
+              py:content="req.args.get('devs-%i.private_comment'%idx)"></textarea>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </py:def>
+
+  <py:def function="show_comments_table(comments)">
+    <table class="wiki">
+      <thead>
+        <tr>
+          <th>Team member</th>
+          <th>Public comments</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr py:for="user, user_comments in comments.iteritems()"
+            py:attrs="{'class': user==authname and 'highlight' or None}">
+          <td>${user_fullname(user)}</td>
+          <td>
+            <ul>
+              <li py:for="comment in user_comments">
+                <div xml:space="preserve">
+                  ${wiki_to_html(context, comment)}
+                </div>
+              </li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </py:def>
+
+  <body>
+    <div id="content">
+      <h1 i18n:msg="milestone">Milestone "${milestone.name}" teamwork evaluation</h1>
+
+      <py:choose test="subaction">
+
+        <py:when test="'edit'">
+          <div py:if="errors">
+            <p>Errors:</p>
+            <ul>
+              <li py:for="err in errors">$err</li>
+            </ul>
+          </div>
+          <p>
+            <i18n:msg params="sum">
+              Distribute sum <strong>$sum</strong> among team members
+              according to amount and quality of their contribution.
+              <br />
+              Explain your decision in <em>Public comment</em> field. Also leave some <strong>criticism and
+              recommendations</strong> for the future to target users. These comments will be <strong>visible</strong>
+              to other team members. You can also use <em>Private comment</em>, visible only for manager.
+              <br />
+              When you are evaluating youself, you can use comments to leave brief self-report.
+            </i18n:msg>
+          </p>
+          <form method="post">
+            <input type="hidden" name="action" value="teameval" />
+            ${show_results_form(targets)}
+            <div class="buttons">
+              <input type="submit" value="${_('Save')}" />
+              <input type="hidden" name="back" value="view" />
+              <input py:if="not is_new" type="submit" name="cancel" value="${_('Cancel')}" />
+            </div>
+          </form>
+          <div py:if="is_new" class="buttons">
+            <form method="post">
+              <input type="submit" name="cancel" value="${_('Cancel')}" />
+            </form>
+          </div>
+        </py:when>
+
+        <py:when test="'view'">
+          ${show_results_table(devs, authname, completed_on, approved)}
+          <div class="buttons">
+            <div>
+              <form method="get" action="" id="editeval">
+                <input type="hidden" name="action" value="teameval" />
+                <input type="hidden" name="subaction" value="edit" />
+                <input type="submit" value="${_('Edit')}" />
+              </form>
+              <form method="post" action="">
+                <input type="submit" name="cancel" value="${_('Cancel')}" />
+              </form>
+            </div>
+          </div>
+          <hr />
+          <h2>Results</h2>
+          <py:choose>
+            <py:when test="all_completed">
+              <h3>Public comments</h3>
+              ${show_comments_table(comments)}
+            </py:when>
+            <py:otherwise>
+              <p>Not all team members completed team evaluation forms yet!</p>
+            </py:otherwise>
+          </py:choose>
+
+          <py:if test="user_vars">
+            <h3>Evaluation model variables</h3>
+            <p>
+              <xi:include href="evaluation_variables_table.html"
+                py:with="group_by_user=True; variables=user_vars; current_user=authname;"/>
+            </p>
+          </py:if>
+
+        </py:when>
+
+        <py:when test="'manage'">
+          <py:for each="dev, results in forms.iteritems()">
+            <py:choose test="results is not None">
+              <h2>${user_fullname(dev)}</h2>
+              <py:when test="True" py:with="approved = results.approved">
+                ${show_results_table(results.devs, dev, results.completed_on, approved)}
+                <div class="buttons">
+                  <form method="get" action="" id="editeval">
+                    <input type="hidden" name="action" value="teameval" />
+                    <input type="hidden" name="subaction" value="${approved and 'disapprove' or 'approve'}" />
+                    <input type="hidden" name="user" value="${dev}" />
+                    <input type="submit" value="${approved and _('Disapprove') or _('Approve')}" />
+                  </form>
+                </div>
+              </py:when>
+              <p py:otherwise="">
+                Form is not completed.
+              </p>
+              <hr />
+            </py:choose>
+          </py:for>
+
+          <h2>Results matrix</h2>
+          ${show_results_matrix(forms, users)}
+          <hr />
+
+          <py:if test="user_vars">
+            <h2>Evaluation model variables</h2>
+            <p>
+              You may consult the values of the following evaluation model variables:
+              <xi:include href="evaluation_variables_table.html"
+                py:with="group_by_user=True; variables=user_vars;"/>
+            </p>
+          </py:if>
+
+        </py:when>
+
+      </py:choose>
+    </div>
+  </body>
+</html>

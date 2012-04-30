@@ -19,6 +19,7 @@ from datetime import datetime
 import pkg_resources
 import re
 from StringIO import StringIO
+from collections import OrderedDict
 
 from genshi.core import Markup
 from genshi.builder import tag
@@ -51,6 +52,7 @@ from trac.wiki.formatter import format_to, format_to_html, format_to_oneliner
 
 from trac.project.api import ProjectManagement
 from trac.user.api import UserManagement
+from trac.evaluation.api.components import EvaluationManagement
 
 class InvalidTicket(TracError):
     """Exception raised when a ticket fails validation."""
@@ -429,7 +431,8 @@ class TicketModule(Component):
             valid = self._validate_ticket(req, ticket, form_fields)
             
         # Preview a new ticket
-        data = self._prepare_data(req, ticket)        
+        data = self._prepare_data(req, ticket)
+        self._prepare_ticket_value_data(req, ticket, data)
         data.update({
             'author_id': reporter_id,
             'actions': [],
@@ -594,6 +597,7 @@ class TicketModule(Component):
                          # Store a timestamp for detecting "mid air collisions"
                          'timestamp': str(ticket['changetime'])})
 
+        self._prepare_ticket_value_data(req, ticket, data)
         data.update({'comment': req.args.get('comment'),
                      'cnum_edit': req.args.get('cnum_edit'),
                      'edited_comment': req.args.get('edited_comment'),
@@ -694,6 +698,33 @@ class TicketModule(Component):
                 'context': Context.from_request(req, ticket.resource,
                                                 absurls=absurls),
                 'preserve_newlines': self.must_preserve_newlines}
+
+    def _prepare_ticket_value_data(self, req, ticket, data):
+        if 'EVAL_VIEW' not in req.perm:
+            return
+
+        syllabus_id = req.data['syllabus_id']
+        model = EvaluationManagement(self.env).get_model(syllabus_id)
+        ticket_value = model.get_ticket_value(ticket)
+        ticket_value_help = model.get_ticket_value_help()
+
+        ticket_eval_enum = OrderedDict()
+        enum_list = model.get_ticket_value_enum_list()
+        fields = ticket.fields
+        for enum in enum_list:
+            field = fields.get(enum)
+            if not field or not field.get('options'):
+                continue
+            vals = OrderedDict()
+            ticket_eval_enum[field['label']] = vals
+            for opt in field['options']:
+                vals[opt] = model.get_enum_value(enum, opt)
+
+        data.update({
+            'ticket_value': ticket_value,
+            'ticket_value_help': ticket_value_help,
+            'ticket_eval_enum': ticket_eval_enum,
+        })
 
     def _toggle_cc(self, req, cc):
         """Return an (action, recipient) tuple corresponding to a change

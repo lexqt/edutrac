@@ -50,6 +50,7 @@ p.percent {
  color: #000;
 }
 .milestone .info h2 em { color: #b00; font-style: normal }
+.milestone .info .rating { font-size: 80%; margin-left: 1em; font-weight: normal }
 .milestone .info .date {
  color: #888;
  font-size: 11px;
@@ -70,6 +71,14 @@ p.percent {
 .milestone .info dt { display: inline; margin-left: .5em }
 .milestone .info dd { display: inline; margin: 0 1em 0 .5em }
 .milestone .description { margin-left: 1em }
+
+.approved {
+    background: url("../tick.png") 0 0 transparent;
+    display: inline-block;
+    vertical-align: middle;
+    width: 16px;
+    height: 16px;
+}
 
 /* Styles for the milestone view */
 .milestone .date { color: #888; font-style: italic; margin: 0 }

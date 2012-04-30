@@ -4,7 +4,8 @@
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:py="http://genshi.edgewall.org/"
       xmlns:i18n="http://genshi.edgewall.org/i18n"
-      xmlns:xi="http://www.w3.org/2001/XInclude">
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      py:with="eval_view = 'EVAL_VIEW' in perm">
   <xi:include href="layout.html" />
   <head>
     <title>Milestone ${milestone.name}</title>
@@ -21,7 +22,10 @@
   <body>
     <div id="content" class="milestone">
 
-      <h1>Milestone ${milestone.name}</h1>
+      <h1>
+        Milestone: ${milestone.name}
+        <span py:if="milestone.approved" class="approved" title="${_('Approved milestone')}"></span>
+      </h1>
 
       <form py:if="available_groups and stats.count" id="stats" action="">
         <fieldset>
@@ -63,19 +67,28 @@
       </form>
 
       <div class="info">
-        <div class="weight">
-            Weight: ${milestone.weight}
-            <py:if test="total_weight">
-              <xi:include href="simple_progress_bar.html" py:with="current=milestone.weight; total=total_weight; show_percent=True;"/>
-            </py:if>
-        </div>
-        <p>Rating: ${milestone.rating}%</p>
+        <py:if test="eval_view">
+          <div class="weight">
+              Weight: ${milestone.weight}
+              <py:if test="total_weight">
+                <xi:include href="simple_progress_bar.html" py:with="current=milestone.weight; total=total_weight; show_percent=True;"/>
+              </py:if>
+          </div>
+          <p>Rating: ${milestone.rating}%</p>
+        </py:if>
         <py:choose>
-          <p py:when="milestone.completed" class="date">
-            <i18n:msg params="duration, date">
-              Completed ${dateinfo(milestone.completed)} ago (${format_datetime(milestone.completed)})
-            </i18n:msg>
-          </p>
+          <py:when test="milestone.completed">
+            <p class="date">
+              <i18n:msg params="duration, date">
+                Completed ${dateinfo(milestone.completed)} ago (${format_datetime(milestone.completed)})
+              </i18n:msg>
+            </p>
+            <p py:if="milestone.is_late" class="date">
+              <i18n:msg params="duration, date">
+                <strong>${pretty_timedelta(milestone.completed, milestone.due)} late</strong> (${format_datetime(milestone.due)})
+              </i18n:msg>
+            </p>
+          </py:when>
           <p py:when="milestone.is_late" class="date">
             <i18n:msg params="duration, date">
               <strong>${dateinfo(milestone.due)} late</strong> (${format_datetime(milestone.due)})
@@ -113,12 +126,32 @@
             <input type="submit" value="${_('Delete milestone')}" />
           </div>
         </form>
-        <form py:if="'EVAL_TEAM_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalteamwork">
+        <form py:if="'MILESTONE_APPROVE' in perm(milestone.resource)" method="post" action="" id="approvemilestone">
+          <div>
+            <input type="hidden" name="action" py:attrs="{'value': milestone.approved and 'disapprove' or 'approve'}" />
+            <input type="submit"  py:attrs="{'value': milestone.approved and _('Disapprove milestone') or _('Approve milestone')}" />
+          </div>
+        </form>
+        <form py:if="eval_view and 'EVAL_TEAM_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalteamwork">
           <div>
             <input type="hidden" name="action" value="teameval" />
             <input type="submit" value="${_('Evaluate teamwork')}" />
           </div>
         </form>
+        <form py:if="eval_view and 'EVAL_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalteammanage">
+          <div>
+            <input type="hidden" name="action" value="teameval" />
+            <input type="hidden" name="subaction" value="manage" />
+            <input type="submit" value="${_('View team evaluation results')}" />
+          </div>
+        </form>
+        <form py:if="eval_view and 'EVAL_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalmilestone">
+          <div>
+            <input type="hidden" name="action" value="eval" />
+            <input type="submit" value="${_('Evaluate milestone')}" />
+          </div>
+        </form>
+        <xi:include py:if="attachments.can_create" href="attach_file_form.html" py:with="alist = attachments"/>
       </div>
 
       <div id="help" i18n:msg=""><strong>Note:</strong> See

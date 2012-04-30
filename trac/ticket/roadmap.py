@@ -45,6 +45,8 @@ from trac.wiki.api import IWikiSyntaxProvider
 from trac.wiki.formatter import format_to
 
 from trac.project.api import ProjectManagement
+from trac.evaluation.milestone import MilestoneEvaluation
+
 
 class ITicketGroupStatsProvider(Interface):
     def get_ticket_group_stats(ticket_ids, pid):
@@ -526,6 +528,9 @@ class MilestoneModule(Component):
     force_milestone = BoolOption('ticket-workflow-config', 'force_milestone', default='true',
                         doc="""Do not allow to have tickets without milestone""", switcher=True)
 
+    def __init__(self):
+        self.milestone_eval = MilestoneEvaluation(self.env)
+
     # INavigationContributor methods
 
     def get_active_navigation_item(self, req):
@@ -538,7 +543,8 @@ class MilestoneModule(Component):
 
     def get_permission_actions(self):
         actions = ['MILESTONE_CREATE', 'MILESTONE_DELETE', 'MILESTONE_MODIFY',
-                   'MILESTONE_MODIFY_WEIGHT', 'MILESTONE_MODIFY_CLOSED', 'MILESTONE_CLOSE',
+                   'MILESTONE_CLOSE',   'MILESTONE_MODIFY_CLOSED',
+                   'MILESTONE_APPROVE', 'MILESTONE_MODIFY_APPROVED',
                    'MILESTONE_VIEW']
         return actions + [('MILESTONE_ADMIN', actions)]
 
@@ -624,8 +630,9 @@ class MilestoneModule(Component):
             action = 'edit' # rather than 'new' so that it works for POST/save
 
         if action == 'teameval':
-            from trac.evaluation.web_ui import EvaluationStatsModule
-            return EvaluationStatsModule(self.env).team_milestone_eval(req, milestone)
+            return self.milestone_eval.do_team_milestone_eval(req, milestone)
+        elif action == 'eval':
+            return self.milestone_eval.do_milestone_eval(req, milestone)
 
         if req.method == 'POST':
             if req.args.has_key('cancel'):
@@ -637,6 +644,10 @@ class MilestoneModule(Component):
                 return self._do_save(req, db, milestone)
             elif action == 'delete':
                 self._do_delete(req, milestone)
+            elif action == 'approve':
+                self._do_approve(req, milestone, True)
+            elif action == 'disapprove':
+                self._do_approve(req, milestone, False)
         elif action in ('new', 'edit'):
             return self._render_editor(req, db, milestone)
         elif action == 'delete':
@@ -651,6 +662,8 @@ class MilestoneModule(Component):
 
     def _do_delete(self, req, milestone):
         req.perm(milestone.resource).require('MILESTONE_DELETE')
+        if milestone.is_completed:
+            req.perm(milestone.resource).require('MILESTONE_MODIFY_CLOSED')
 
         retarget_to = None
         if req.args.has_key('retarget'):
@@ -668,8 +681,10 @@ class MilestoneModule(Component):
     def _do_save(self, req, db, milestone):
         if milestone.exists:
             req.perm(milestone.resource).require('MILESTONE_MODIFY')
-            if milestone.completed:
+            if milestone.is_completed:
                 req.perm(milestone.resource).require('MILESTONE_MODIFY_CLOSED')
+            if milestone.approved:
+                req.perm(milestone.resource).require('MILESTONE_MODIFY_APPROVED')
         else:
             req.perm(milestone.resource).require('MILESTONE_CREATE')
 
@@ -726,16 +741,6 @@ class MilestoneModule(Component):
             completed = None
         milestone.completed = completed
 
-        # -- check weight value
-        try:
-            weight = int(req.args.get('weight'))
-            if weight != milestone.weight:
-                req.perm(milestone.resource).require('MILESTONE_MODIFY_WEIGHT')
-        except ValueError:
-            warn(_('You must provide a valid integer value for milestone weight.'))
-            weight = None
-        milestone.weight = weight
-
         if warnings:
             return self._render_editor(req, db, milestone)
         
@@ -758,16 +763,32 @@ class MilestoneModule(Component):
         add_notice(req, _('Your changes have been saved.'))
         req.redirect(get_resource_url(self.env, milestone.resource, req.href))
 
+    def _do_approve(self, req, milestone, to_approve=True):
+        if not milestone.exists:
+            raise ResourceNotFound(_('Milestone %(name)s does not exist in project #%(pid)s.',
+                                   name=milestone.name, pid=milestone.pid), _('Invalid milestone name'))
+        req.perm(milestone.resource).require('MILESTONE_MODIFY')
+        req.perm(milestone.resource).require('MILESTONE_APPROVE')
+
+        milestone.approved = to_approve
+        milestone.update()
+
+        add_notice(req, _('Your changes have been saved.'))
+        req.redirect(get_resource_url(self.env, milestone.resource, req.href))
+
     def _render_confirm(self, req, db, milestone):
         req.perm(milestone.resource).require('MILESTONE_DELETE')
 
         milestones = [m for m in Milestone.select(self.env, pid=milestone.pid, db=db)
                       if m.name != milestone.name
                       and 'MILESTONE_VIEW' in req.perm(m.resource)]
+        ticket_fields = TicketSystem(self.env).get_ticket_fields(milestone.pid)
+        allow_retarget_to_none = ticket_fields['milestone']['optional']
         data = {
             'milestone': milestone,
             'milestone_groups': group_milestones(milestones,
-                'TICKET_ADMIN' in req.perm)
+                'TICKET_ADMIN' in req.perm),
+            'allow_retarget_to_none': allow_retarget_to_none,
         }
         return 'milestone_delete.html', data, None
 
@@ -777,12 +798,15 @@ class MilestoneModule(Component):
                                                    microsecond=0)
         if default_due <= datetime.now(utc):
             default_due += timedelta(days=1)
-        
+
+        ticket_fields = TicketSystem(self.env).get_ticket_fields(milestone.pid)
+        allow_retarget_to_none = ticket_fields['milestone']['optional']
         data = {
             'milestone': milestone,
             'datetime_hint': get_datetime_format_hint(),
             'default_due': default_due,
             'milestone_groups': [],
+            'allow_retarget_to_none': allow_retarget_to_none,
         }
 
         if milestone.exists:

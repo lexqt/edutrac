@@ -1,0 +1,69 @@
+<!--!
+Display a table of evaluation variables.
+
+Arguments:
+ `variables`: (ordered) dict (or another map type) with variables and their values
+              if no grouping is used, must be {<variable object>: <value>, ...}
+ `group_by_user`: bool. Values of `variables` are grouped by username:
+                  {<variable object>: {'user1': <value>, ...}, ...}
+ `users`: list of users, used when `group_by_user` is true.
+          Order of usernames in `users` and in `variables` values MUST be the same.
+ `current_user`: if specified, used for highlight table column
+-->
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:i18n="http://genshi.edgewall.org/i18n"
+      py:with="
+        current_user = value_of('current_user', False);
+        highlight = bool(current_user);
+      "
+      py:strip="">
+
+
+  <table py:choose="" class="wiki">
+
+    <py:when test="group_by_user">
+      <tr>
+        <th rowspan="2">Variable</th>
+        <th colspan="${len(users)}">Value</th>
+      </tr>
+      <tr>
+        <th py:for="user in users"
+            py:attrs="{'class': highlight and user==current_user and 'highlight' or None}">
+          ${user_fullname(user)}
+        </th>
+      </tr>
+      <tr py:for="var, values in variables.iteritems()">
+        <td>
+          <dl class="evalvar">
+            <dt>${var.label}</dt>
+            <dd>${var.description}</dd>
+          </dl>
+        </td>
+        <td py:for="user, value in values.iteritems()"
+            py:attrs="{'class': highlight and user==current_user and 'highlight' or None}">
+            ${format_scale(var.scale, value)}
+        </td>
+      </tr>
+    </py:when>
+
+    <py:otherwise>
+      <tr>
+        <th>Variable</th>
+        <th>Value</th>
+      </tr>
+      <tr py:for="var, value in variables.iteritems()">
+        <td>
+          <dl class="evalvar">
+            <dt>${var.label}</dt>
+            <dd>${var.description}</dd>
+          </dl>
+        </td>
+        <td>${format_scale(var.scale, value)}</td>
+      </tr>
+    </py:otherwise>
+
+  </table>
+
+</html>

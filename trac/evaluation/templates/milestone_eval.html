@@ -7,90 +7,65 @@
       xmlns:xi="http://www.w3.org/2001/XInclude">
   <xi:include href="layout.html" />
   <head>
-    <title>Teamwork evaluation</title>
+    <title>Evaluation for Milestone ${milestone.name}</title>
+    <link rel="stylesheet" type="text/css"
+          href="${chrome.htdocs_location}css/roadmap.css" />
   </head>
 
   <body>
-    <div id="content">
-      <h1>Milestone teamwork evaluation</h1>
+    <div id="content" class="milestone">
+      <h1>Evaluation for Milestone ${milestone.name}</h1>
 
-      <p py:if="not is_new">
-        Form completed: ${format_datetime(completed_on)}
+      <div py:if="errors" class="error-list">
+        <h2>Errors:</h2>
+        <ul>
+          <li py:for="err in errors">$err</li>
+        </ul>
+      </div>
+
+      <p>
+        <i18n:msg params="">
+        Set values for milestone evaluation.<br />
+        <strong>Weight</strong> allows to specify weight of milestone used when summing
+        evaluation results of all milestones.<br />
+        <strong>Rating</strong> is an expert percental grade (0–100) for the milestone. It may take into account
+        degree of milestone completion within the time limit.
+        </i18n:msg>
       </p>
 
-      <py:choose test="edit">
-        <py:when test="True">
-          <div py:if="errors">
-            <p>Errors:</p>
-            <ul>
-              <li py:for="err in errors">$err</li>
-            </ul>
-          </div>
-          <p>
-            <i18n:msg params="sum">
-              Distribute sum <strong>$sum</strong> among team members
-              according to amount and quality of their contribution.
-              Explain your decision in <em>Comment</em> field.
-            </i18n:msg>
-          </p>
-          <form method="post">
-            <input type="hidden" name="action" value="teameval" />
-            <table class="wiki">
-              <thead>
-                <tr>
-                  <th>Team member</th>
-                  <th>Earned amount</th>
-                  <th>Comment</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr py:for="idx, target in enumerate(targets)">
-                  <td>
-                    <input name="devs-${idx}.target" type="hidden" value="$target" />
-                    <strong>${user_fullname(target)}</strong>
-                  </td>
-                  <td>
-                    <input name="devs-${idx}.value" type="text" value="${req.args.get('devs-%i.value'%idx) or 0}" size="3" />
-                  </td>
-                  <td>
-                    <textarea name="devs-${idx}.comment" rows="2" cols="40" class="trac-resizable">${req.args.get('devs-%i.comment'%idx) or ''}</textarea>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="buttons">
-              <input type="submit" value="${_('Save')}" />
-            </div>
-          </form>
-        </py:when>
-        <py:otherwise>
-          <table class="wiki">
-            <thead>
-              <tr>
-                <th>Team member</th>
-                <th>Earned amount</th>
-                <th>Comment</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr py:for="row in devs">
-                <td>${user_fullname(row['target'])}</td>
-                <td>${row['value']}</td>
-                <td>${row['comment']}</td>
-              </tr>
-            </tbody>
+      <form id="edit" action="" method="post">
+        <div class="field">
+          <input type="hidden" name="id" value="${milestone.name}" />
+          <input type="hidden" name="pid" value="${milestone.pid}" />
+          <input type="hidden" name="action" value="eval" />
+          <input type="hidden" name="subaction" value="save" />
+          <table>
+            <tr>
+              <td><label for="weight">Weight of the milestone:</label></td>
+              <td><input type="text" id="weight" name="weight" size="6" value="${weight}" /></td>
+            </tr>
+            <tr>
+              <td><label for="rating">Rating of the milestone:</label></td>
+              <td><input type="text" id="rating" name="rating" size="6" value="${rating}" /></td>
+            </tr>
           </table>
-          <div class="buttons">
-            <form method="get" action="" id="editeval">
-              <div>
-                <input type="hidden" name="action" value="teameval" />
-                <input type="hidden" name="subaction" value="edit" />
-                <input type="submit" value="${_('Edit')}" />
-              </div>
-            </form>
-          </div>
-        </py:otherwise>
-      </py:choose>
+        </div>
+        <div class="buttons">
+          <input type="submit" value="${_('Submit changes')}" />
+          <input type="submit" name="cancel" value="${_('Cancel')}" />
+        </div>
+      </form>
+
+      <py:if test="milestone_vars">
+        <hr />
+        <h2>Evaluation model variables</h2>
+        <p>
+          You may consult the values of the following evaluation model variables:
+          <xi:include href="evaluation_variables_table.html"
+            py:with="variables=milestone_vars;"/>
+        </p>
+      </py:if>
+
     </div>
   </body>
 </html>

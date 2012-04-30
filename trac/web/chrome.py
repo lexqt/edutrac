@@ -773,6 +773,7 @@ class Chrome(Component):
         user_management = UserManagement(self.env)
 
         from trac.ticket.api import format_field_value
+        from trac.evaluation.api.scale import prepare_rendered_value
 
         d.update({
             'context': req and Context.from_request(req) or None,
@@ -798,6 +799,7 @@ class Chrome(Component):
             'format_author': partial(self.format_author, req),
             'format_emails': self.format_emails,
             'format_field': format_field_value,
+            'format_scale': prepare_rendered_value,
             'get_systeminfo': self.env.get_systeminfo,
 
             # Date/time formatting

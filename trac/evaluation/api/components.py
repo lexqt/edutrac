@@ -2,6 +2,7 @@ import threading
 
 from trac.core import Component, TracError
 from trac.util.text import exception_to_unicode
+from trac.util.translation import _, N_
 from trac.config import Option
 
 from trac.project.api import ProjectManagement
@@ -33,10 +34,12 @@ class EvaluationManagement(Component):
                     fp, path, desc = imp.find_module(pkg, [ev_path])
                     p = imp.load_module(pkg, fp, path, desc)
                     if not issubclass(p.Model, EvaluationModel):
-                        raise Exception('Syllabus evaluation package must define Model as subclass of EvaluationModel')
-                    model = p.Model()
+                        raise Exception(_('Syllabus evaluation package must contain '
+                                          'class Model that is a subclass of EvaluationModel'))
+                    model = p.Model(syllabus_id)
                 except Exception, e:
-                    raise TracError(exception_to_unicode(e), 'Error occurred while loading evaluation model')
+                    raise TracError(exception_to_unicode(e, traceback=True),
+                                    N_('Error occurred while loading evaluation model'))
                 self.env.component_activated(model)
                 model.sconfig = model.configs.syllabus(syllabus_id)
                 self._models[syllabus_id] = model

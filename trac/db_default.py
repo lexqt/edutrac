@@ -246,6 +246,8 @@ schema = [
         Column('completed', type='int64'),
         Column('description'),
         Column('weight', type='int', null=False, default='0'),
+        Column('rating', type='int', null=False, default='0'),
+        Column('approved', type='bool', null=False, default='FALSE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
     Table('version', key=('project_id', 'name'))[
         Column('project_id', type='int', null=False),
@@ -316,6 +318,7 @@ schema = [
         Column('milestone', type='varchar(255)'),
         Column('complete', type='bool', default='TRUE', null=False),
         Column('completed_on', type='timestamp', default='CURRENT_TIMESTAMP', null=False),
+        Column('approved', type='bool', default='FALSE', null=False),
         ForeignKey('username', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         ForeignKey(('milestone', 'project_id'), 'milestone', ('name', 'project_id'), on_delete='CASCADE', on_update='CASCADE'),],
     Table('team_milestone_evaluation_results', key=('author', 'target', 'project_id', 'milestone'))[
@@ -324,10 +327,16 @@ schema = [
         Column('project_id', type='int'),
         Column('milestone', type='varchar(255)'),
         Column('value', type='int', null=False, default='0'),
-        Column('comment', type='text', default="''", null=False),
+        Column('public_comment', type='text', default="''", null=False),
+        Column('private_comment', type='text', default="''", null=False),
         ForeignKey('author', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         ForeignKey('target', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
         ForeignKey(('milestone', 'project_id'), 'milestone', ('name', 'project_id'), on_delete='CASCADE', on_update='CASCADE'),],
+    Table('project_evaluation', key=('project_id', 'criterion'))[
+        Column('project_id', type='int'),
+        Column('criterion', type='varchar(255)'),
+        Column('value', default="''", null=False),
+        ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE')],
 ]
 
 ##

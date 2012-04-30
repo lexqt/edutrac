@@ -1,0 +1,75 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="layout.html" />
+  <head>
+    <title>Project evaluation</title>
+  </head>
+
+  <body>
+    <div id="content">
+      <h1>Project evaluation</h1>
+
+      <div py:if="errors">
+        <p>Errors:</p>
+        <ul>
+          <li py:for="err in errors">
+            <strong>${err.name}</strong>: ${err.error}
+          </li>
+        </ul>
+      </div>
+      <form action="${href.eval()}" py:attrs="{'method': view and 'get' or 'post'}">
+        <input type="hidden" name="action" value="project" />
+        <input type="hidden" name="subaction" value="edit" />
+        <table class="wiki">
+          <tr>
+            <th>Criterion</th>
+            <th>Value</th>
+          </tr>
+          <tr py:for="crit in values">
+            <td>
+              <dl class="evalvar">
+                <dt>${crit.label}</dt>
+                <dd>${crit.description}</dd>
+              </dl>
+            </td>
+            <td py:choose="">
+              <py:when test="view">
+                ${crit.value}
+              </py:when>
+              <py:otherwise py:choose="crit.type">
+                <input py:when="'checkbox'" type="checkbox" name="${crit.alias}" value="1" checked="${crit.value or None}" />
+                <select py:when="'select'" name="${crit.alias}">
+                  <option py:for="opt in crit.options" value="${opt}" selected="${crit.value==opt or None}">${opt}</option>
+                </select>
+                <input py:otherwise="" type="text" name="${crit.alias}" value="${crit.value}" size="6" />
+                <py:if test="crit.help">[${crit.help}]</py:if>
+              </py:otherwise>
+            </td>
+          </tr>
+        </table>
+        <div class="buttons" py:with="can_edit = 'EVAL_PROJECT' in perm;">
+          <py:if test="can_edit" py:choose="view">
+            <input py:when="True" type="submit" value="${_('Edit')}" />
+            <py:otherwise>
+              <input type="submit" value="${_('Submit changes')}" />
+              <input type="submit" name="cancel" value="${_('Cancel')}" />
+            </py:otherwise>
+          </py:if>
+        </div>
+      </form>
+
+      <py:if test="variables">
+        <hr />
+        <h2>Evaluation model variables</h2>
+        <p>
+          <xi:include href="evaluation_variables_table.html" />
+        </p>
+      </py:if>
+
+    </div>
+  </body>
+</html>

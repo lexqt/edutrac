@@ -1,0 +1,50 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="layout.html" />
+  <head>
+    <title>Evaluation variable</title>
+  </head>
+
+  <body>
+    <div id="content">
+      <h1>Get evaluation variable</h1>
+
+      <form action="${href.eval()}" method="get">
+        <input type="hidden" name="action" value="debug_var" />
+        <label>
+          Variable name:
+          <select name="var_name">
+            <option value=""></option>
+            <option py:for="var in all_vars"
+              py:attrs="{'value': var.alias, 'selected': var.alias == var_name or None}">
+                ${var.label}
+            </option>
+          </select>
+        </label>
+        <fieldset>
+          <legend>Arguments</legend>
+          <label>
+            Project ID: <input type="text" name="var_project" value="${var_project}" />
+          </label><br />
+          <label>
+            User: <input type="text" name="var_username" value="${var_username}" />
+          </label><br />
+          <label>
+            Milestone: <input type="text" name="var_milestone" value="${var_milestone}" />
+          </label>
+        </fieldset>
+        <input type="submit" value="${_('Show')}" />
+      </form>
+
+      <div py:if="var">
+        <h2>${var.label}</h2>
+        <p>${var.description}</p>
+        <p>Value: ${var_value}</p>
+      </div>
+    </div>
+  </body>
+</html>

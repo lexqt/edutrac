@@ -52,9 +52,6 @@
           <label>Name of the milestone:<br />
             <input type="text" id="name" name="name" size="32" value="${milestone.name or req.args.get('name')}" />
           </label><br />
-          <label>Weight of the milestone:
-            <input type="text" id="weight" name="weight" size="6" value="${milestone.weight if milestone.weight is not None else req.args.get('weight')}" />
-          </label>
         </div>
         <fieldset>
           <legend>Schedule</legend>
@@ -86,7 +83,7 @@
               <input type="checkbox" id="retarget" name="retarget" checked="${not milestone.completed or None}" />
               <label for="retarget">Retarget associated open tickets to milestone:</label>
               <select id="target" name="target">
-                <option value="">None</option>
+                <option py:if="allow_retarget_to_none" value="">None</option>
                 <optgroup py:for="(label, milestones) in milestone_groups"
                           py:if="milestones" label="${label}">
                   <option py:for="milestone in milestones"

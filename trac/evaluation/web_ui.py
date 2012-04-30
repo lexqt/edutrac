@@ -1,225 +1,170 @@
 import pkg_resources
-from datetime import datetime
+from collections import OrderedDict
 
-from trac.util.translation import _, tag_
-from trac.util.datefmt import utc
+from trac.util.translation import _
+from trac.util.text import exception_to_unicode
 
-from trac.core import Component, implements
+from genshi.builder import tag
+
+from trac.core import Component, implements, TracError
 from trac.web.api import IRequestHandler
 from trac.project.api import ProjectManagement
-from trac.web.chrome import ITemplateProvider
+from trac.web.chrome import ITemplateProvider, INavigationContributor, add_warning
 from trac.perm import IPermissionRequestor
-from trac.resource import get_resource_url
-from trac.config import IntOption
 
 from trac.evaluation.api import EvaluationManagement
-from trac.evaluation.milestone import MilestoneEvaluation
+from trac.evaluation.api.model import EvalModelError
 
-import formencode
-from formencode import validators, variabledecode
-from trac.util.formencode_addons import EqualSet, make_plain_errors_list
-
-
-
-class MilestoneUserEvalRow(formencode.Schema):
-
-    target = validators.String(not_empty=True)
-    value = validators.Int(not_empty=True, min=0)
-    comment = validators.String(max=2000)
-
-class MilestoneEvalFormValidator(formencode.Schema):
-
-    allow_extra_fields = True
-    filter_extra_fields = True
-
-    team = ()
-    sum = 0
-
-    pre_validators = [variabledecode.NestedVariables()]
-    chained_validators = []
-
-    def __init__(self, *args, **kwargs):
-        super(MilestoneEvalFormValidator, self).__init__(*args, **kwargs)
-        self.pre_validators.append(TeamSetValidator(team_set=set(self.team)))
-        self.chained_validators.append(ValuesSumValidator(sum=self.sum))
-
-    devs = formencode.ForEach(MilestoneUserEvalRow())
-
-
-class TeamSetValidator(validators.FormValidator):
-
-    team_set = set()
-
-    def validate_python(self, value, state):
-        targets = [d['target'] for d in value['devs']]
-        validator = EqualSet(equal_to_set=self.team_set)
-        validator.validate_python(targets, state)
-
-class ValuesSumValidator(validators.FormValidator):
-
-    sum = 0
-
-    messages = {
-        'not_valid_sum': 'Sum of earned scores field must be %(sum)s',
-    }
-
-    def validate_python(self, value, state):
-        sum = reduce(lambda s, r: s+r['value'], value['devs'], 0)
-        if sum != self.sum:
-            raise formencode.Invalid(self.message('not_valid_sum', state, sum=self.sum), sum, state)
-
-_milestone_eval_labels = {
-    'devs': _('Evaluation form'),
-    'value': _('Earned amount'),
-    'comment': _('Comment'),
-}
-
+from trac.evaluation.project import ProjectEvaluation
 
 
 class EvaluationStatsModule(Component):
 
-    implements(IPermissionRequestor, IRequestHandler, ITemplateProvider)
+    implements(IPermissionRequestor, IRequestHandler, ITemplateProvider, INavigationContributor)
 
-    permissions = ('EVAL_TEAM_MILESTONE',)
+    permissions = ('EVAL_VIEW', 'EVAL_DEBUG_VAR')
 
     def __init__(self):
+        self.pm = ProjectManagement(self.env)
         self.evmanager = EvaluationManagement(self.env)
-        self.milestone_eval = MilestoneEvaluation(self.env)
 
-    # IPermissionRequestor methods
+    # IPermissionRequestor
 
     def get_permission_actions(self):
         return self.permissions
 
-    # IRequestHandler methods
+    # INavigationContributor
+
+    def get_active_navigation_item(self, req):
+        action = req.args.get('action', 'project')
+        if action == 'project':
+            return 'project_eval'
+        elif action == 'individual':
+            return 'individual_eval'
+        elif action == 'debug_var':
+            return 'debug_eval_var'
+
+    def get_navigation_items(self, req):
+        if 'EVAL_VIEW' not in req.perm:
+            return
+        yield ('mainnav', 'project_eval', 
+               tag.a(_('Project evaluation'), href=req.href.eval(action='project')))
+        yield ('mainnav', 'individual_eval', 
+               tag.a(_('Individual evaluation'), href=req.href.eval(action='individual')))
+        if 'EVAL_DEBUG_VAR' in req.perm:
+            yield ('mainnav', 'debug_eval_var', 
+                   tag.a(_('Debug eval var'), href=req.href.eval(action='debug_var')))
+
+    # IRequestHandler
     
     def match_request(self, req):
         return req.path_info == '/eval'
 
     def process_request(self, req):
-        pm = ProjectManagement(self.env)
+        req.perm.require('EVAL_VIEW')
 
-        pid = pm.get_current_project(req)
+        # check project
+        _pid = self.pm.get_current_project(req)
 
-        model = self.evmanager.get_model_by_project(pid)
+        action = req.args.get('action', 'project')
 
-        var1 = model.vars['test'].project(pid).user('dev1')
-        var2 = model.vars['test'].project(pid)
-        var3 = model.vars['milestone_grade'].project(pid).user('dev1').milestone('milestone1')
-        var4 = model.vars['milestone_grade_self_weighted'].project(pid).user('dev1').milestone('milestone1')
+        if action == 'debug_var':
+            return self._do_debug_eval_var(req)
+        elif action == 'individual':
+            return self._do_individual_eval(req)
+        elif action == 'project':
+            return ProjectEvaluation(self.env).do_project_eval(req)
+
+    def _do_debug_eval_var(self, req):
+        req.perm.require('EVAL_DEBUG_VAR')
+
+        var_name      = req.args.get('var_name')
+        var_project   = req.args.getint('var_project')
+        var_username  = req.args.get('var_username')
+        var_milestone = req.args.get('var_milestone')
+
+        do_not_process = req.args.getbool('do_not_process', False)
+
+        syllabus_id = req.data['syllabus_id']
+        model = self.evmanager.get_model(syllabus_id)
+        all_vars = model.vars.all()
+        all_vars = sorted(all_vars, key=lambda v: v.label)
+        var = None
+        var_value = None
+
+        if not do_not_process and var_name:
+            if var_project is None:
+                raise TracError(_('Variable project ID undefined'))
+            psyll = self.pm.get_project_syllabus(var_project)
+            if psyll != syllabus_id:
+                raise TracError(_('Current syllabus and requested project syllabus are mismatching. '
+                                  'Try to switch current session project.'))
+            self.pm.check_session_project(req, var_project)
+            if var_name in model.vars:
+                var = model.vars[var_name]
+                var.project(var_project)
+                if var_username:
+                    var.user(var_username)
+                if var_milestone:
+                    var.milestone(var_milestone)
+            else:
+                add_warning(req, _('Unknown variable %(var_name)s', var_name=var_name))
+
+        if var:
+            # try to get var value here to prevent
+            # unhandled exception in template
+            try:
+                var_value = var.get()
+            except EvalModelError, e:
+                add_warning(req, exception_to_unicode(e))
 
         data = {
-            'vars': [var1, var2, var3, var4],
+            'var_name': var_name,
+            'all_vars': all_vars,
+            'var_project': var_project,
+            'var_username': var_username,
+            'var_milestone': var_milestone,
+            'var': var,
+            'var_value': var_value,
         }
 
-        return 'dummy.html', data, None
+        return 'show_var.html', data, None
 
-    # Outer handlers
+    def _do_individual_eval(self, req):
+        data = {}
+        syllabus_id = req.data['syllabus_id']
+        project_id  = req.data['project_id']
 
-    def team_milestone_eval(self, req, milestone):
-        '''Handler for "teameval" action on milestone'''
-        # TODO: differentiate user roles
-        # now let it Developer
-        req.perm.require('EVAL_TEAM_MILESTONE')
-        
-        completed = self.milestone_eval.get_completed(req.authname, milestone.pid, milestone.name)
-        data = {
-            'milestone': milestone,
-        }
+        users = self.pm.get_project_users(project_id)
+        model = self.evmanager.get_model(syllabus_id)
+        user_vars = model.get_individual_rating_vars()
 
-        subaction = req.args.get('subaction', 'view')
-        is_new = completed is None
-        edit = is_new or subaction == 'edit'
-        if not is_new:
-            complete, completed_on = completed
-            if not complete:
-                raise NotImplementedError
-            data['completed_on'] = completed_on
+        ivalues = OrderedDict()
+        for var in user_vars:
+            uvalues = OrderedDict()
+            var.project(project_id)
+            for user in users:
+                try:
+                    var.user(user)
+                    var_value = var.get()
+                except EvalModelError, e:
+                    var_value = e.message
+                uvalues[user] = var_value
+            ivalues[var] = uvalues
+
+        if req.authname in users:
+            data['current_user'] = req.authname
+
         data.update({
-            'is_new': is_new,
-            'edit': edit,
+            'users': users,
+            'user_vars': ivalues,
         })
+        return 'individual_eval.html', data, None
 
-        # Save data or prepare errors to display
-        if req.method == 'POST':
-            self._prepare_milestone_eval_edit_data(req, milestone, data)
-            cleaned_data, errs = self._fetch_and_validate_data(req, data)
-            if not errs:
-                cleaned_data.update({
-                    'author': data['author'],
-                    'milestone': milestone.name,
-                    'project_id': milestone.pid,
-                    'completed_on': datetime.now(utc),
-                })
-                self._save_milestone_eval(cleaned_data, is_new=is_new)
-                req.redirect(req.href(get_resource_url(self.env, milestone.resource), action='teameval'))
-            data.update({
-                'edit': True,
-                'errors': errs,
-            })
-        elif edit:
-            self._prepare_milestone_eval_edit_data(req, milestone, data, is_existent=not is_new)
-        else:
-            self._prepare_milestone_eval_view_data(req, milestone, data)
-
-        return 'milestone_eval.html', data, None
-
-    #
-
-    def _prepare_milestone_eval_view_data(self, req, milestone, data):
-        res = self.milestone_eval.get_results_by_user(req.authname, milestone.pid, milestone.name)
-        devs = data['devs'] = []
-        for row in res:
-            devs.append({
-                'target': row['target'],
-                'value': row['value'],
-                'comment': row['comment'],
-            })
-
-    def _prepare_milestone_eval_edit_data(self, req, milestone, data, is_existent=False):
-        pm = ProjectManagement(self.env)
-        devs = pm.get_project_users(milestone.pid)
-        syllabus_id = pm.get_project_syllabus(milestone.pid)
-        sum = self.milestone_eval.milestone_eval_sum.syllabus(syllabus_id)
-        data.update({
-            'author': req.authname,
-            'targets': devs,
-            'sum': sum,
-        })
-        if not is_existent:
-            return
-
-        # Request args update for existent results 
-        validator = MilestoneEvalFormValidator(team=devs, sum=sum)
-        res = self.milestone_eval.get_results_by_user(req.authname, milestone.pid, milestone.name)
-        args_upd = validator.from_python({'devs': res})
-        req.args.update(args_upd)
-
-    def _fetch_and_validate_data(self, req, data):
-        errs = ()
-        args = req.args
-        devs = data['targets']
-        sum = data['sum']
-        validator = MilestoneEvalFormValidator(team=devs, sum=sum)
-        try:
-            cleaned_data = validator.to_python(args)
-        except formencode.Invalid, e:
-            cleaned_data = ()
-            errs = e.unpack_errors()
-            errs = make_plain_errors_list(errs, _milestone_eval_labels)
-        return cleaned_data, errs
-
-    def _save_milestone_eval(self, data, is_new):
-        self.milestone_eval.save_results(data['author'], data['project_id'],
-            data['milestone'], data['completed_on'], data['devs'], is_new=is_new)
-
-
-    # ITemplateProvider methods
+    # ITemplateProvider
 
     def get_htdocs_dirs(self):
         return []
 
     def get_templates_dirs(self):
         return [pkg_resources.resource_filename(__name__, 'templates')]
-
-

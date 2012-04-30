@@ -4,7 +4,8 @@
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:py="http://genshi.edgewall.org/"
       xmlns:i18n="http://genshi.edgewall.org/i18n"
-      xmlns:xi="http://www.w3.org/2001/XInclude">
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      py:with="eval_view = 'EVAL_VIEW' in perm">
   <xi:include href="layout.html" />
   <head>
     <title>Roadmap</title>
@@ -36,6 +37,8 @@
           <div class="info" py:with="mstats = milestone_stats[idx]">
             <h2><a href="${url_of(milestone.resource)}">
               Milestone: <em>${milestone.name}</em>
+              <span py:if="eval_view" class="rating">[ rating: ${milestone.rating}% ]</span>
+              <span py:if="milestone.approved" class="approved" title="${_('Approved milestone')}"></span>
             </a></h2>
             <py:if test="total_weight">
               <div class="weight">

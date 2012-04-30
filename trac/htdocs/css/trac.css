@@ -405,6 +405,7 @@ table.wiki {
  border-spacing: 0;
 }
 table.wiki td { border: 1px solid #ccc;  padding: .1em .25em; }
+table.wiki .highlight { background-color: #FFFFDD; }
 table.wiki th {
  border: 1px solid #bbb;
  padding: .1em .25em;
@@ -602,6 +603,11 @@ div.system-message p.system-message-title { font-weight: bold; }
 
 #content.error #plugins td.file { color: #666; }
 
+.error-list {
+    color: #FF0000;
+}
+
+/* Styles for pagination */
 #content .paging { margin: 0 0 2em; padding: .5em 0 0;
   font-size: 85%; line-height: 2em; text-align: center;
 }
@@ -656,3 +662,7 @@ div.system-message p.system-message-title { font-weight: bold; }
     height: 16px;
     background: url('../ajax-loader-small.gif') 0 0 transparent;
 }
+
+/* Styles for the evaluation variables table */
+dl.evalvar dt { font-weight: bold; }
+dl.evalvar dd { font-size: 90%; margin: 0.5em 0 0; }

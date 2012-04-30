@@ -3,7 +3,7 @@ import threading
 from trac.core import Component, Interface, TracError
 from trac.resource import GLOBAL_PID, ResourceNotFound
 
-from trac.user.api import UserManagement, GroupLevel
+from trac.user.api import UserManagement, GroupLevel, UserRole
 
 from trac.config import ComponentDisabled
 from trac.util.translation import _, N_
@@ -71,7 +71,7 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((UserManagement.USER_ROLE_DEVELOPER, _('Developer')))
+            roles.append((UserRole.DEVELOPER, _('Developer')))
 
         # check for manager
         query = '''
@@ -82,7 +82,7 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((UserManagement.USER_ROLE_MANAGER, _('Project manager')))
+            roles.append((UserRole.MANAGER, _('Project manager')))
 
         # check for admin
         query = '''
@@ -93,27 +93,27 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((UserManagement.USER_ROLE_ADMIN, _('Administrator')))
+            roles.append((UserRole.ADMIN, _('Administrator')))
 
         return roles
 
-    def get_user_projects(self, username, role=UserManagement.USER_ROLE_DEVELOPER, pid_only=False):
+    def get_user_projects(self, username, role=UserRole.DEVELOPER, pid_only=False):
         db = self.env.get_read_db()
         cursor = db.cursor()
 
-        if role == UserManagement.USER_ROLE_DEVELOPER:
+        if role == UserRole.DEVELOPER:
             query = '''
                 SELECT project_id, project_name
                 FROM developer_projects
                 WHERE username=%s
             '''
-        elif role == UserManagement.USER_ROLE_MANAGER:
+        elif role == UserRole.MANAGER:
             query = '''
                 SELECT project_id, project_name
                 FROM manager_projects
                 WHERE username=%s
             '''
-        elif role == UserManagement.USER_ROLE_ADMIN:
+        elif role == UserRole.ADMIN:
             query = '''
                 SELECT id project_id, name project_name
                 FROM projects
@@ -127,13 +127,13 @@ class ProjectManagement(Component):
             return projects
         return [r[0] for r in projects]
 
-    def get_project_users(self, pid, role=UserManagement.USER_ROLE_DEVELOPER):
+    def get_project_users(self, pid, role=UserRole.DEVELOPER):
         db = self.env.get_read_db()
         cursor = db.cursor()
 
-        if role == UserManagement.USER_ROLE_DEVELOPER:
+        if role == UserRole.DEVELOPER:
             table = 'developer_projects'
-        elif role == UserManagement.USER_ROLE_MANAGER:
+        elif role == UserRole.MANAGER:
             table = 'manager_projects'
         else:
             return ()
@@ -150,6 +150,26 @@ class ProjectManagement(Component):
         users = [u[0] for u in users]
         users.sort()
         return users
+
+    def get_project_user_count(self, pid, role=UserRole.DEVELOPER):
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+
+        if role == UserRole.DEVELOPER:
+            table = 'developer_projects'
+        elif role == UserRole.MANAGER:
+            table = 'manager_projects'
+        else:
+            return ()
+        q = '''
+            SELECT COUNT(*)
+            FROM {table}
+            WHERE project_id=%s
+        '''.format(table=table)
+
+        cursor.execute(q, (pid,))
+        cnt = cursor.fetchone()[0]
+        return cnt
 
     def get_current_project(self, req, err_msg=None, fail_on_none=True):
         '''Wrapper func to get project_id from req.data or optionally raise error on None'''

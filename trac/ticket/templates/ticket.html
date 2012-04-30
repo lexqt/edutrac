@@ -5,7 +5,8 @@
       xmlns:xi="http://www.w3.org/2001/XInclude"
       xmlns:py="http://genshi.edgewall.org/"
       xmlns:i18n="http://genshi.edgewall.org/i18n"
-      py:with="preview_mode = 'preview' in req.args">
+      py:with="preview_mode = 'preview' in req.args;
+               eval_view = 'EVAL_VIEW' in perm;">
   <xi:include href="layout.html" />
 
   <head>
@@ -67,6 +68,31 @@
       <a href="#comment:$cnum">$prefix$cnum</a>
     </py:def>
 
+    <py:def function="show_evaluation_info()">
+      <div py:if="eval_view" id="evaluation">
+        <h2>Ticket evaluation value</h2>
+        <div>
+          <div>Current ticket evaluation value: <strong>${ticket_value}</strong></div>
+          <div class="collapsed">
+            <h3 class="foldable">Help on evaluation</h3>
+            <div xml:space="preserve">
+              ${wiki_to_html(context, ticket_value_help)}
+              <h4>Numeric values for ticket fields values</h4>
+              <div py:for="field, values in ticket_eval_enum.iteritems()" class="enum_list">
+                <div><strong>${field}:</strong></div>
+                <ul>
+                  <li py:for="name, num in values.iteritems()">
+                    <em>${name}</em>: ${num}
+                  </li>
+                </ul>
+              </div>
+              <div class="clr"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </py:def>
+
     <div id="content" class="ticket"
          py:with="can_append = 'TICKET_APPEND' in perm(ticket.resource);
                   can_create = 'TICKET_CREATE' in perm(ticket.resource) and not ticket.exists;
@@ -110,7 +136,11 @@
 
       <xi:include href="ticket_box.html" py:if="ticket.exists or preview_mode"/>
 
+
       <py:if test="ticket.exists">
+
+        ${show_evaluation_info()}
+
         <!--! do not show attachments for old versions of this ticket or for new tickets -->
         <py:if test="not version and version != 0 and ticket.exists">
           <xi:include href="list_of_attachments.html"
@@ -369,6 +399,10 @@ ${value}</textarea>
             </py:if>
           </div>
         </div>
+
+        <py:if test="not ticket.exists">
+          ${show_evaluation_info()}
+        </py:if>
 
         <!--! Author or Reporter -->
         <div py:if="authname == 'anonymous'" class="field">

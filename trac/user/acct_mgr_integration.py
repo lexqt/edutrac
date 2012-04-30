@@ -9,7 +9,7 @@ from trac.web.api import IRequestFilter, RequestDone, IAuthenticator
 from trac.perm import PermissionError
 from trac.project.sys import ProjectSystem
 from trac.project.api import ProjectManagement
-from trac.user.api import UserManagement
+from trac.user.api import UserRole
 
 from genshi.builder import tag
 from trac.util.translation import _
@@ -362,7 +362,7 @@ class HTTPAuthFilter(Component):
             # check project
             # TODO: what about user role?
             req.data['role'] = None
-            for role in (UserManagement.USER_ROLE_DEVELOPER, UserManagement.USER_ROLE_MANAGER):
+            for role in (UserRole.DEVELOPER, UserRole.MANAGER):
                 pids = self.pm.get_user_projects(req.authname, role=role, pid_only=True)
                 if pid in pids:
                     req.data['role'] = role

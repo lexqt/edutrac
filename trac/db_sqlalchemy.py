@@ -102,12 +102,26 @@ ticket_evaluation = Table('ticket_evaluation', metadata,
     Column('value', Integer, nullable=False, server_default='0'),
 )
 
+milestone = Table('milestone', metadata,
+    Column('project_id', Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, primary_key=True),
+    Column('name', String(255), primary_key=True),
+    Column('due', IntegerUTimestamp),
+#    Column('completed', IntegerUTimestamp),
+    Column('completed', Integer),
+    Column('description', Text),
+    Column('weight', Integer, nullable=False, server_default='0'),
+    Column('rating', Integer, nullable=False, server_default='0'),
+    Column('approved', Boolean, nullable=False, server_default='FALSE'),
+)
+
+
 team_milestone_evaluation = Table('team_milestone_evaluation', metadata,
     Column('username', String(255), ForeignKey('users.username', ondelete='CASCADE', onupdate='CASCADE'), primary_key=True),
     Column('project_id', Integer, primary_key=True),
     Column('milestone', String(255), primary_key=True),
     Column('complete', Boolean, server_default='TRUE', nullable=False),
     Column('completed_on', UTCDateTime, server_default='CURRENT_TIMESTAMP', nullable=False),
+    Column('approved', Boolean, server_default='FALSE', nullable=False),
     ForeignKeyConstraint(['milestone', 'project_id'], ['milestone.name', 'milestone.project_id'], ondelete='CASCADE', onupdate='CASCADE'),
 )
 
@@ -117,8 +131,16 @@ team_milestone_evaluation_results = Table('team_milestone_evaluation_results', m
     Column('project_id', Integer, primary_key=True),
     Column('milestone', String(255), primary_key=True),
     Column('value', Integer, nullable=False, server_default='0'),
-    Column('comment', Text, server_default='', nullable=False),
+    Column('public_comment', Text, server_default='', nullable=False),
+    Column('private_comment', Text, server_default='', nullable=False),
     ForeignKeyConstraint(['milestone', 'project_id'], ['milestone.name', 'milestone.project_id'], ondelete='CASCADE', onupdate='CASCADE'),
+)
+
+project_evaluation = Table('project_evaluation', metadata,
+    Column('project_id', Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, primary_key=True),
+    Column('criterion', String(255), primary_key=True),
+    Column('value', Text, server_default='', nullable=False),
+
 )
 
 # Repository system
