@@ -64,7 +64,7 @@ class EvaluationStatsModule(Component):
         req.perm.require('EVAL_VIEW')
 
         # check project
-        _pid = self.pm.get_current_project(req)
+        _pid = req.project
 
         action = req.args.get('action', 'project')
 

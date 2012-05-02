@@ -101,8 +101,7 @@ class TimelineModule(Component):
         if is_group:
             req.perm.require('TIMELINE_VIEW_GROUP_AREA')
 
-        pm = ProjectManagement(self.env)
-        pid = pm.get_current_project(req)
+        pid = req.project
         current_project = pid
         syllabus_id = req.data['syllabus_id']
         project_info = OrderedDict({
@@ -113,7 +112,7 @@ class TimelineModule(Component):
         })
         if is_group:
             gid = req.data['group_id']
-            projects = pm.get_group_projects(gid, with_names=True)
+            projects = ProjectManagement(self.env).get_group_projects(gid, with_names=True)
             pid = [pid for pid, pname in projects]
         else:
             projects = [(pid, req.data['project_name'])]

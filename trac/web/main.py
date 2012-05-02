@@ -54,6 +54,7 @@ from trac.web.href import Href
 from trac.web.session import Session
 
 from trac.project.sys import ProjectSystem
+from trac.project.api import ProjectManagement
 from trac.user.sys import UserSystem
 
 
@@ -185,6 +186,7 @@ class RequestDispatcher(Component):
         chrome = Chrome(self.env)
         ps = ProjectSystem(self.env)
         us = UserSystem(self.env)
+        pm = ProjectManagement(self.env)
 
         # Setup request callbacks for lazily-evaluated properties
         req.callbacks.update({
@@ -198,6 +200,7 @@ class RequestDispatcher(Component):
             'form_token': self._get_form_token,
             'session_project': ps.get_session_project,
             'user_projects': ps.get_session_user_projects,
+            'project': pm.get_current_project,
         })
 
         try:

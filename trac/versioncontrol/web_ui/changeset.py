@@ -251,10 +251,9 @@ class ChangesetModule(Component):
                 raise TracError(_("No repository specified and no default "
                                   "repository configured."))
 
-        pm = ProjectManagement(self.env)
-        cur_pid = pm.get_current_project(req)
+        cur_pid = req.project
         if cur_pid != repos.pid:
-            pm.redirect_to_project(req, repos.pid)
+            ProjectManagement(self.env).redirect_to_project(req, repos.pid)
 
         # -- normalize and check for special case
         try:
@@ -871,8 +870,7 @@ class ChangesetModule(Component):
             # Non-'hidden' repositories will be listed as additional
             # repository filters, unless there is only a single repository.
             filters = []
-            pm = ProjectManagement(self.env)
-            pid = pm.get_current_project(req)
+            pid = req.project
             rm = RepositoryManager(self.env)
             repositories = rm.get_real_repositories(project_id=pid)
             if len(repositories) > 1:
@@ -1159,7 +1157,7 @@ class ChangesetModule(Component):
         if not 'changeset' in filters:
             return
         rm = RepositoryManager(self.env)
-        pid = self.pm.get_current_project(req)
+        pid = req.project
         repositories = dict((repos.params['id'], repos)
                             for repos in rm.get_real_repositories(project_id=pid))
         db = self.env.get_db_cnx()
@@ -1194,8 +1192,7 @@ class AnyDiffModule(Component):
 
     def process_request(self, req):
         rm = RepositoryManager(self.env)
-        pm = ProjectManagement(self.env)
-        pid = pm.get_current_project(req)
+        pid = req.project
 
         if req.get_header('X-Requested-With') == 'XMLHttpRequest':
             dirname, prefix = posixpath.split(req.args.get('q'))
@@ -1208,6 +1205,7 @@ class AnyDiffModule(Component):
             entries = []
             if repos:
                 if pid != repos.pid:
+                    pm = ProjectManagement(self.env)
                     pm.redirect_to_project(req, repos.pid)
                 entries.extend((e.isdir, e.name, 
                                 '/' + pathjoin(repos.reponame, e.path))

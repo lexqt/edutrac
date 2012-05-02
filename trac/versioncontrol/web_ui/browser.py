@@ -333,7 +333,7 @@ class BrowserModule(Component):
         if presel and (presel + '/').startswith(req.href.browser() + '/'):
             req.redirect(presel)
 
-        pid = self.pm.get_current_project(req)
+        pid = req.project
 
         path = req.args.get('path', '/')
         rev = req.args.get('rev', '')

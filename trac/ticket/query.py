@@ -1137,7 +1137,7 @@ class QueryModule(Component):
                 if pid_arg is not None:
                     pid = pid_arg
                 else:
-                    pid = pm.get_current_project(req)
+                    pid = req.project
                 # just check, do not redirect
                 pm.check_session_project(req, pid)
             query_area_args['project'] = pid
@@ -1145,7 +1145,7 @@ class QueryModule(Component):
         elif area == 'group':
             req.perm.require('TICKET_VIEW_GROUP_AREA')
             # check if data ready
-            pid = pm.get_current_project(req)
+            pid = req.project
             gid = req.data['group_id']
             query_area_args['group_id'] = gid
             ts_kwargs['syllabus_id'] = pm.get_group_syllabus(gid)

@@ -513,10 +513,9 @@ class AttachmentModule(Component):
 
         # project check
         if res_pid is not None:
-            pm = ProjectManagement(self.env)
-            cur_pid = pm.get_current_project(req)
+            cur_pid = req.project
             if res_pid != cur_pid:
-                pm.redirect_to_project(req, res_pid)
+                ProjectManagement(self.env).redirect_to_project(req, res_pid)
 
         
         # Link the attachment page to parent resource

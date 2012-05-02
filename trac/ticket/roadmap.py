@@ -344,8 +344,7 @@ class RoadmapModule(Component):
     def process_request(self, req):
         req.perm.require('MILESTONE_VIEW')
 
-        pm = ProjectManagement(self.env)
-        pid = pm.get_current_project(req)
+        pid = req.project
 
         show = req.args.getlist('show')
         hide = req.args.getlist('hide')
@@ -611,9 +610,8 @@ class MilestoneModule(Component):
         milestone_id = req.args.get('id')
         action = req.args.get('action', 'view')
 
-        pm = ProjectManagement(self.env)
-        self.pm = pm
-        pid = pm.get_current_project(req)
+        self.pm = ProjectManagement(self.env)
+        pid = req.project
 
         req.perm('milestone', milestone_id).require('MILESTONE_VIEW')
         

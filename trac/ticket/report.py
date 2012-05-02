@@ -104,8 +104,7 @@ class ReportModule(Component):
         action = req.args.get('action', 'view')
 
         # check if pid defined
-        self.pm = ProjectManagement(self.env)
-        pid = self.pm.get_current_project(req)
+        pid = req.project
 
         data = {}
         if req.method == 'POST':
@@ -388,7 +387,7 @@ class ReportModule(Component):
         if project_id is not None:
             area = self.AREA_PROJECT
             if project_id != cur_pid:
-                self.pm.redirect_to_project(project_id)
+                ProjectManagement(self.env).redirect_to_project(project_id)
             syllabus_id = cur_sid
         elif syllabus_id is not None:
             area = self.AREA_SYLLABUS

@@ -480,7 +480,7 @@ class TicketModule(Component):
         req.perm('ticket', id, version).require('TICKET_VIEW')
         ticket = Ticket(self.env, id, version=version)
 
-        cur_pid = self.pm.get_current_project(req)
+        cur_pid = req.project
         if cur_pid != ticket.pid:
             self.pm.redirect_to_project(req, ticket.pid)
 
