@@ -117,6 +117,20 @@ def add_script(req, filename, mimetype='text/javascript'):
     req.chrome.setdefault('scripts', []).append(script)
     scriptset.add(filename)
 
+def add_package(req, package):
+    '''Add a bunch of resources connected with a specified package like
+    "jquery.tablesorter"'''
+    # TODO: pkg-rsc mapping, auto add dependencies, etc
+    pkgset = req.chrome.setdefault('pkgset', set())
+    if package in pkgset:
+        return False
+    if package == 'jquery.tablesorter':
+        add_stylesheet(req, 'common/css/jquery.tablesorter.css')
+        add_script(req, 'common/js/jquery.tablesorter.js')
+    else:
+        return False
+    pkgset.add(package)
+
 def add_script_data(req, data):
     """Add data to be made available in javascript scripts as global variables.
     
