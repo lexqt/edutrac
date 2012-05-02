@@ -9,7 +9,7 @@ from genshi.builder import tag
 from trac.core import Component, implements, TracError
 from trac.web.api import IRequestHandler
 from trac.project.api import ProjectManagement
-from trac.web.chrome import ITemplateProvider, INavigationContributor, add_warning
+from trac.web.chrome import ITemplateProvider, INavigationContributor, add_warning, add_package
 from trac.perm import IPermissionRequestor
 
 from trac.evaluation.api import EvaluationManagement
@@ -159,6 +159,7 @@ class EvaluationStatsModule(Component):
             'users': users,
             'user_vars': ivalues,
         })
+        add_package(req, 'jquery.tablesorter')
         return 'individual_eval.html', data, None
 
     # ITemplateProvider

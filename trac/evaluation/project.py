@@ -5,6 +5,7 @@ import formencode
 from formencode import validators
 from trac.util.formencode_addons import BoolInt
 from trac.util.translation import _
+from trac.web.chrome import add_package
 
 from trac.core import Component, implements
 from trac.perm import IPermissionRequestor
@@ -166,6 +167,7 @@ class ProjectEvaluation(Component):
             'values': values,
             'view': view,
         })
+        add_package(req, 'jquery.tablesorter')
         return 'project_eval.html', data, None
 
     # API

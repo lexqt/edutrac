@@ -21,47 +21,59 @@ Arguments:
       py:strip="">
 
 
-  <table py:choose="" class="wiki">
+  <table py:choose="" class="wiki tablesorter">
 
     <py:when test="group_by_user">
-      <tr>
-        <th rowspan="2">Variable</th>
-        <th colspan="${len(users)}">Value</th>
-      </tr>
-      <tr>
-        <th py:for="user in users"
-            py:attrs="{'class': highlight and user==current_user and 'highlight' or None}">
-          ${user_fullname(user)}
-        </th>
-      </tr>
-      <tr py:for="var, values in variables.iteritems()">
-        <td>
-          <dl class="evalvar">
-            <dt>${var.label}</dt>
-            <dd>${var.description}</dd>
-          </dl>
-        </td>
-        <td py:for="user, value in values.iteritems()"
-            py:attrs="{'class': highlight and user==current_user and 'highlight' or None}">
-            ${format_scale(var.scale, value)}
-        </td>
-      </tr>
+      <thead>
+        <tr>
+          <th rowspan="2">#</th>
+          <th rowspan="2">Variable</th>
+          <th colspan="${len(users)}">Value</th>
+        </tr>
+        <tr>
+          <th py:for="user in users"
+              py:attrs="{'class': highlight and user==current_user and 'highlight' or None}">
+            ${user_fullname(user)}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr py:for="idx, (var, values) in enumerate(variables.iteritems())">
+          <td>${idx+1}</td>
+          <td>
+            <dl class="evalvar">
+              <dt>${var.label}</dt>
+              <dd>${var.description}</dd>
+            </dl>
+          </td>
+          <td py:for="user, value in values.iteritems()"
+              py:attrs="{'class': highlight and user==current_user and 'highlight' or None}">
+              ${format_scale(var.scale, value)}
+          </td>
+        </tr>
+      </tbody>
     </py:when>
 
     <py:otherwise>
-      <tr>
-        <th>Variable</th>
-        <th>Value</th>
-      </tr>
-      <tr py:for="var, value in variables.iteritems()">
-        <td>
-          <dl class="evalvar">
-            <dt>${var.label}</dt>
-            <dd>${var.description}</dd>
-          </dl>
-        </td>
-        <td>${format_scale(var.scale, value)}</td>
-      </tr>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Variable</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr py:for="idx, (var, value) in enumerate(variables.iteritems())">
+          <td>${idx+1}</td>
+          <td>
+            <dl class="evalvar">
+              <dt>${var.label}</dt>
+              <dd>${var.description}</dd>
+            </dl>
+          </td>
+          <td>${format_scale(var.scale, value)}</td>
+        </tr>
+      </tbody>
     </py:otherwise>
 
   </table>

@@ -11,7 +11,7 @@ from trac.config import IntOption
 from trac.resource import get_resource_url
 from trac.perm import IPermissionRequestor
 
-from trac.web.chrome import add_ctxtnav, add_warning, add_notice, \
+from trac.web.chrome import add_ctxtnav, add_package, add_notice, \
                             add_stylesheet, Chrome
 
 from trac.project.api import ProjectManagement
@@ -146,6 +146,7 @@ class MilestoneEvaluation(Component):
         elif subaction in ('manage', 'approve', 'disapprove'):
             self._do_team_manage(req, milestone, subaction, data)
 
+        add_package(req, 'jquery.tablesorter')
         add_ctxtnav(req, _('Back to milestone view'), get_resource_url(self.env, milestone.resource, req.href))
         add_stylesheet(req, 'common/css/roadmap.css')
 
@@ -207,7 +208,7 @@ class MilestoneEvaluation(Component):
             'weight': weight,
             'rating': rating,
         })
-
+        add_package(req, 'jquery.tablesorter')
         add_ctxtnav(req, _('Back to milestone view'), get_resource_url(self.env, milestone.resource, req.href))
 
         return 'milestone_eval.html', data, None
