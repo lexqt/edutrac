@@ -7,6 +7,8 @@ from trac.web import chrome
 from genshi.core import Markup
 from genshi.builder import tag
 from trac.util.translation import _, tag_
+from trac.util.text import exception_to_unicode
+from trac.web.chrome import add_warning
 
 from trac.project.api import IProjectSwitchListener, ProjectManagement
 
@@ -77,7 +79,12 @@ class ProjectSystem(Component):
         '''
         if not req.session.authenticated:
             return False
-        info = self.pm.get_project_info(project_id, fail_on_none=True)
+        try:
+            info = self.pm.get_project_info(project_id, fail_on_none=True)
+        except TracError, e:
+            add_warning(req, exception_to_unicode(e))
+            req.session.pop('postlogin', None)
+            req.redirect(req.href.postlogin(force=1))
         # see `ProjectManagement.get_project_info` for list of info keys
         req.data.update(info)
 
@@ -113,6 +120,9 @@ class PostloginModule(Component):
 
         s = req.session
         if not s.authenticated:
+            if 'project_id' in req.data:
+                # specified in url
+                req.redirect(req.href.login())
             return handler
 
         if req.data.get('force_httpauth'):
