@@ -20,6 +20,7 @@ table.progress :link:hover, table.progress :visited:hover {
 }
 table.progress td { background: #fff; padding: 0 }
 table.progress td.new { background: #f5f5b5 }
+table.progress td.inprogress { background: #ffdd88 /*#daeab8*/ }
 table.progress td.closed { background: #bae0ba }
 table.progress td :hover { background: none }
 p.percent { 
@@ -72,7 +73,7 @@ p.percent {
 .milestone .info dd { display: inline; margin: 0 1em 0 .5em }
 .milestone .description { margin-left: 1em }
 
-.approved {
+.milestone .approved {
     background: url("../tick.png") 0 0 transparent;
     display: inline-block;
     vertical-align: middle;
