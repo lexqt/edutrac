@@ -524,8 +524,6 @@ class MilestoneModule(Component):
         """Name of the component implementing `ITicketGroupStatsProvider`, 
         which is used to collect statistics on groups of tickets for display
         in the milestone views.""")
-    force_milestone = BoolOption('ticket-workflow-config', 'force_milestone', default='true',
-                        doc="""Do not allow to have tickets without milestone""", switcher=True)
 
     def __init__(self):
         self.milestone_eval = MilestoneEvaluation(self.env)
@@ -667,8 +665,9 @@ class MilestoneModule(Component):
         if req.args.has_key('retarget'):
             retarget_to = req.args.get('target')
         if not retarget_to: # None or empty
-            syllabus_id = self.pm.get_project_syllabus(milestone.pid)
-            if self.force_milestone.syllabus(syllabus_id) and milestone.has_tickets():
+            ticket_fields = TicketSystem(self.env).get_ticket_fields(milestone.pid)
+            allow_retarget_to_none = ticket_fields['milestone']['optional']
+            if not allow_retarget_to_none and milestone.has_tickets():
                 raise TracError(_('Can not delete milestone %(milestone)s because there are some tickets associated with it'
                                   ' and new target is not selected for them.', milestone=milestone.name))
         milestone.delete(retarget_to, req.authname)
@@ -750,11 +749,13 @@ class MilestoneModule(Component):
                 # TODO: check ticket modify permissions
                 retarget_to = req.args.get('target')
                 if retarget_to is None:
-                    syllabus_id = self.pm.get_project_syllabus(milestone.pid)
-                    if self.force_milestone.syllabus(syllabus_id):
+                    ticket_fields = TicketSystem(self.env).get_ticket_fields(milestone.pid)
+                    allow_retarget_to_none = ticket_fields['milestone']['optional']
+                    if not allow_retarget_to_none:
                         raise TracError(_('Can not retarget tickets to empty milestone.'))
                 milestone.retarget_tickets(retarget_to, req.authname, comment=_(
-                                            'Milestone %(name)s set as completed', name=milestone.name))
+                                            'Milestone %(name)s set as completed', name=milestone.name),
+                                           not_closed=True)
         else:
             milestone.insert()
 

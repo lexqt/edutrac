@@ -1227,7 +1227,7 @@ class Milestone(object):
                            (self.pid, self.name))
         return bool(cursor.rowcount)
 
-    def retarget_tickets(self, retarget_to, author=None, comment=None):
+    def retarget_tickets(self, retarget_to, author=None, comment=None, not_closed=False):
         if retarget_to:
             # check if retarget milestone exists
             retarget_milestone = Milestone(self.env, self.pid, retarget_to)
@@ -1237,8 +1237,9 @@ class Milestone(object):
             cursor = db.cursor()
             # Retarget/reset tickets associated with this milestone
             now = datetime.now(utc)
-            cursor.execute("SELECT id FROM ticket WHERE project_id=%s AND milestone=%s",
-                           (self.pid, self.name))
+            q = 'SELECT id FROM ticket WHERE project_id=%s AND milestone=%s {0}'
+            extra = not_closed and "AND status!='closed'" or '' 
+            cursor.execute(q.format(extra), (self.pid, self.name))
             tkt_ids = [int(row[0]) for row in cursor]
             for tkt_id in tkt_ids:
                 ticket = Ticket(self.env, tkt_id, db)
