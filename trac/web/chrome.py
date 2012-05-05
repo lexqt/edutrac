@@ -32,7 +32,7 @@ from genshi.filters import Translator
 from genshi.output import DocType
 from genshi.template import TemplateLoader, MarkupTemplate, NewTextTemplate
 
-from trac import __version__ as VERSION
+from trac import __version__ as VERSION, EDUTRAC_VERSION
 from trac.config import *
 from trac.core import *
 from trac.env import IEnvironmentSetupParticipant, ISystemInfoProvider
@@ -713,6 +713,10 @@ class Chrome(Component):
         d['trac'] = {
             'version': VERSION,
             'homepage': 'http://trac.edgewall.org/', # FIXME: use setup data
+        }
+        d['edutrac'] = {
+            'version': EDUTRAC_VERSION,
+            'homepage': 'https://github.com/lexqt/edutrac',
         }
         
         href = req and req.href

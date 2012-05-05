@@ -72,12 +72,13 @@
     </div>
 
     <div id="footer" xml:lang="en"><hr/>
-      <a id="tracpowered" href="http://trac.edgewall.org/"><img
+      <a id="tracpowered" href="${trac.homepage}"><img
         src="${chrome.htdocs_location}trac_logo_mini.png" height="30"
         width="107" alt="Trac Powered"/></a>
-      <p class="left" i18n:msg="version">
-        Powered by <a href="${href.about()}"><strong>Trac ${trac.version}</strong></a><br />
-        By <a href="http://www.edgewall.org/">Edgewall Software</a>.
+      <p class="left" i18n:msg="edutracversion, version">
+        Powered by <a href="${href.about()}"><strong>EduTrac ${edutrac.version} (Trac ${trac.version})</strong></a><br />
+        (C) 2003-2012 <a href="http://www.edgewall.org/">Edgewall Software</a><br />
+        (C) 2012 <a href="https://github.com/lexqt">Aleksey A. Porfirov</a>
       </p>
       <p class="right">${chrome.footer}</p>
     </div>

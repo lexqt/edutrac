@@ -17,3 +17,5 @@ try:
     __version__ = get_distribution('Trac').version
 except DistributionNotFound:
     __version__ = '0.12.3'
+
+EDUTRAC_VERSION = '0.1'

@@ -21,7 +21,7 @@
   <body>
     <div id="content" class="about">
 
-      <a href="http://trac.edgewall.org/"
+      <a href="${trac.homepage}"
         style="border: none; float: right; margin-left: 2em">
         <img style="display: block" src="${chrome.htdocs_location}trac_banner.png"
           alt="Trac: Integrated SCM &amp; Project Management"/>
@@ -57,10 +57,16 @@
         <img style="display: block" src="${chrome.htdocs_location}python.png"
           alt="python powered" width="140" height="56" />
       </a>
-      <p i18n:msg="">Please visit the Trac open source project:
-        <a href="http://trac.edgewall.org/">http://trac.edgewall.org/</a></p>
-      <p class="copyright" xml:lang="en" i18n:msg="">Copyright &copy; 2003-2012
-        <a href="http://www.edgewall.org/">Edgewall Software</a>
+      <p i18n:msg="trac_url, edutrac_url">Please visit the Trac open source project:
+        <a href="${trac.homepage}">${trac.homepage}</a><br/>
+        and EduTrac open source project:
+        <a href="${edutrac.homepage}">${edutrac.homepage}</a>
+      </p>
+      <p class="copyright" xml:lang="en" i18n:msg="">
+        Copyright &copy; 2003-2012
+        <a href="http://www.edgewall.org/">Edgewall Software</a><br/>
+        Copyright &copy; 2012
+        <a href="https://github.com/lexqt">Aleksey A. Porfirov</a>
       </p>
 
       <py:if test="systeminfo or plugins or config">
