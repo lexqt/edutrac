@@ -3,6 +3,7 @@
 	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml"
 	xmlns:py="http://genshi.edgewall.org/"
+	xmlns:i18n="http://genshi.edgewall.org/i18n"
 	xmlns:xi="http://www.w3.org/2001/XInclude">
 
 	<xi:include href="layout.html" />
@@ -22,9 +23,25 @@
 				</fieldset>
 				<fieldset py:when="set_project">
 					<legend>Project</legend>
+					<p py:if="current_project" i18n:msg="project_name">
+					  Current session project: <strong>${current_project_name}</strong>.
+					  You can switch session project by selecting project in the list below.
+					</p>
 					<select name="project">
-						<option py:for="project_id, project_name in projects" value="${project_id}">${project_name}</option>
+						<option py:for="project_id, project_name in projects" value="${project_id}"
+						    selected="${project_id == prev_project or None}">${project_name}</option>
 					</select>
+					<py:if test="current_project">
+					 <p i18n:msg="">
+					   Also you can switch to another project by appending <strong>project/&lt;id&gt;/</strong>
+					   to the base site URL. Follow one of the links for available projects:
+					 </p>
+					 <ul>
+					   <li py:for="project_id, project_name in projects">
+					     <a href="${req.href.copy_for_project(project_id)()}">${project_name}</a>
+					   </li>
+					 </ul>
+					</py:if>
 				</fieldset>
 				<input id="postlogin-submit" type="submit" value="${_('Continue')}" />
 				<script type="text/javascript">

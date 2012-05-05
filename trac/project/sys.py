@@ -211,10 +211,17 @@ class PostloginModule(Component):
                     )))
             elif step == STEP_SET_PROJECT:
                 role = int(s['role'])
-#                if role not in (USER_ROLE_DEVELOPER, USER_ROLE_MANAGER):
-#                    data['finalize'] = True
-#                else:
                 data['projects'] = self.pm.get_user_projects(req.authname, role)
+                if req.method != 'POST':
+                    prev_project_id = s.get('project')
+                    data['prev_project'] = int(prev_project_id) if prev_project_id is not None else None
+                    cur_pid = req.data.get('project_id')
+                    if not cur_pid:
+                        return
+                    data.update({
+                        'current_project': cur_pid,
+                        'current_project_name': req.data['project_name'],
+                    })
 
         step_preprocess(step)
 
