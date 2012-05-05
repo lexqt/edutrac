@@ -2220,7 +2220,26 @@ msgstr "Установка параметров сессии"
 msgid "User role"
 msgstr "Роль пользователя"
 
-#: trac/project/templates/postlogin.html:29
+#: trac/project/templates/postlogin.html:26
+#, python-format
+msgid ""
+"Current session project: [1:%(project_name)s].\n"
+"\t\t\t\t\t  You can switch session project by selecting project in the list "
+"below."
+msgstr ""
+"Текущий проект сессии: [1:%(project_name)s].\n"
+" Вы можете сменить проект сессии, выбрав проект из списка ниже."
+
+#: trac/project/templates/postlogin.html:35
+msgid ""
+"Also you can switch to another project by appending [1:project/<id>/]\n"
+"\t\t\t\t\t   to the base site URL. Follow one of the links for available "
+"projects:"
+msgstr ""
+"Вы также можете переключиться на другой проект, дописав [1:project/<id>/]\n"
+" к базовому URL сайта. Перейдите по одной из ссылок для доступных проектов:"
+
+#: trac/project/templates/postlogin.html:46
 msgid "Continue"
 msgstr "Продолжить"
 
@@ -2364,17 +2383,28 @@ msgid "python powered"
 msgstr "Работает под управлением Python"
 
 #: trac/templates/about.html:60
+#, python-format
 msgid ""
 "Please visit the Trac open source project:\n"
-"        [1:http://trac.edgewall.org/]"
+"        [1:%(trac_url)s][2:]\n"
+"        and EduTrac open source project:\n"
+"        [3:%(edutrac_url)s]"
 msgstr ""
-"Пожалуйста, посетите сайт проекта с открытым кодом Trac: \n"
-"        [1:http://trac.edgewall.org/]"
+"Посетите сайт открытого проекта Trac:\n"
+"        [1:%(trac_url)s][2:]\n"
+"        и EduTrac:\n"
+"        [3:%(edutrac_url)s]"
 
-#: trac/templates/about.html:62
+#: trac/templates/about.html:65
+#, fuzzy
+#| msgid ""
+#| "Copyright © 2003-2012\n"
+#| "        [1:Edgewall Software]"
 msgid ""
 "Copyright © 2003-2012\n"
-"        [1:Edgewall Software]"
+"        [1:Edgewall Software][2:]\n"
+"        Copyright © 2012\n"
+"        [3:Aleksey A. Porfirov]"
 msgstr ""
 "Авторские права © 2003-2011\n"
 "        [1:Edgewall Software]"
@@ -2961,11 +2991,13 @@ msgstr "Предупреждение:"
 #: trac/templates/theme.html:78
 #, python-format
 msgid ""
-"Powered by [1:[2:Trac %(version)s]][3:]\n"
-"        By [4:Edgewall Software]."
+"Powered by [1:[2:EduTrac %(edutracversion)s (Trac %(version)s)]][3:]\n"
+"        (C) 2003-2012 [4:Edgewall Software][5:]\n"
+"        (C) 2012 [6:Aleksey A. Porfirov]"
 msgstr ""
-"Работает на [1:[2:Trac %(version)s]][3:]\n"
-"        От [4:Edgewall Software]."
+"Работает на [1:[2:EduTrac %(edutracversion)s (Trac %(version)s)]][3:]\n"
+"        (C) 2003-2012 [4:Edgewall Software][5:]\n"
+"        (C) 2012 [6:Aleksey A. Porfirov]"
 
 #: trac/ticket/admin.py:35
 msgid "(Undefined)"
@@ -7041,3 +7073,15 @@ msgid ""
 msgstr ""
 "Названия следующих страниц похожи на название этой, и они могут быть "
 "связанными:"
+
+#, fuzzy
+#~| msgid "Project"
+#~ msgid "project/<id>/"
+#~ msgstr "Проект"
+
+#~ msgid ""
+#~ "Please visit the Trac open source project:\n"
+#~ "        [1:http://trac.edgewall.org/]"
+#~ msgstr ""
+#~ "Пожалуйста, посетите сайт проекта с открытым кодом Trac: \n"
+#~ "        [1:http://trac.edgewall.org/]"
