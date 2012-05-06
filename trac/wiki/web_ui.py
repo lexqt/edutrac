@@ -759,9 +759,16 @@ class WikiModule(Component):
             yield ('wiki', project_id, from_utimestamp(ts), author, data_)
 
         # Attachments
-        for event in AttachmentModule(self.env).get_timeline_events(
-            req, wiki_realm, start, stop, pid, syllabus_id):
-            yield event
+        def attachment_events(pid):
+            for event in AttachmentModule(self.env).get_timeline_events(
+                req, wiki_realm, start, stop, pid, syllabus_id):
+                yield event
+        if is_project:
+            for e in attachment_events(pid):
+                yield e
+        if is_global:
+            for e in attachment_events(None):
+                yield e
 
     def render_timeline_event(self, context, field, event):
         wiki_page, comment = event[4]

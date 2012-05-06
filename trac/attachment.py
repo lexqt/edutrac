@@ -592,18 +592,18 @@ class AttachmentModule(Component):
         db = self.env.get_read_db()
         cursor = db.cursor()
         query = '''
-            SELECT {sel_pid} a.type, a.id, a.filename, a.time, a.description, a.author
+            SELECT DISTINCT {sel_pid} a.type, a.id, a.filename, a.time, a.description, a.author
             FROM attachment a
-            LEFT JOIN {rsc_tab} r ON CAST(r.{rsc_id} AS varchar)=a.id
+            JOIN {rsc_tab} r ON CAST(r.{rsc_id} AS varchar)=a.id
             WHERE a.time > %s AND a.time < %s AND a.type = %s {and_pid}
         '''
         rsc_tab = db.quote(self.rs.get_realm_table(realm))
         rsc_id  = db.quote(self.rs.get_realm_id(realm))
         sql_args = [to_utimestamp(start), to_utimestamp(stop), realm]
         if has_project:
-            sel_pid = 'r.project_id,'
+            sel_pid = 'COALESCE(r.project_id,0),'
             if is_global:
-                and_pid = ''
+                and_pid = 'AND (r.project_id IS NULL OR r.project_id=0)'
             else:
                 and_pid = 'AND r.project_id=%s'
                 sql_args.append(pid)
@@ -622,25 +622,28 @@ class AttachmentModule(Component):
         Events are changes to attachments on resources of the given
         `resource_realm.realm`.
         """
-        is_multi = isinstance(pid, (list, tuple))
         def generate_event(pid):
             for change, project_id, realm, id, filename, time, descr, author in \
-                    self.get_history(start, stop, resource_realm.realm, pid, syllabus_id):
+                    self.get_history(start, stop, resource_realm.realm, pid):
                 attachment = resource_realm(id=id, pid=project_id).child('attachment', filename)
                 if 'ATTACHMENT_VIEW' in req.perm(attachment):
                     data_ = (attachment, descr)
                     yield ('attachment', project_id, time, author, data_, self)
 
+        # global
+        if pid is None:
+            for e in generate_event(None):
+                yield e
+            return
+
+        is_multi = isinstance(pid, (list, tuple))
         if is_multi:
             for project_id in pid:
-                generate_event(project_id)
+                for e in generate_event(project_id):
+                    yield e
         else:
-            generate_event(pid)
-        # and global
-        generate_event(None)
-
-        if False:
-            yield None # show that func is generator
+            for e in generate_event(pid):
+                yield e
 
     def render_timeline_event(self, context, field, event):
         attachment, descr = event[4]
