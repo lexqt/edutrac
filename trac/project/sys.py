@@ -11,6 +11,7 @@ from trac.util.text import exception_to_unicode
 from trac.web.chrome import add_warning
 
 from trac.project.api import IProjectSwitchListener, ProjectManagement
+from trac.user.api import UserRole
 
 
 class ProjectSystem(Component):
@@ -108,6 +109,9 @@ class PostloginModule(Component):
         self.pm = ProjectManagement(self.env)
         self.ps = ProjectSystem(self.env)
     
+    def role_switch_url(self, href):
+        return href.postlogin(step=STEP_SET_ROLE)
+
     def project_switch_url(self, href):
         return href.postlogin(step=STEP_SET_PROJECT)
 
@@ -154,7 +158,7 @@ class PostloginModule(Component):
 
             # set project data
             self.ps.set_request_data(req, pid)
-            req.data['role'] = s['role']
+            req.data['role'] = int(s['role'] or UserRole.NONE)
 
             if not check:
                 # now raise exception
@@ -189,7 +193,9 @@ class PostloginModule(Component):
 
         step_arg  = req.args.getint('step')
         force = 'force' in req.args
-        change_param = step_arg is not None and self._postlogin_passed(req)
+        change_param = step_arg is not None and \
+                       step_arg not in (STEP_SET_ROLE,) and \
+                       self._postlogin_passed(req)
         if force:
             step = s['postlogin_step'] = STEP_INIT
         elif change_param:
@@ -212,7 +218,7 @@ class PostloginModule(Component):
             elif step == STEP_SET_PROJECT:
                 role = int(s['role'])
                 data['projects'] = self.pm.get_user_projects(req.authname, role)
-                if req.method != 'POST':
+                if 'project' not in req.args:
                     prev_project_id = s.get('project')
                     data['prev_project'] = int(prev_project_id) if prev_project_id is not None else None
                     cur_pid = req.data.get('project_id')

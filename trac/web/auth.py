@@ -34,6 +34,8 @@ from trac.util import hex_entropy, md5, md5crypt
 from trac.util.concurrency import threading
 from trac.util.translation import _, tag_
 
+from trac.user.api import UserRole
+
 
 class LoginModule(Component):
     """User authentication manager.
@@ -97,8 +99,16 @@ class LoginModule(Component):
 
     def get_navigation_items(self, req):
         if req.authname and req.authname != 'anonymous':
-            yield ('metanav', 'login', _('logged in as %(user)s',
-                                         user=req.authname))
+            from trac.project.sys import PostloginModule
+            switch_url = PostloginModule(self.env).role_switch_url(req.href)
+            role = int(req.data.get('role') or UserRole.NONE)
+            yield ('metanav', 'login', tag(_('logged in as %(user)s',
+                                             user=req.authname), ' ',
+                                           tag.a('(%s)' % UserRole.label(role),
+                                                 href=switch_url,
+                                                 title=_('Change role'))
+                                           )
+                   )
             yield ('metanav', 'logout',
                    tag.a(_('Logout'), href=req.href.logout()))
         else:

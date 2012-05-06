@@ -2,6 +2,7 @@ from trac.config import Option, ExtensionOption
 from trac.core import Component, implements, TracError
 from trac.db import with_transaction, call_db_func
 
+from trac.util.translation import _
 
 
 class UnknownGroupLevel(ValueError):
@@ -38,9 +39,21 @@ GL_MAP = {
 
 
 class UserRole(object):
+    NONE      = 0
     DEVELOPER = 1
     MANAGER   = 2
     ADMIN     = 3
+
+    @classmethod
+    def label(cls, role):
+        if role == cls.DEVELOPER:
+            return _('Developer')
+        elif role == cls.MANAGER:
+            return _('Project manager')
+        elif role == cls.ADMIN:
+            return _('Administrator')
+        return _('Unknown role')
+
 
 
 class UserManagement(Component):

@@ -71,7 +71,7 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((UserRole.DEVELOPER, _('Developer')))
+            roles.append(UserRole.DEVELOPER)
 
         # check for manager
         query = '''
@@ -82,7 +82,7 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((UserRole.MANAGER, _('Project manager')))
+            roles.append(UserRole.MANAGER)
 
         # check for admin
         query = '''
@@ -93,9 +93,9 @@ class ProjectManagement(Component):
         '''
         cursor.execute(query, (username,))
         if cursor.rowcount:
-            roles.append((UserRole.ADMIN, _('Administrator')))
+            roles.append(UserRole.ADMIN)
 
-        return roles
+        return [(r, UserRole.label(r)) for r in roles]
 
     def get_user_projects(self, username, role=UserRole.DEVELOPER, pid_only=False):
         db = self.env.get_read_db()
