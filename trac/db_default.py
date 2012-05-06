@@ -117,7 +117,7 @@ schema = [
     ],
     Table('metagroup_syllabus_rel', key=('metagroup_id',))[
         Column('metagroup_id', type='int', null=False),
-        Column('syllabus_id', type='int', null=False),
+        Column('syllabus_id', type='int', null=False, unique=True),
         ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
         ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
     ],
@@ -278,7 +278,8 @@ schema = [
         ForeignKey('reporter', 'users', 'username', on_delete='SET NULL', on_update='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
         Index(['time']),
-        Index(['status'])],    
+        Index(['status']),
+    ],    
     Table('ticket_change', key=('ticket', 'time', 'field'))[
         Column('ticket', type='int'),
         Column('time', type='int64'),
@@ -286,13 +287,17 @@ schema = [
         Column('field', type='varchar (255)'),
         Column('oldvalue'),
         Column('newvalue'),
+        ForeignKey('ticket', 'ticket', 'id', on_delete='CASCADE'),
         ForeignKey('author', 'users', 'username', on_delete='SET NULL', on_update='CASCADE'),
         Index(['ticket']),
-        Index(['time'])],
+        Index(['time']),
+    ],
     Table('ticket_custom', key=('ticket', 'name'))[
         Column('ticket', type='int'),
         Column('name', type='varchar (255)'),
-        Column('value')],
+        Column('value'),
+        ForeignKey('ticket', 'ticket', 'id', on_delete='CASCADE'),
+    ],
 
     # Report system
     Table('report', key='id')[

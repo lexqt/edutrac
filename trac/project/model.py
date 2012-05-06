@@ -12,46 +12,37 @@ def simplify_whitespace(name):
 
 
 class Project(object):
-    _check_dict = {}
 
-    def __init__(self, env, pid=None, db=None):
+    def __init__(self, env, id=None, db=None):
         self.env = env
-        if pid:
+        if id:
             if not db:
                 db = self.env.get_read_db()
             cursor = db.cursor()
             cursor.execute("""
                 SELECT name, description FROM projects WHERE id=%s
-                """, (pid,))
+                """, (id,))
             row = cursor.fetchone()
             if not row:
                 raise ResourceNotFound(_('Project #%(pid)s does not exist.',
-                                         pid=pid))
-            self.id = pid
+                                         pid=id))
+            self.id = id
             self.name = row[0] or None
             self.description = row[1] or ''
-            self._check_dict[pid] = True
         else:
             self.id = None
             self.name = None
             self.description = None
 
-    @classmethod
-    def exists(cls, env, pid):
-        assert pid is not None, 'Project ID is not set'
-        pid = int(pid)
-        if pid not in cls._check_dict:
-            db = env.get_read_db()
-            cursor = db.cursor()
-            cursor.execute('SELECT 1 FROM projects WHERE id=%s LIMIT 1', (pid,))
-            res = bool(cursor.rowcount)
-            cls._check_dict[pid] = res
-        return cls._check_dict[pid]
+    exists = property(lambda self: self.id is not None)
 
     @classmethod
     def check_exists(cls, env, pid):
-        if not cls.exists(env, pid):
-            raise ResourceNotFound
+        pid = int(pid)
+        db = env.get_read_db()
+        cursor = db.cursor()
+        cursor.execute('SELECT 1 FROM projects WHERE id=%s LIMIT 1', (pid,))
+        return bool(cursor.rowcount)
 
     def delete(self, db=None):
         """Delete the project."""
@@ -62,11 +53,7 @@ class Project(object):
             cursor = db.cursor()
             self.env.log.info('Deleting project #%s' % self.id)
             cursor.execute("DELETE FROM projects WHERE id=%s", (self.id,))
-            pid = self.id
             self.id = None
-            self._check_dict[pid] = False
-            from trac.ticket.api import TicketSystem
-            TicketSystem(self.env).reset_ticket_fields(pid)
 
     def insert(self, db=None):
         """Insert a new project."""
@@ -86,9 +73,6 @@ class Project(object):
                 """, (self.name, self.description))
             pid = cursor.fetchone()[0]
             self.id = pid
-            self._check_dict[pid] = True
-            from trac.ticket.api import TicketSystem
-            TicketSystem(self.env).reset_ticket_fields(pid)
 
     def update(self, db=None):
         """Update the project.
@@ -108,6 +92,4 @@ class Project(object):
                 UPDATE projects SET name=%s, description=%s
                 WHERE id=%s
                 """, (self.name, self.description, self.id))
-            from trac.ticket.api import TicketSystem
-            TicketSystem(self.env).reset_ticket_fields(self.id)
 
