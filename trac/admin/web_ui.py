@@ -351,11 +351,28 @@ class PermissionAdminPanel(Component):
     # IAdminPanelProvider methods
     def get_admin_panels(self, req):
         if 'PERMISSION_GRANT' in req.perm or 'PERMISSION_REVOKE' in req.perm:
-            yield ('general', _('General'), 'perm', _('Permissions'))
+            yield ('general', _('General'), 'perm', _('Permissions'),
+                   set([AdminArea.GLOBAL, AdminArea.SYLLABUS, AdminArea.PROJECT]))
 
-    def render_admin_panel(self, req, cat, page, path_info):
+    def render_admin_panel(self, req, cat, page, path_info, area, area_id):
         perm = PermissionSystem(self.env)
-        all_permissions = perm.get_all_permissions()
+
+        perm_get_kwargs = {}
+        perm_change_kwargs = {}
+        if area == AdminArea.SYLLABUS:
+            perm_get_kwargs.update({
+                'syllabus_id': area_id,
+                'inherit': False,
+            })
+            perm_change_kwargs['syllabus_id'] = area_id
+        elif area == AdminArea.PROJECT:
+            perm_get_kwargs.update({
+                'project_id': area_id,
+                'inherit': False,
+            })
+            perm_change_kwargs['project_id'] = area_id
+
+        all_permissions = perm.get_all_permissions(**perm_get_kwargs)
         all_actions = perm.get_actions()
 
         if req.method == 'POST':
@@ -375,11 +392,11 @@ class PermissionAdminPanel(Component):
                     raise TracError(_('Unknown action'))
                 req.perm.require(action)
                 if (subject, action) not in all_permissions:
-                    perm.grant_permission(subject, action)
+                    perm.grant_permission(subject, action, **perm_change_kwargs)
                     add_notice(req, _('The subject %(subject)s has been '
                                       'granted the permission %(action)s.',
                                       subject=subject, action=action))
-                    req.redirect(req.href.admin(cat, page))
+                    req.redirect(req.panel_href())
                 else:
                     add_warning(req, _('The permission %(action)s was already '
                                        'granted to %(subject)s.',
@@ -388,7 +405,9 @@ class PermissionAdminPanel(Component):
             # Add subject to group
             elif req.args.get('add') and subject and group:
                 req.perm.require('PERMISSION_GRANT')
-                for action in perm.get_user_permissions(group):
+                kwargs = perm_get_kwargs.copy()
+                kwargs['inherit'] = True
+                for action in perm.get_user_permissions(group, **kwargs):
                     if not action in all_actions: # plugin disabled?
                         self.env.log.warn("Adding %s to group %s: " \
                             "Permission %s unavailable, skipping perm check." \
@@ -396,11 +415,11 @@ class PermissionAdminPanel(Component):
                     else:
                         req.perm.require(action)
                 if (subject, group) not in all_permissions:
-                    perm.grant_permission(subject, group)
+                    perm.grant_permission(subject, group, **perm_change_kwargs)
                     add_notice(req, _('The subject %(subject)s has been added '
                                       'to the group %(group)s.',
                                       subject=subject, group=group))
-                    req.redirect(req.href.admin(cat, page))
+                    req.redirect(req.panel_href())
                 else:
                     add_warning(req, _('The subject %(subject)s was already '
                                        'added to the group %(group)s.',
@@ -415,11 +434,11 @@ class PermissionAdminPanel(Component):
                     subject, action = key.split(':', 1)
                     subject = unicode_from_base64(subject)
                     action = unicode_from_base64(action)
-                    if (subject, action) in perm.get_all_permissions():
-                        perm.revoke_permission(subject, action)
+                    if (subject, action) in perm.get_all_permissions(**perm_get_kwargs):
+                        perm.revoke_permission(subject, action, **perm_change_kwargs)
                 add_notice(req, _('The selected permissions have been '
                                   'revoked.'))
-                req.redirect(req.href.admin(cat, page))
+                req.redirect(req.panel_href())
 
         return 'admin_perms.html', {
             'actions': all_actions,
