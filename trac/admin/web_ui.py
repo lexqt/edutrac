@@ -65,7 +65,7 @@ class AdminModule(Component):
     # IRequestHandler methods
 
     def match_request(self, req):
-        match = re.match('/admin(?:/(s|g)/(\d+))?(?:/([^/]+)(?:/([^/]+)(?:/(.+))?)?)?$',
+        match = re.match('/admin(?:/(s|g|p)/(\d+))?(?:/([^/]+)(?:/([^/]+)(?:/(.+))?)?)?$',
                          req.path_info)
         if match:
             req.args['admin_area'] = AdminArea.from_string(match.group(1))
@@ -86,6 +86,10 @@ class AdminModule(Component):
             if UserRole.GROUP_MANAGER in role:
                 area    = AdminArea.GROUP
                 area_id = req.data['group_id']
+                redirect = True
+            elif UserRole.PROJECT_MANAGER in role:
+                area    = AdminArea.PROJECT
+                area_id = req.data['project_id']
                 redirect = True
             if redirect:
                 req.redirect(req.href('admin', AdminArea.href_part(area, area_id)))
@@ -132,6 +136,7 @@ class AdminModule(Component):
         data.update({
             'area_label': AdminArea.label(area, area_id),
             'active_cat': cat_id, 'active_panel': panel_id,
+            'admin_area_href': partial(req.href, 'admin', AdminArea.href_part(area, area_id)),
             'panel_href': panel_href,
             'panels': [{
                 'category': {'id': panel[0], 'label': panel[1]},
@@ -149,6 +154,8 @@ class AdminModule(Component):
             return True
         if area == AdminArea.GROUP:
             role = UserRole.GROUP_MANAGER
+        elif area == AdminArea.PROJECT:
+            role = UserRole.PROJECT_MANAGER
         return self._require_role(req, role, area, area_id)
 
     def _require_role(self, req, role, area, area_id):

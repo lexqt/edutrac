@@ -23,7 +23,7 @@
               <li py:for="panel in panels" py:with="panel = panel.panel;
                       pan_is_active = cat_is_active and panel.id == active_panel"
                   class="${pan_is_active and 'active' or None}">
-                <a href="${href.admin(category.id, panel.id)}">${panel.label}</a>
+                <a href="${admin_area_href(category.id, panel.id)}">${panel.label}</a>
               </li>
             </ul>
           </li>

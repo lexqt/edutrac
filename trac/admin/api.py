@@ -66,6 +66,8 @@ class AdminArea(object):
             return cls.GROUP
         elif s == 's':
             return cls.SYLLABUS
+        elif s == 'p':
+            return cls.PROJECT
         raise ValueError('Unknown admin area')
 
     @classmethod
@@ -76,6 +78,8 @@ class AdminArea(object):
             return HrefPart('g', area_id)
         elif area == cls.SYLLABUS:
             return HrefPart('s', area_id)
+        elif area == cls.PROJECT:
+            return HrefPart('p', area_id)
         raise ValueError('Unknown admin area')
 
     @classmethod
@@ -86,6 +90,8 @@ class AdminArea(object):
             return _('Group #%(id)s admin area', id=area_id)
         elif area == cls.SYLLABUS:
             return _('Syllabus #%(id)s admin area', id=area_id)
+        elif area == cls.PROJECT:
+            return _('Project #%(id)s admin area', id=area_id)
         return _('Unknown area (code %(code)s)', code=area)
 
 class AdminCommandError(TracError):

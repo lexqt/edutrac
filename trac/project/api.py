@@ -116,7 +116,7 @@ class ProjectManagement(Component):
         elif role == UserRole.ADMIN:
             query = '''
                 SELECT id project_id, name project_name
-                FROM projects
+                FROM real_projects
             '''
         else:
             return ()
