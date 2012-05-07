@@ -72,9 +72,12 @@ class IPermissionStore(Interface):
     """Extension point interface for components that provide storage and
     management of permissions."""
 
-    def get_user_permissions(username, pid=None):
+    def get_user_permissions(username, project_id=None, syllabus_id=None, inherit=True):
         """Return all permissions for the user with the specified name.
-        And optionally for specified project ID.
+        And optionally for specified project or syllabus ID.
+        If `inherit` is True, also retrieve permissions from higher levels.
+        Project perms would include syllabus and global, syllabus - global,
+        global - only itself.
         
         The permissions are returned as a dictionary where the key is the name
         of the permission, and the value is either `True` for granted
@@ -86,16 +89,17 @@ class IPermissionStore(Interface):
         Users are returned as a list of usernames.
         """
 
-    def get_all_permissions():
+    def get_all_permissions(project_id=None, syllabus_id=None, inherit=True):
         """Return all permissions for all users.
+        Optional arguments have the same meaning as in `get_user_permissions`.
 
         The permissions are returned as a list of (subject, action)
         formatted tuples."""
 
-    def grant_permission(username, action, pid=None, syllabus_id=None):
+    def grant_permission(username, action, project_id=None, syllabus_id=None):
         """Grant a user permission to perform an action."""
 
-    def revoke_permission(username, action, pid=None, syllabus_id=None):
+    def revoke_permission(username, action, project_id=None, syllabus_id=None):
         """Revokes the permission of the given user to perform an action."""
 
 
@@ -104,9 +108,12 @@ class IPermissionGroupProvider(Interface):
     user groups.
     """
 
-    def get_permission_groups(username):
+    def get_permission_groups(username, project_id=None, inherit=True):
         """Return a list of names of the groups that the user with the specified
-        name is a member of."""
+        name is a member of.
+        `project_id` and `inherit` params have same meaning as in
+        `IPermissionStore.get_user_permissions`.
+        """
 
 
 class IPermissionPolicy(Interface):
@@ -120,12 +127,13 @@ class IPermissionPolicy(Interface):
                          authenticated user
         :param resource: the resource on which the check applies.
                          Will be `None`, if the check is a global one and
-                         not made on a resource in particular
+                         not made on a resource in particular. Resource
+                         can be used as project ID carrier.
         :param perm: the permission cache for that username and resource, 
                      which can be used for doing secondary checks on other
                      permissions. Care must be taken to avoid recursion.  
-        :param req: request object. Can be usefull for dynamic permissions.
-                    But can be None.
+        :param req: request object. Can be used for dynamic permissions and
+                    for cache. But can be None.
 
         :return: `True` if action is allowed, `False` if action is denied,
                  or `None` if indifferent. If `None` is returned, the next
@@ -162,42 +170,44 @@ class DefaultPermissionStore(Component):
 
     group_providers = ExtensionPoint(IPermissionGroupProvider)
 
-    def get_user_permissions(self, username, pid):
-        """Retrieve the permissions for the given user and return them in a
-        dictionary.
-        
-        The permissions are stored in the database as (username, action)
-        records. There's simple support for groups by using lowercase names for
-        the action column: such a record represents a group and not an actual
-        permission, and declares that the user is part of that group.
-        """
+    def get_user_permissions(self, username, project_id=None, syllabus_id=None, inherit=True):
+        """Return the permissions of the specified user.
+        See `IPermissionStore.get_user_permissions`."""
         subjects = set([username])
         for provider in self.group_providers:
-            subjects.update(provider.get_permission_groups(username) or [])
+            subjects.update(provider.get_permission_groups(username, project_id, inherit) or [])
+
+        levels = self._get_perm_levels(project_id, syllabus_id, inherit)
 
         args = []
-        q = 'SELECT username, action FROM permission'
-        if pid is not None:
-            syllabus_id = ProjectManagement(self.env).get_project_syllabus(pid)
-            q += '''
-                UNION
-                SELECT permgroup, action
-                FROM syllabus_permissions
-                WHERE syllabus_id=%s
-                UNION
+        qs   = []
+        if levels['p']:
+            qs.append('''
                 SELECT username, action
                 FROM project_permissions
                 WHERE project_id=%s AND username=%s
-            '''
-            args.append(syllabus_id)
-            args.append(pid)
+            ''')
+            args.append(project_id)
             args.append(username)
+        if levels['s']:
+            if levels['p']:
+                syllabus_id = ProjectManagement(self.env).get_project_syllabus(project_id)
+            qs.append('''
+                SELECT username, action
+                FROM syllabus_permissions
+                WHERE syllabus_id=%s
+            ''')
+            args.append(syllabus_id)
+        if levels['g']:
+            qs.append('SELECT username, action FROM permission')
 
-        actions = set([])
+        q = u'\nUNION\n'.join(qs)
         db = self.env.get_read_db()
         cursor = db.cursor()
         cursor.execute(q, args)
         rows = cursor.fetchall()
+
+        actions = set()
         while True:
             num_users = len(subjects)
             num_actions = len(actions)
@@ -230,31 +240,53 @@ class DefaultPermissionStore(Component):
                     result.add(user)
         return list(result)
 
-    def get_all_permissions(self):
+    def get_all_permissions(self, project_id=None, syllabus_id=None, inherit=True):
         """Return all permissions for all users.
+        See `IPermissionStore.get_all_permissions`."""
+        levels = self._get_perm_levels(project_id, syllabus_id, inherit)
 
-        The permissions are returned as a list of (subject, action)
-        formatted tuples."""
+        args = []
+        qs   = []
+        if levels['p']:
+            qs.append('''
+                SELECT username, action
+                FROM project_permissions
+                WHERE project_id=%s
+            ''')
+            args.append(project_id)
+        if levels['s']:
+            if levels['p']:
+                syllabus_id = ProjectManagement(self.env).get_project_syllabus(project_id)
+            qs.append('''
+                SELECT username, action
+                FROM syllabus_permissions
+                WHERE syllabus_id=%s
+            ''')
+            args.append(syllabus_id)
+        if levels['g']:
+            qs.append('SELECT username, action FROM permission')
+
+        q = u'\nUNION\n'.join(qs)
         db = self.env.get_read_db()
         cursor = db.cursor()
-        cursor.execute("SELECT username,action FROM permission")
+        cursor.execute(q, args)
         return [(row[0], row[1]) for row in cursor]
 
-    def grant_permission(self, username, action, pid, syllabus_id):
+    def grant_permission(self, username, action, project_id, syllabus_id):
         """Grants a user the permission to perform the specified action."""
         args = [username, action]
-        if pid is not None:
+        if project_id is not None:
             q = '''
                 INSERT INTO project_permissions
                 (username, action, project_id)
                 VALUES (%s, %s, %s)
             '''
-            args.append(pid)
-            log = '(project #%s)' % pid
+            args.append(project_id)
+            log = '(project #%s)' % project_id
         elif syllabus_id is not None:
             q = '''
                 INSERT INTO syllabus_permissions
-                (permgroup, action, syllabus_id)
+                (username, action, syllabus_id)
                 VALUES (%s, %s, %s)
             '''
             args.append(syllabus_id)
@@ -272,20 +304,20 @@ class DefaultPermissionStore(Component):
             cursor.execute(q, args)
         self.log.info('Granted permission for %s to %s %s' % (action, username, log))
 
-    def revoke_permission(self, username, action, pid, syllabus_id):
+    def revoke_permission(self, username, action, project_id, syllabus_id):
         """Revokes a users' permission to perform the specified action."""
         args = [username, action]
-        if pid is not None:
+        if project_id is not None:
             q = '''
                 DELETE FROM project_permissions
                 WHERE username=%s AND action=%s AND project_id=%s
             '''
-            args.append(pid)
-            log = '(project #%s)' % pid
+            args.append(project_id)
+            log = '(project #%s)' % project_id
         elif syllabus_id is not None:
             q = '''
                 DELETE FROM syllabus_permissions
-                WHERE permgroup=%s AND action=%s AND syllabus_id=%s
+                WHERE username=%s AND action=%s AND syllabus_id=%s
             '''
             args.append(syllabus_id)
             log = '(syllabus #%s)' % syllabus_id
@@ -301,6 +333,29 @@ class DefaultPermissionStore(Component):
             cursor.execute(q, args)
         self.log.info('Revoked permission for %s to %s %s' % (action, username, log))
 
+    def _get_perm_levels(self, project_id=None, syllabus_id=None, inherit=True):
+        levels = {
+            'g': False, # global
+            's': False, # syllabus
+            'p': False, # project
+        }
+        if inherit:
+            levels['g'] = True
+            if syllabus_id is not None:
+                levels['s'] = True
+            elif project_id is not None:
+                levels['s'] = True
+                levels['p'] = True
+        else:
+            if syllabus_id is not None:
+                levels['s'] = True
+            elif project_id is not None:
+                levels['p'] = True
+            else:
+                levels['g'] = True
+
+        return levels
+
 
 class DefaultPermissionGroupProvider(Component):
     """Permission group provider providing the basic builtin permission groups
@@ -310,7 +365,10 @@ class DefaultPermissionGroupProvider(Component):
 
     implements(IPermissionGroupProvider)
 
-    def get_permission_groups(self, username):
+    def get_permission_groups(self, username, project_id=None, inherit=True):
+        '''See `IPermissionGroupProvider.get_permission_groups`.'''
+        if project_id is not None and not inherit:
+            return []
         groups = ['anonymous']
         if username and username != 'anonymous':
             groups.append('authenticated')
@@ -407,17 +465,17 @@ class PermissionSystem(Component):
 
     # Public API
 
-    def grant_permission(self, username, action, pid=None, syllabus_id=None):
+    def grant_permission(self, username, action, project_id=None, syllabus_id=None):
         """Grant the user with the given name permission to perform to specified
         action."""
         if action.isupper() and action not in self.get_actions():
             raise TracError(_('%(name)s is not a valid action.', name=action))
 
-        self.store.grant_permission(username, action, pid, syllabus_id)
+        self.store.grant_permission(username, action, project_id, syllabus_id)
 
-    def revoke_permission(self, username, action, pid=None, syllabus_id=None):
+    def revoke_permission(self, username, action, project_id=None, syllabus_id=None):
         """Revokes the permission of the specified user to perform an action."""
-        self.store.revoke_permission(username, action, pid, syllabus_id)
+        self.store.revoke_permission(username, action, project_id, syllabus_id)
 
     def get_actions(self):
         actions = []
@@ -429,12 +487,9 @@ class PermissionSystem(Component):
                     actions.append(action)
         return actions
 
-    def get_user_permissions(self, username=None, pid=None):
+    def get_user_permissions(self, username=None, project_id=None, syllabus_id=None, inherit=True):
         """Return the permissions of the specified user.
-        
-        The return value is a dictionary containing all the actions as keys, and
-        a boolean value. `True` means that the permission is granted, `False`
-        means the permission is denied."""
+        See `IPermissionStore.get_user_permissions`."""
         actions = []
         for requestor in self.requestors:
             actions += list(requestor.get_permission_actions() or [])
@@ -450,7 +505,7 @@ class PermissionSystem(Component):
                 permissions[action] = True
                 if meta.has_key(action):
                     [_expand_meta(perm) for perm in meta[action]]
-            for perm in self.store.get_user_permissions(username, pid) or []:
+            for perm in self.store.get_user_permissions(username, project_id, syllabus_id, inherit) or []:
                 _expand_meta(perm)
         else:
             # Return all permissions available in the system
@@ -461,12 +516,12 @@ class PermissionSystem(Component):
                     permissions[action] = True
         return permissions
 
-    def get_all_permissions(self):
+    def get_all_permissions(self, project_id=None, syllabus_id=None, inherit=True):
         """Return all permissions for all users.
 
         The permissions are returned as a list of (subject, action)
         formatted tuples."""
-        return self.store.get_all_permissions() or []
+        return self.store.get_all_permissions(project_id, syllabus_id, inherit) or []
 
     def get_users_with_permission(self, permission):
         """Return all users that have the specified permission.

@@ -124,18 +124,18 @@ schema = [
 
     # Permissions, authentication, session
     Table('permission', key=('username', 'action'))[
-        Column('username', type='varchar (255)'),
+        Column('username', type='varchar (255)'), # user or permgroup name
         Column('action', type='varchar (255)'),
     ],
     Table('project_permissions', key=('username', 'project_id', 'action'))[
-        Column('username', type='varchar (255)'),
+        Column('username', type='varchar (255)'), # user name only
         Column('project_id', type='int', null=False),
         Column('action', type='varchar (255)'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
         ForeignKey('username', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
     ],
     Table('syllabus_permissions', key=('permgroup', 'syllabus_id', 'action'))[
-        Column('permgroup', type='varchar (255)'),
+        Column('username', type='varchar (255)'), # user or permgroup name
         Column('syllabus_id', type='int', null=False),
         Column('action', type='varchar (255)'),
         ForeignKey('syllabus_id', 'syllabuses', 'id', on_delete='CASCADE'),
