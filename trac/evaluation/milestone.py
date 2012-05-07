@@ -187,22 +187,7 @@ class MilestoneEvaluation(Component):
                     'errors': errs,
                 })
 
-        project_id  = req.data['project_id']
-        syllabus_id = req.data['syllabus_id']
-        model = self.evmanager.get_model(syllabus_id)
-        milestone_vars = model.get_milestone_rating_vars()
-        vars = OrderedDict()
-        if milestone_vars:
-            for var in milestone_vars:
-                try:
-                    var.project(project_id)
-                    var.milestone(milestone.name)
-                    var_value = var.get()
-                    vars[var] = var_value
-                except EvalModelError:
-                    continue
-            if vars:
-                data['milestone_vars'] = vars
+        self._prepare_milestone_vars(req, milestone, data)
 
         data.update({
             'weight': weight,
@@ -234,7 +219,9 @@ class MilestoneEvaluation(Component):
             if not complete:
                 raise NotImplementedError
             if edit and approved:
-                raise TracError(_('Your results have been approved already. You can not edit them.'))
+                raise TracError(_('Your results have been approved already. If you want '
+                                  'to edit them contact your manager to disapprove them '
+                                  'temporarily.'))
             data['completed_on'] = completed_on
             data['approved'] = approved
 
@@ -262,6 +249,9 @@ class MilestoneEvaluation(Component):
 
         if edit:
             Chrome(self.env).add_wiki_toolbars(req)
+
+        self._prepare_milestone_vars(req, milestone, data)
+        self._prepare_eval_vars(req, milestone, data['users'], UserRole.DEVELOPER, data)
 
     def _do_team_manage(self, req, milestone, subaction, data):
         req.perm(milestone.resource).require('EVAL_MILESTONE')
@@ -305,13 +295,8 @@ class MilestoneEvaluation(Component):
         users = sorted(all_completed.keys())
         data['users'] = users
 
-        syllabus_id = req.data['syllabus_id']
-        model = self.evmanager.get_model(syllabus_id)
-        milestone_vars = model.get_milestone_team_eval_vars(UserRole.MANAGER)
-        if milestone_vars:
-            vvalues = self._init_user_vars(milestone, milestone_vars, users)
-            if vvalues:
-                data['user_vars'] = vvalues
+        self._prepare_milestone_vars(req, milestone, data)
+        self._prepare_eval_vars(req, milestone, users, UserRole.MANAGER, data)
 
     def _init_user_vars(self, milestone, vars, users):
         user_vars = [var for var in vars
@@ -330,6 +315,33 @@ class MilestoneEvaluation(Component):
                 uvalues[user] = var_value
             vvalues[var] = uvalues
         return vvalues
+
+    def _prepare_eval_vars(self, req, milestone, users, role, data):
+        syllabus_id = req.data['syllabus_id']
+        model = self.evmanager.get_model(syllabus_id)
+        milestone_vars = model.get_milestone_team_eval_vars(role)
+        if milestone_vars:
+            vvalues = self._init_user_vars(milestone, milestone_vars, users)
+            if vvalues:
+                data['user_vars'] = vvalues
+
+    def _prepare_milestone_vars(self, req, milestone, data):
+        project_id  = req.data['project_id']
+        syllabus_id = req.data['syllabus_id']
+        model = self.evmanager.get_model(syllabus_id)
+        milestone_vars = model.get_milestone_rating_vars()
+        vars = OrderedDict()
+        if milestone_vars:
+            for var in milestone_vars:
+                try:
+                    var.project(project_id)
+                    var.milestone(milestone.name)
+                    var_value = var.get()
+                except EvalModelError, e:
+                    var_value = e.message
+                vars[var] = var_value
+            if vars:
+                data['milestone_vars'] = vars
 
     def _te_prepare_view_data(self, req, username, milestone, data):
         res = self.get_results_by_user(username, milestone.pid, milestone.name)
@@ -357,15 +369,6 @@ class MilestoneEvaluation(Component):
                 comments[user] = user_comments
             data['comments'] = comments
 
-        syllabus_id = req.data['syllabus_id']
-        model = self.evmanager.get_model(syllabus_id)
-        milestone_vars = model.get_milestone_team_eval_vars(UserRole.DEVELOPER)
-        if milestone_vars:
-            vvalues = self._init_user_vars(milestone, milestone_vars, users)
-            if vvalues:
-                data['user_vars'] = vvalues
-
-
     def _te_prepare_edit_data(self, req, milestone, data, is_existent=False):
         devs = self.pm.get_project_users(milestone.pid)
         syllabus_id = self.pm.get_project_syllabus(milestone.pid)
@@ -373,6 +376,7 @@ class MilestoneEvaluation(Component):
         data.update({
             'author': req.authname,
             'targets': devs,
+            'users': devs,
             'sum': sum,
         })
         if not is_existent:

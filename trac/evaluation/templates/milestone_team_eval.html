@@ -114,6 +114,30 @@
     </table>
   </py:def>
 
+  <py:def function="show_eval_vars(with_info=False)">
+    <py:if test="user_vars or milestone_vars">
+      <hr />
+      <h2>Evaluation model variables</h2>
+      <p py:if="with_info">
+        You may consult the values of the following evaluation model variables:
+      </p>
+      <py:if test="user_vars">
+        <h3>Evaluation model variables (team members)</h3>
+        <p>
+          <xi:include href="evaluation_variables_table.html"
+            py:with="group_by_user=True; variables=user_vars; current_user=authname;"/>
+        </p>
+      </py:if>
+      <py:if test="milestone_vars">
+        <h3>Evaluation model variables (milestone)</h3>
+        <p>
+          <xi:include href="evaluation_variables_table.html"
+            py:with="variables=milestone_vars;"/>
+        </p>
+      </py:if>
+    </py:if>
+  </py:def>
+
   <body>
     <div id="content">
       <h1 i18n:msg="milestone">Milestone "${milestone.name}" teamwork evaluation</h1>
@@ -153,6 +177,9 @@
               <input type="submit" name="cancel" value="${_('Cancel')}" />
             </form>
           </div>
+
+          ${show_eval_vars(with_info=True)}
+
         </py:when>
 
         <py:when test="'view'">
@@ -181,13 +208,7 @@
             </py:otherwise>
           </py:choose>
 
-          <py:if test="user_vars">
-            <h3>Evaluation model variables</h3>
-            <p>
-              <xi:include href="evaluation_variables_table.html"
-                py:with="group_by_user=True; variables=user_vars; current_user=authname;"/>
-            </p>
-          </py:if>
+          ${show_eval_vars()}
 
         </py:when>
 
@@ -215,16 +236,8 @@
 
           <h2>Results matrix</h2>
           ${show_results_matrix(forms, users)}
-          <hr />
 
-          <py:if test="user_vars">
-            <h2>Evaluation model variables</h2>
-            <p>
-              You may consult the values of the following evaluation model variables:
-              <xi:include href="evaluation_variables_table.html"
-                py:with="group_by_user=True; variables=user_vars;"/>
-            </p>
-          </py:if>
+          ${show_eval_vars(with_info=True)}
 
         </py:when>
 
