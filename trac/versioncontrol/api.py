@@ -26,6 +26,7 @@ from trac.util.text import printout, to_unicode
 from trac.util.translation import _
 from trac.web.api import IRequestFilter
 
+from trac.project.model import Project
 
 def is_default(reponame):
     """Check whether `reponame` is the default repository."""
@@ -142,13 +143,14 @@ class DbRepositoryProvider(Component):
         for id_, info in repos.iteritems():
             if 'name' in info and ('dir' in info or 'alias' in info):
                 info['id'] = id_
+                info['project_id'] = int(info.get('project_id', 0))
                 reponames[info['name']] = info
         return reponames.iteritems()
 
     # IAdminCommandProvider methods
     
     def get_admin_commands(self):
-        yield ('repository add', '<repos> <dir> [type]',
+        yield ('repository add', '<repos> <project_id> <dir> [type]',
                'Add a source repository',
                self._complete_add, self._do_add)
         yield ('repository alias', '<name> <target>',
@@ -189,8 +191,8 @@ class DbRepositoryProvider(Component):
         elif len(args) == 2:
             return self.repository_attrs
             
-    def _do_add(self, reponame, dir, type_=None):
-        self.add_repository(reponame, os.path.abspath(dir), type_)
+    def _do_add(self, reponame, project_id, dir, type_=None):
+        self.add_repository(reponame, project_id, os.path.abspath(dir), type_)
     
     def _do_alias(self, reponame, target):
         self.add_alias(reponame, target)
@@ -215,10 +217,13 @@ class DbRepositoryProvider(Component):
     
     # Public interface
     
-    def add_repository(self, reponame, dir, type_=None):
+    def add_repository(self, reponame, project_id, dir, type_=None):
         """Add a repository."""
         if not os.path.isabs(dir):
             raise TracError(_("The repository directory must be absolute"))
+        project_id = int(project_id)
+        if not Project.check_exists(self.env, project_id):
+            raise TracError(_("Project #%(id)s doesn't exist", id=project_id))
         if is_default(reponame):
             reponame = ''
         rm = RepositoryManager(self.env)
@@ -232,16 +237,21 @@ class DbRepositoryProvider(Component):
             cursor.executemany("INSERT INTO repository (id, name, value) "
                                "VALUES (%s, %s, %s)",
                                [(id, 'dir', dir),
+                                (id, 'project_id', project_id),
                                 (id, 'type', type_ or '')])
         rm.reload_repositories()
     
     def add_alias(self, reponame, target):
         """Create an alias repository."""
+        rm = RepositoryManager(self.env)
+        repos = rm.get_repository(target)
+        if not repos:
+            raise TracError(_("Repository '%(repo)s' not found",
+                                  repo=target))
         if is_default(reponame):
             reponame = ''
         if is_default(target):
             target = ''
-        rm = RepositoryManager(self.env)
         @self.env.with_transaction()
         def do_add(db):
             id = rm.get_repository_id(reponame)
@@ -249,6 +259,7 @@ class DbRepositoryProvider(Component):
             cursor.executemany("INSERT INTO repository (id, name, value) "
                                "VALUES (%s, %s, %s)",
                                [(id, 'dir', None),
+                                (id, 'project_id', repos.pid),
                                 (id, 'alias', target)])
         rm.reload_repositories()
     

@@ -13,6 +13,23 @@
   <body>
     <h2>Manage Repositories</h2>
 
+    <py:def function="project_field(projects, selected=None)">
+      <div class="field">
+        <py:choose test="bool(projects)">
+          <label py:when="True">Project:<br/>
+            <select size="1" id="trac-project" name="project_id">
+              <option py:for="id, name in projects" value="${id}" selected="${id == selected or None}">${name}</option>
+              <option py:if="selected and selected not in [r[0] for r in projects]"
+                value="${selected}" selected="selected">ID ${selected}</option>
+            </select>
+          </label>
+          <label py:otherwise="">Project ID:<br/>
+            <input type="text" name="project_id" value="${selected}" />
+          </label>
+        </py:choose>
+      </div>
+    </py:def>
+
     <py:def function="type_field(editable, selected=None)">
       <div class="field">
         <label>Type:<br/>
@@ -54,6 +71,7 @@
               ${alias_field(info.editable, info.alias)}
             </py:when>
             <py:otherwise>
+              ${project_field(projects, info.project_id)}
               ${type_field(info.editable, info.type)}
               <div class="field">
                 <label>Directory:<br/><input type="text" name="dir" size="48" value="$info.dir" readonly="$readonly"/></label>
@@ -94,6 +112,7 @@ $info.description</textarea>
             <div class="field">
               <label>Name:<br/><input type="text" name="name"/></label>
             </div>
+            ${project_field(projects)}
             ${type_field(True)}
             <div class="field">
               <label>Directory:<br/><input type="text" name="dir"/></label>
@@ -122,7 +141,7 @@ $info.description</textarea>
           <table class="listing" id="trac-reposlist">
             <thead>
               <tr><th class="sel">&nbsp;</th>
-                <th>Name</th><th>Type</th><th>Directory</th><th>Revision</th>
+                <th>Name</th><th>Project ID</th><th>Type</th><th>Directory</th><th>Revision</th>
               </tr>
             </thead>
             <tbody>
@@ -131,6 +150,7 @@ $info.description</textarea>
                 <td class="name">
                   <a href="${panel_href(info.name or '(default)')}">${info.name or _('(default)')}</a>
                 </td>
+                <td>${info.project_id}</td>
                 <td>${not info.alias and (info.type or _('(default)')) or None}</td>
                 <td py:choose="">
                   <py:when test="info.dir">$info.prettydir</py:when>

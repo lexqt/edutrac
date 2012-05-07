@@ -16,7 +16,7 @@ import sys
 
 from genshi.builder import tag
 
-from trac.admin import IAdminCommandProvider, IAdminPanelProvider
+from trac.admin import IAdminCommandProvider, IAdminPanelProvider, AdminArea
 from trac.config import ListOption
 from trac.core import *
 from trac.perm import IPermissionRequestor
@@ -28,6 +28,9 @@ from trac.util.translation import _, ngettext, tag_
 from trac.versioncontrol import DbRepositoryProvider, RepositoryManager, \
                                 is_default
 from trac.web.chrome import Chrome, add_notice, add_warning
+
+from trac.project.api import ProjectManagement
+
 
 
 class VersionControlAdmin(Component):
@@ -180,16 +183,34 @@ class RepositoryAdminPanel(Component):
     def get_admin_panels(self, req):
         if 'VERSIONCONTROL_ADMIN' in req.perm:
             yield ('versioncontrol', _('Version Control'), 'repository',
-                   _('Repositories'))
+                   _('Repositories'),
+                   set([AdminArea.GLOBAL, AdminArea.GROUP, AdminArea.SYLLABUS])
+                   )
     
-    def render_admin_panel(self, req, category, page, path_info):
+    def render_admin_panel(self, req, category, page, path_info, area, area_id):
         req.perm.require('VERSIONCONTROL_ADMIN')
+        role = req.data['role']
         
-        # Retrieve info for all repositories
+        # Retrieve info for all repositories / projects
         rm = RepositoryManager(self.env)
-        all_repos = rm.get_all_repositories()
+        pm = ProjectManagement(self.env)
+        all_repos = {}
+        projects  = None
+        if area == AdminArea.GLOBAL:
+            all_repos = rm.get_all_repositories()
+        elif area == AdminArea.SYLLABUS:
+            projects = pm.get_syllabus_projects(area_id, with_names=True)
+            all_repos = rm.get_all_repositories(syllabus_id=area_id)
+        elif area == AdminArea.GROUP:
+            projects = pm.get_group_projects(area_id, with_names=True)
+            for project_id, _name in projects:
+                all_repos.update(rm.get_all_repositories(project_id=project_id))
+
+        if not projects:
+            projects = pm.get_user_projects(req.authname, role)
+
         db_provider = self.env[DbRepositoryProvider]
-        
+
         if path_info:
             # Detail view
             reponame = not is_default(path_info) and path_info or ''
@@ -199,7 +220,7 @@ class RepositoryAdminPanel(Component):
                                   repo=path_info))
             if req.method == 'POST':
                 if req.args.get('cancel'):
-                    req.redirect(req.href.admin(category, page))
+                    req.redirect(req.panel_href())
                 
                 elif db_provider and req.args.get('save'):
                     # Modify repository
@@ -207,8 +228,13 @@ class RepositoryAdminPanel(Component):
                     for field in db_provider.repository_attrs:
                         value = normalize_whitespace(req.args.get(field))
                         if (value is not None or field == 'hidden') \
-                                and value != info.get(field):
+                                and value != unicode(info.get(field)):
                             changes[field] = value
+                    if 'project_id' in changes:
+                        project_ids = [r[0] for r in projects]
+                        project_id = int(changes['project_id'])
+                        if project_id not in project_ids:
+                            raise TracError(_('Invalid project ID specified.'))
                     if 'dir' in changes \
                             and not self._check_dir(req, changes['dir']):
                         changes = {}
@@ -237,7 +263,7 @@ class RepositoryAdminPanel(Component):
                                    'repository name.', cset_added=cset_added)
                         add_notice(req, msg)
                     if changes:
-                        req.redirect(req.href.admin(category, page))
+                        req.redirect(req.panel_href())
             
             Chrome(self.env).add_wiki_toolbars(req)
             data = {'view': 'detail', 'reponame': reponame}
@@ -247,15 +273,19 @@ class RepositoryAdminPanel(Component):
             if req.method == 'POST':
                 # Add a repository
                 if db_provider and req.args.get('add_repos'):
+                    project_ids = [r[0] for r in projects]
                     name = req.args.get('name')
+                    project_id = req.args.getint('project_id')
                     type_ = req.args.get('type')
                     # Avoid errors when copy/pasting paths
                     dir = normalize_whitespace(req.args.get('dir', ''))
-                    if name is None or type_ is None or not dir:
+                    if name is None or type_ is None or project_id is None or not dir:
                         add_warning(req, _('Missing arguments to add a '
                                            'repository.'))
+                    elif project_id not in project_ids:
+                        add_warning(req, _('Invalid project ID specified.'))
                     elif self._check_dir(req, dir):
-                        db_provider.add_repository(name, dir, type_)
+                        db_provider.add_repository(name, project_id, dir, type_)
                         name = name or '(default)'
                         add_notice(req, _('The repository "%(name)s" has been '
                                           'added.', name=name))
@@ -272,33 +302,37 @@ class RepositoryAdminPanel(Component):
                                    'for each committed changeset.',
                                    cset_added=cset_added)
                         add_notice(req, msg)
-                        req.redirect(req.href.admin(category, page))
+                        req.redirect(req.panel_href())
                 
                 # Add a repository alias
                 elif db_provider and req.args.get('add_alias'):
                     name = req.args.get('name')
                     alias = req.args.get('alias')
-                    if name is not None and alias is not None:
+                    if name is None and alias is None:
+                        add_warning(req, _('Missing arguments to add an '
+                                           'alias.'))
+                    elif alias not in all_repos:
+                        add_warning(req, _('Invalid repository name specified.'))
+                    else:
                         db_provider.add_alias(name, alias)
                         add_notice(req, _('The alias "%(name)s" has been '
                                           'added.', name=name or '(default)'))
-                        req.redirect(req.href.admin(category, page))
-                    add_warning(req, _('Missing arguments to add an '
-                                       'alias.'))
+                        req.redirect(req.panel_href())
                 
                 # Refresh the list of repositories
                 elif req.args.get('refresh'):
-                    req.redirect(req.href.admin(category, page))
+                    req.redirect(req.panel_href())
                 
                 # Remove repositories
                 elif db_provider and req.args.get('remove'):
                     sel = req.args.getlist('sel')
+                    sel = set(sel) & set(all_repos)
                     if sel:
                         for name in sel:
                             db_provider.remove_repository(name)
                         add_notice(req, _('The selected repositories have '
                                           'been removed.'))
-                        req.redirect(req.href.admin(category, page))
+                        req.redirect(req.panel_href())
                     add_warning(req, _('No repositories were selected.'))
             
             data = {'view': 'list'}
@@ -313,8 +347,11 @@ class RepositoryAdminPanel(Component):
                                                          reponame in db_repos))
                             for (reponame, info) in all_repos.iteritems())
         types = sorted([''] + rm.get_supported_types())
-        data.update({'types': types, 'default_type': rm.repository_type,
-                     'repositories': repositories})
+        data.update({
+            'types': types, 'default_type': rm.repository_type,
+            'repositories': repositories,
+            'projects': projects,
+        })
         
         return 'admin_repositories.html', data
 
