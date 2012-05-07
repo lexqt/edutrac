@@ -158,7 +158,7 @@ class PostloginModule(Component):
 
             # set project data
             self.ps.set_request_data(req, pid)
-            req.data['role'] = int(s['role'] or UserRole.NONE)
+            req.data['role'] = UserRole(s['role'])
 
             if not check:
                 # now raise exception

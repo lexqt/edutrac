@@ -297,10 +297,12 @@ class ProjectManagement(Component):
         '''Return whether `username` has `role`.
         If `obj_id` is specified, check that user has this role for some object.
         Object meaning may vary according to concrete role:
-         * Developer - project
-         * Manager - group
+         * Developer / Project manager - project
+         * Group manager - group
         '''
-        if role not in (UserRole.DEVELOPER, UserRole.MANAGER):
+        if role == UserRole.MANAGER:
+            role = UserRole.GROUP_MANAGER
+        if role not in (UserRole.DEVELOPER, UserRole.GROUP_MANAGER, UserRole.PROJECT_MANAGER):
             obj_id = None
         if obj_id is None:
             # TODO: make it more efficient...
@@ -308,8 +310,11 @@ class ProjectManagement(Component):
         if role == UserRole.DEVELOPER:
             # TODO: make it more efficient...
             return obj_id in self.get_user_projects(username, role, pid_only=True)
-        elif role == UserRole.MANAGER:
+        elif role == UserRole.GROUP_MANAGER:
             return self.has_group_manager(username, obj_id)
+        elif role == UserRole.PROJECT_MANAGER:
+            # TODO: make it more efficient...
+            return obj_id in self.get_user_projects(username, UserRole.MANAGER, pid_only=True)
 
         return False
 

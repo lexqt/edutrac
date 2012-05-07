@@ -38,17 +38,77 @@ GL_MAP = {
 }
 
 
+class UserRoleInstance(object):
+    '''
+    Wrapper class for user roles to support
+    internal bitwise operations for metaroles.
+    '''
+
+    def __init__(self, code):
+        self._code = int(code)
+
+    def __eq__(self, role):
+        '''Is role equal to other `role`.
+
+        `role`: UserRoleInstance or integer code.'''
+        if isinstance(role, UserRoleInstance):
+            return self._code == role._code
+        return self._code == role
+
+    def __ne__(self, role):
+        return not self == role
+
+    def __str__(self):
+        return str(self._code)
+
+    def __int__(self):
+        return self._code
+
+    def __long__(self):
+        return self._code
+
+    def __contains__(self, role):
+        return self.include(role)
+
+    def include(self, role):
+        '''Does role include other `role`
+
+        `role`: UserRoleInstance or integer code.'''
+        if isinstance(role, UserRoleInstance):
+            return bool(self._code & role._code)
+        return bool(self._code & role)
+
+
 class UserRole(object):
-    NONE      = 0
-    DEVELOPER = 1
-    MANAGER   = 2
-    ADMIN     = 3
+
+    # include bit logic for metaroles
+
+    NONE            = UserRoleInstance(0)  # 00000b
+    DEVELOPER       = UserRoleInstance(1)  # 00001b
+
+    PROJECT_MANAGER = UserRoleInstance(2)  # 00100b
+    GROUP_MANAGER   = UserRoleInstance(4)  # 00010b
+    MANAGER         = UserRoleInstance(6)  # 00110b
+
+    ADMIN           = UserRoleInstance(14) # 01110b
+
+    def __new__(cls, code):
+        if not code: # None, empty string, etc
+            return cls.NONE
+        try:
+            return UserRoleInstance(code)
+        except (TypeError, ValueError):
+            return cls.NONE
 
     @classmethod
     def label(cls, role):
         if role == cls.DEVELOPER:
             return _('Developer')
         elif role == cls.MANAGER:
+            return _('Manager')
+        elif role == cls.GROUP_MANAGER:
+            return _('Group manager')
+        elif role == cls.PROJECT_MANAGER:
             return _('Project manager')
         elif role == cls.ADMIN:
             return _('Administrator')

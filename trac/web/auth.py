@@ -101,7 +101,7 @@ class LoginModule(Component):
         if req.authname and req.authname != 'anonymous':
             from trac.project.sys import PostloginModule
             switch_url = PostloginModule(self.env).role_switch_url(req.href)
-            role = int(req.data.get('role') or UserRole.NONE)
+            role = req.data.get('role', UserRole.NONE)
             yield ('metanav', 'login', tag(_('logged in as %(user)s',
                                              user=req.authname), ' ',
                                            tag.a('(%s)' % UserRole.label(role),

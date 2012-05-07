@@ -83,7 +83,7 @@ class AdminModule(Component):
 
         redirect = False
         if area == AdminArea.GLOBAL and role != UserRole.ADMIN:
-            if role == UserRole.MANAGER:
+            if UserRole.GROUP_MANAGER in role:
                 area    = AdminArea.GROUP
                 area_id = req.data['group_id']
                 redirect = True
@@ -148,11 +148,11 @@ class AdminModule(Component):
             # Administrator can access everything
             return True
         if area == AdminArea.GROUP:
-            role = UserRole.MANAGER
+            role = UserRole.GROUP_MANAGER
         return self._require_role(req, role, area, area_id)
 
     def _require_role(self, req, role, area, area_id):
-        if req.data['role'] != role:
+        if role not in req.data['role']:
             from trac.project.sys import PostloginModule
             switch_url = PostloginModule(self.env).role_switch_url(req.href)
             raise TracError(tag_('Role %(role)s required to access %(admin_area)s. '
