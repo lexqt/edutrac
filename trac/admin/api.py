@@ -16,6 +16,7 @@ import sys
 import traceback
 
 from trac.core import *
+from trac.web.href import HrefPart
 from trac.util.translation import _
 
 
@@ -33,17 +34,59 @@ class IAdminPanelProvider(Interface):
         """Return a list of available admin panels.
         
         The items returned by this function must be tuples of the form
-        `(category, category_label, page, page_label)`.
+        `(category, category_label, page, page_label, area_set)`,
+        where `area_set` is a set with supported admin areas (see `AdminArea`).
+        Legacy (trac 0.12) form `(category, category_label, page, page_label)`
+        still supported as panel with implicit area GLOBAL.
         """
 
-    def render_admin_panel(req, category, page, path_info):
+    def render_admin_panel(req, category, page, path_info, area, area_id):
         """Process a request for an admin panel.
-        
+
+        Legacy (trac 0.12) form `render_admin_panel(req, category, page, path_info)`
+        also supported with implicit area GLOBAL.
         This function should return a tuple of the form `(template, data)`,
         where `template` is the name of the template to use and `data` is the
         data to be passed to the template.
         """
 
+
+class AdminArea(object):
+
+    GLOBAL    = 0
+    PROJECT   = 10
+    GROUP     = 20
+    SYLLABUS  = 30
+
+    @classmethod
+    def from_string(cls, s):
+        if not s:
+            return cls.GLOBAL
+        elif s == 'g':
+            return cls.GROUP
+        elif s == 's':
+            return cls.SYLLABUS
+        raise ValueError('Unknown admin area')
+
+    @classmethod
+    def href_part(cls, area, area_id):
+        if area == cls.GLOBAL:
+            return None
+        elif area == cls.GROUP:
+            return HrefPart('g', area_id)
+        elif area == cls.SYLLABUS:
+            return HrefPart('s', area_id)
+        raise ValueError('Unknown admin area')
+
+    @classmethod
+    def label(cls, area, area_id):
+        if area == cls.GLOBAL:
+            return _('Global admin area')
+        elif area == cls.GROUP:
+            return _('Group #%(id)s admin area', id=area_id)
+        elif area == cls.SYLLABUS:
+            return _('Syllabus #%(id)s admin area', id=area_id)
+        return _('Unknown area (code %(code)s)', code=area)
 
 class AdminCommandError(TracError):
     """Exception raised when an admin command cannot be executed."""

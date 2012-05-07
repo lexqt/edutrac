@@ -13,7 +13,7 @@
 
   <py:match path="body" once="true" buffer="false"><body>
     <div id="content" class="admin">
-      <h1>Administration</h1>
+      <h1>Administration: ${area_label}</h1>
       <div id="tabs">
         <ul py:for="category, panels in groupby(panels, lambda p: p.category)"
             py:with="cat_is_active = category.id == active_cat">

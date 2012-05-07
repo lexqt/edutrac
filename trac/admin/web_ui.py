@@ -22,20 +22,22 @@ import shutil
 from genshi import HTML
 from genshi.builder import tag
 
-from trac.admin.api import IAdminPanelProvider
+from trac.admin.api import IAdminPanelProvider, AdminArea
 from trac.core import *
 from trac.loader import get_plugin_info, get_plugins_dir
 from trac.perm import PermissionSystem, IPermissionRequestor
 from trac.util.compat import partial
 from trac.util.text import exception_to_unicode, \
                             unicode_to_base64, unicode_from_base64
-from trac.util.translation import _, ngettext
+from trac.util.translation import _, ngettext, tag_
 from trac.web import HTTPNotFound, IRequestHandler
 from trac.web.chrome import add_notice, add_stylesheet, \
                             add_warning, Chrome, INavigationContributor, \
                             ITemplateProvider
 from trac.wiki.formatter import format_to_html
 
+from trac.user.api import UserRole
+from trac.project.api import ProjectManagement
 
 
 class AdminModule(Component):
@@ -45,6 +47,9 @@ class AdminModule(Component):
 
     panel_providers = ExtensionPoint(IAdminPanelProvider)
 
+    def __init__(self):
+        self.pm = ProjectManagement(self.env)
+
     # INavigationContributor methods
 
     def get_active_navigation_item(self, req):
@@ -53,32 +58,50 @@ class AdminModule(Component):
     def get_navigation_items(self, req):
         # The 'Admin' navigation item is only visible if at least one
         # admin panel is available
-        panels, providers = self._get_panels(req)
-        if panels:
+        if self._has_panels(req):
             yield 'mainnav', 'admin', tag.a(_('Admin'), href=req.href.admin(),
                                             title=_('Administration'))
 
     # IRequestHandler methods
 
     def match_request(self, req):
-        match = re.match('/admin(?:/([^/]+)(?:/([^/]+)(?:/(.+))?)?)?$',
+        match = re.match('/admin(?:/(s|g)/(\d+))?(?:/([^/]+)(?:/([^/]+)(?:/(.+))?)?)?$',
                          req.path_info)
         if match:
-            req.args['cat_id'] = match.group(1)
-            req.args['panel_id'] = match.group(2)
-            req.args['path_info'] = match.group(3)
+            req.args['admin_area'] = AdminArea.from_string(match.group(1))
+            req.args['admin_area_id'] = int(match.group(2) or 0)
+            req.args['cat_id'] = match.group(3)
+            req.args['panel_id'] = match.group(4)
+            req.args['path_info'] = match.group(5)
             return True
 
     def process_request(self, req):
-        panels, providers = self._get_panels(req)
+        area    = req.args.get('admin_area')
+        area_id = req.args.get('admin_area_id')
+        pid  = req.project # is project data ready
+        role = req.data['role']
+
+        redirect = False
+        if area == AdminArea.GLOBAL and role != UserRole.ADMIN:
+            if role == UserRole.MANAGER:
+                area    = AdminArea.GROUP
+                area_id = req.data['group_id']
+                redirect = True
+            if redirect:
+                req.redirect(req.href('admin', AdminArea.href_part(area, area_id)))
+
+        self._check_access(req, area, area_id)
+
+        panels, providers = self._get_panels(req, area)
         if not panels:
             raise HTTPNotFound(_('No administration panels available'))
 
         def _panel_order_key(p):
-            if p[::2] == ('general', 'basics'):
-                return 1
-            elif p[0] == 'general':
-                return p[2]
+            if p[0] == 'general':
+                if p[2] == 'basics':
+                    return 1
+                else:
+                    return p[2]
             return p
         panels.sort(key=_panel_order_key)
 
@@ -96,12 +119,20 @@ class AdminModule(Component):
         if not provider:
             raise HTTPNotFound(_('Unknown administration panel'))
 
-        template, data = provider.render_admin_panel(req, cat_id, panel_id,
-                                                     path_info)
+        href_args = ['admin', AdminArea.href_part(area, area_id), cat_id, panel_id]
+        panel_href = partial(req.href, *href_args)
+        req.panel_href = panel_href
+
+        arg_cnt = provider.render_admin_panel.func_code.co_argcount - 1
+        args = [req, cat_id, panel_id, path_info]
+        if arg_cnt == 6:
+            args += [area, area_id]
+        template, data = provider.render_admin_panel(*args)
 
         data.update({
+            'area_label': AdminArea.label(area, area_id),
             'active_cat': cat_id, 'active_panel': panel_id,
-            'panel_href': partial(req.href, 'admin', cat_id, panel_id),
+            'panel_href': panel_href,
             'panels': [{
                 'category': {'id': panel[0], 'label': panel[1]},
                 'panel': {'id': panel[2], 'label': panel[3]}
@@ -110,6 +141,29 @@ class AdminModule(Component):
 
         add_stylesheet(req, 'common/css/admin.css')
         return template, data, None
+
+    def _check_access(self, req, area, area_id):
+        role = UserRole.ADMIN
+        if req.data['role'] == role:
+            # Administrator can access everything
+            return True
+        if area == AdminArea.GROUP:
+            role = UserRole.MANAGER
+        return self._require_role(req, role, area, area_id)
+
+    def _require_role(self, req, role, area, area_id):
+        if req.data['role'] != role:
+            from trac.project.sys import PostloginModule
+            switch_url = PostloginModule(self.env).role_switch_url(req.href)
+            raise TracError(tag_('Role %(role)s required to access %(admin_area)s. '
+                                 'You may %(change_role)s and try to access admin page again.',
+                                 role=tag.strong(UserRole.label(role)),
+                                 admin_area=tag.strong(AdminArea.label(area, area_id)),
+                                 change_role=tag.a(_('change role'), href=switch_url)))
+
+        if not self.pm.has_role(req.authname, role, area_id):
+            raise TracError(_('Insufficient rights to access %(admin_area)s',
+                              admin_area=AdminArea.label(area, area_id)))
 
     # ITemplateProvider methods
 
@@ -121,16 +175,30 @@ class AdminModule(Component):
 
     # Internal methods
 
-    def _get_panels(self, req):
-        """Return a list of available admin panels."""
+    def _has_panels(self, req):
+        for provider in self.panel_providers:
+            if list(provider.get_admin_panels(req)):
+                return True
+        return False
+
+    def _get_panels(self, req, area):
+        """Return a list of available admin panels for specifies `area`."""
         panels = []
         providers = {}
 
         for provider in self.panel_providers:
             p = list(provider.get_admin_panels(req) or [])
             for panel in p:
+                if len(panel) == 4:
+                    # legacy form, implicit GLOBAL area
+                    areas = (AdminArea.GLOBAL,)
+                else:
+                    areas = panel[4]
+                    panel = panel[:4]
+                if area not in areas:
+                    continue
                 providers[(panel[0], panel[2])] = provider
-            panels += p
+                panels.append(panel)
 
         return panels, providers
 

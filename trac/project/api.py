@@ -257,19 +257,23 @@ class ProjectManagement(Component):
         names  = get_column_names(cursor)
         return dict(zip(names, values))
 
-    def get_syllabus_projects(self, syllabus_id):
-        '''Return ids of all projects connected with specified syllabus'''
+    def get_syllabus_projects(self, syllabus_id, with_names=False):
+        '''Return all projects connected with specified syllabus'''
         db = self.env.get_read_db()
         cursor = db.cursor()
         query = '''
-            SELECT project_id
+            SELECT project_id{0}
             FROM project_info
             WHERE syllabus_id=%s
             ORDER BY project_id
         '''
+        query = query.format(', project_name' if with_names else '')
         cursor.execute(query, (syllabus_id,))
         rows = cursor.fetchall()
-        return [r[0] for r in rows]
+        if with_names:
+            return [(r[0], r[1]) for r in rows]
+        else:
+            return [r[0] for r in rows]
 
     def get_group_projects(self, gid, with_names=False):
         '''Return all projects connected with specified group'''
@@ -288,6 +292,40 @@ class ProjectManagement(Component):
             return [(r[0], r[1]) for r in rows]
         else:
             return [r[0] for r in rows]
+
+    def has_role(self, username, role, obj_id=None):
+        '''Return whether `username` has `role`.
+        If `obj_id` is specified, check that user has this role for some object.
+        Object meaning may vary according to concrete role:
+         * Developer - project
+         * Manager - group
+        '''
+        if role not in (UserRole.DEVELOPER, UserRole.MANAGER):
+            obj_id = None
+        if obj_id is None:
+            # TODO: make it more efficient...
+            return role in self.get_user_roles(username)
+        if role == UserRole.DEVELOPER:
+            # TODO: make it more efficient...
+            return obj_id in self.get_user_projects(username, role, pid_only=True)
+        elif role == UserRole.MANAGER:
+            return self.has_group_manager(username, obj_id)
+
+        return False
+
+    def has_group_manager(self, username, gid):
+        '''Return whether username is manager of group with id=`gid`'''
+        db = self.env.get_read_db()
+        cursor = db.cursor()
+        q = '''
+            SELECT 1
+            FROM studgroup_managers m
+            JOIN users u ON u.id=m.user_id AND u.username=%s
+            WHERE m.studgroup_id=%s
+            LIMIT 1
+        '''
+        cursor.execute(q, (username, gid))
+        return cursor.rowcount==1
 
     def check_component_enabled(self, component, pid=None, syllabus_id=None, raise_on_disabled=True):
         if pid is not None:

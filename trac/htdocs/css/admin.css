@@ -1,7 +1,7 @@
 /* Avoid layout issues with side fieldsets, see #8866 */
 .admin h1, .admin h2 { margin-top: 0; }
 
-#content.admin h1 { float: left; }
+#content.admin h1 { text-align: center; }
 
 #tabs { background: #f7f7f0; border: 1px solid black;
   border-color: #ccc #666 #666 #ccc; clear: left;
