@@ -3,6 +3,8 @@ from collections import OrderedDict
 from sqlalchemy import text
 from random import shuffle
 
+from genshi.builder import tag
+
 from trac.util.datefmt import utc
 from trac.util.translation import _, N_
 
@@ -11,9 +13,11 @@ from trac.config import IntOption
 from trac.resource import get_resource_url
 from trac.perm import IPermissionRequestor
 
+from trac.web.api import IRequestHandler
 from trac.web.chrome import add_ctxtnav, add_package, add_notice, \
-                            add_stylesheet, Chrome
+                            add_stylesheet, Chrome, INavigationContributor
 
+from trac.ticket.model import Milestone
 from trac.project.api import ProjectManagement
 from trac.user.api import UserRole
 from trac.evaluation.api.components import EvaluationManagement
@@ -101,7 +105,7 @@ class MilestoneEvaluation(Component):
     This class provides API to control milestone evaluation.
     """
 
-    implements(IPermissionRequestor)
+    implements(IPermissionRequestor, IRequestHandler, INavigationContributor)
 
     permissions = ('EVAL_MILESTONE', 'EVAL_TEAM_MILESTONE',
                    'MILESTONE_MODIFY_WEIGHT', 'MILESTONE_MODIFY_RATING')
@@ -115,6 +119,38 @@ class MilestoneEvaluation(Component):
         md = self.env.get_sa_metadata()
         self.ev_tab  = md.tables['team_milestone_evaluation']
         self.res_tab = md.tables['team_milestone_evaluation_results']
+
+    # INavigationContributor methods
+
+    def get_active_navigation_item(self, req):
+        return 'milestones_eval'
+
+    def get_navigation_items(self, req):
+        if 'EVAL_VIEW' not in req.perm:
+            return
+        if 'ROADMAP_VIEW' not in req.perm:
+            return
+        yield ('mainnav', 'milestones_eval',
+               tag.a(_('Milestones evaluation'), href=req.href.meval()))
+
+    # IRequestHandler
+    
+    def match_request(self, req):
+        return req.path_info == '/meval'
+
+    def process_request(self, req):
+        req.perm.require('EVAL_VIEW')
+        req.perm.require('ROADMAP_VIEW')
+
+        project_id = req.project
+        milestones = Milestone.select(self.env, project_id, include_completed=True)
+        total_weight = Milestone.get_total_weight(self.env, project_id)
+        data = {
+            'milestones': milestones,
+            'total_weight': total_weight,
+        }
+        add_stylesheet(req, 'common/css/roadmap.css')
+        return 'milestone_list.html', data, None
 
     # IPermissionRequestor
 

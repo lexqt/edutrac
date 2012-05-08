@@ -135,7 +135,7 @@
         <form py:if="eval_view and 'EVAL_TEAM_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalteamwork">
           <div>
             <input type="hidden" name="action" value="teameval" />
-            <input type="submit" value="${_('Evaluate teamwork')}" />
+            <input type="submit" value="${_('Evaluate teamwork / View results')}" />
           </div>
         </form>
         <form py:if="eval_view and 'EVAL_MILESTONE' in perm(milestone.resource)" method="get" action="" id="evalteammanage">

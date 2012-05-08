@@ -806,9 +806,8 @@ msgid ""
 "Role %(role)s required to access %(admin_area)s. You may %(change_role)s and "
 "try to access admin page again."
 msgstr ""
-"Для доступа к %(admin_area)s требуется роль %(role)s. Вы можете %"
-"(change_role)s и "
-"попробовать обратиться к административной странице снова."
+"Для доступа к %(admin_area)s требуется роль %(role)s. Вы можете "
+"%(change_role)s и попробовать обратиться к административной странице снова."
 
 #: trac/admin/web_ui.py:173
 #, python-format
@@ -1475,7 +1474,14 @@ msgstr "Вес"
 msgid "Rating"
 msgstr "Рейтинг"
 
-#: trac/evaluation/milestone.py:149 trac/evaluation/milestone.py:211
+#: trac/evaluation/milestone.py:134
+#: trac/evaluation/templates/milestone_list.html:10
+#: trac/evaluation/templates/milestone_list.html:15
+#| msgid "Milestone evaluation data updated"
+msgid "Milestones evaluation"
+msgstr "Оценивание этапов"
+
+#: trac/evaluation/milestone.py:186 trac/evaluation/milestone.py:233
 msgid "Back to milestone view"
 msgstr "Вернуться к просмотру этапа"
 
@@ -1497,8 +1503,8 @@ msgid ""
 "Your results have been approved already. If you want to edit them contact "
 "your manager to disapprove them temporarily."
 msgstr ""
-"Ваши результаты уже были утверждены. Если Вы хотите изменить их, "
-"свяжитесь с Вашим менеджером, чтобы временно отменить утверждение."
+"Ваши результаты уже были утверждены. Если Вы хотите изменить их, свяжитесь с "
+"Вашим менеджером, чтобы временно отменить утверждение."
 
 #: trac/evaluation/milestone.py:274
 msgid "User must be specified"
@@ -1720,6 +1726,74 @@ msgstr "Переменные модели оценивания"
 msgid "You may consult the values of the following evaluation model variables:"
 msgstr ""
 "Вы можете принять в расчет значения следующих переменных модели оценивания:"
+
+#: trac/evaluation/templates/milestone_list.html:21
+#: trac/evaluation/templates/show_var.html:36
+#: trac/ticket/templates/milestone_view.html:25
+#: trac/ticket/templates/roadmap.html:38
+msgid "Milestone:"
+msgstr "Этап:"
+
+#: trac/evaluation/templates/milestone_list.html:23
+#: trac/ticket/templates/roadmap.html:40
+msgid "[ rating:"
+msgstr "[ рейтинг:"
+
+#: trac/evaluation/templates/milestone_list.html:24
+#: trac/ticket/templates/milestone_view.html:27
+#: trac/ticket/templates/roadmap.html:41
+msgid "Approved milestone"
+msgstr "Утвержденный этап"
+
+#: trac/evaluation/templates/milestone_list.html:27
+#: trac/ticket/templates/milestone_view.html:71
+#: trac/ticket/templates/roadmap.html:44
+msgid "Weight:"
+msgstr "Вес:"
+
+#: trac/evaluation/templates/milestone_list.html:34
+#: trac/ticket/templates/milestone_view.html:82
+#: trac/ticket/templates/roadmap.html:51
+#, python-format
+msgid "Completed %(duration)s ago (%(date)s)"
+msgstr "Завершён %(duration)s назад (%(date)s)"
+
+#: trac/evaluation/templates/milestone_list.html:39
+#: trac/ticket/templates/milestone_view.html:87
+#: trac/ticket/templates/milestone_view.html:93
+#: trac/ticket/templates/roadmap.html:56
+#, python-format
+msgid "[1:%(duration)s late] (%(date)s)"
+msgstr "[1:Опоздание на %(duration)s] (%(date)s)"
+
+#: trac/evaluation/templates/milestone_list.html:44
+#: trac/ticket/templates/milestone_view.html:98
+#: trac/ticket/templates/roadmap.html:61
+#, python-format
+msgid "Due in %(duration)s (%(date)s)"
+msgstr "Осталось %(duration)s (%(date)s)"
+
+#: trac/evaluation/templates/milestone_list.html:48
+#: trac/ticket/templates/milestone_view.html:102
+#: trac/ticket/templates/roadmap.html:65
+msgid "No date set"
+msgstr "Дата не установлена"
+
+#: trac/evaluation/templates/milestone_list.html:63
+#: trac/ticket/templates/milestone_view.html:138
+#| msgid "Evaluate teamwork"
+msgid "Evaluate teamwork / View results"
+msgstr "Оценить командную работу / Результаты"
+
+#: trac/evaluation/templates/milestone_list.html:71
+#: trac/ticket/templates/milestone_view.html:145
+msgid "View team evaluation results"
+msgstr "Результаты взаимного оценивания"
+
+#: trac/evaluation/templates/milestone_list.html:78
+#: trac/ticket/templates/milestone_view.html:151
+msgid "Evaluate milestone"
+msgstr "Оценить этап"
 
 #: trac/evaluation/templates/milestone_team_eval.html:10
 msgid "Teamwork evaluation"
@@ -4213,11 +4287,6 @@ msgstr ""
 msgid "Edit this milestone"
 msgstr "Редактировать этап"
 
-#: trac/ticket/templates/milestone_view.html:27
-#: trac/ticket/templates/roadmap.html:41
-msgid "Approved milestone"
-msgstr "Утвержденный этап"
-
 #: trac/ticket/templates/milestone_view.html:33
 #, python-format
 msgid "%(stat_title)s by"
@@ -4227,38 +4296,9 @@ msgstr "%(stat_title)s по"
 msgid "(none)"
 msgstr "(нет)"
 
-#: trac/ticket/templates/milestone_view.html:71
-#: trac/ticket/templates/roadmap.html:44
-msgid "Weight:"
-msgstr "Вес:"
-
 #: trac/ticket/templates/milestone_view.html:77
 msgid "Rating:"
 msgstr "Рейтинг:"
-
-#: trac/ticket/templates/milestone_view.html:82
-#: trac/ticket/templates/roadmap.html:51
-#, python-format
-msgid "Completed %(duration)s ago (%(date)s)"
-msgstr "Завершён %(duration)s назад (%(date)s)"
-
-#: trac/ticket/templates/milestone_view.html:87
-#: trac/ticket/templates/milestone_view.html:93
-#: trac/ticket/templates/roadmap.html:56
-#, python-format
-msgid "[1:%(duration)s late] (%(date)s)"
-msgstr "[1:Опоздание на %(duration)s] (%(date)s)"
-
-#: trac/ticket/templates/milestone_view.html:98
-#: trac/ticket/templates/roadmap.html:61
-#, python-format
-msgid "Due in %(duration)s (%(date)s)"
-msgstr "Осталось %(duration)s (%(date)s)"
-
-#: trac/ticket/templates/milestone_view.html:102
-#: trac/ticket/templates/roadmap.html:65
-msgid "No date set"
-msgstr "Дата не установлена"
 
 #: trac/ticket/templates/milestone_view.html:120
 msgid "Edit milestone"
@@ -4271,18 +4311,6 @@ msgstr "Отменить утверждение этапа"
 #: trac/ticket/templates/milestone_view.html:132
 msgid "Approve milestone"
 msgstr "Утвердить этап"
-
-#: trac/ticket/templates/milestone_view.html:138
-msgid "Evaluate teamwork"
-msgstr "Оценить командную работу"
-
-#: trac/ticket/templates/milestone_view.html:145
-msgid "View team evaluation results"
-msgstr "Результаты взаимного оценивания"
-
-#: trac/ticket/templates/milestone_view.html:151
-msgid "Evaluate milestone"
-msgstr "Оценить этап"
 
 #: trac/ticket/templates/query.html:31
 #: trac/ticket/templates/query_results.html:28
@@ -4569,10 +4597,6 @@ msgstr "Скрывать завершенные этапы"
 #: trac/ticket/templates/roadmap.html:27
 msgid "Hide milestones with no due date"
 msgstr "Скрыть этапы без срока"
-
-#: trac/ticket/templates/roadmap.html:40
-msgid "[ rating:"
-msgstr "[ рейтинг:"
 
 #: trac/ticket/templates/roadmap.html:84
 msgid "Add new milestone"
