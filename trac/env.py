@@ -434,10 +434,14 @@ class Environment(Component, ComponentManager):
         os.mkdir(os.path.join(self.path, 'conf', 'project'))
         os.mkdir(os.path.join(self.path, 'conf', 'syllabus'))
         create_file(os.path.join(self.path, 'conf', 'trac.ini.sample'))
+        create_file(os.path.join(self.path, 'conf', 'syllabus', 'id0.ini'))
         config = Configuration(os.path.join(self.path, 'conf', 'trac.ini'))
+        gs_config = Configuration(os.path.join(self.path, 'conf', 'syllabus', 'id0.ini'))
         for section, name, value in options:
             config.set(section, name, value)
         config.save()
+        gs_config['inherit'].set('file', '../trac.ini')
+        gs_config.save()
         self.setup_config()
         if not any((section, option) == ('inherit', 'file')
                    for section, option, value in options):

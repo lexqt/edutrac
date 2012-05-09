@@ -37,9 +37,13 @@ class EvaluationManagement(Component):
                         raise Exception(_('Syllabus evaluation package must contain '
                                           'class Model that is a subclass of EvaluationModel'))
                     model = p.Model(syllabus_id)
+                except ImportError:
+                    raise TracError(_('Can not import evaluation package "%(pkg_name)s" specified '
+                                      ' in syllabus configuration', pkg_name=pkg),
+                                    _('Error occurred while loading evaluation model'))
                 except Exception, e:
-                    raise TracError(exception_to_unicode(e, traceback=True),
-                                    N_('Error occurred while loading evaluation model'))
+                    raise TracError(exception_to_unicode(e,),
+                                    _('Error occurred while loading evaluation model'))
                 self.env.component_activated(model)
                 model.sconfig = model.configs.syllabus(syllabus_id)
                 self._models[syllabus_id] = model

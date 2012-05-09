@@ -20,7 +20,7 @@
           <div class="info">
             <h2><a href="${url_of(milestone.resource)}">
               Milestone: <em>${milestone.name}</em>
-              <span py:if="eval_view" class="rating">[ rating: ${milestone.rating}% ]</span>
+              <span class="rating">[ rating: ${milestone.rating}% ]</span>
               <span py:if="milestone.approved" class="approved" title="${_('Approved milestone')}"></span>
             </a></h2>
             <py:if test="total_weight">

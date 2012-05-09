@@ -58,7 +58,7 @@ from trac.project.api import ProjectManagement
 from trac.user.sys import UserSystem
 
 
-default_tracker = 'http://trac.edgewall.org'
+default_tracker = 'https://github.com/lexqt/edutrac/issues'
 """This URL is used for semi-automatic bug reports (see
    `send_internal_error`).  Please modify it to point to your own
    Trac instance if you distribute a patched version of Trac.

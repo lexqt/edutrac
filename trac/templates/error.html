@@ -98,7 +98,7 @@ ${url and description_en or description}</textarea>
               <pre>${req.method}: ${req.path_info}</pre>
             </py:when>
             <py:otherwise>
-              <form class="newticket" method="get" action="${project.admin_href.newticket()}#">
+              <form py:if="project.admin_href" class="newticket" method="get" action="${project.admin_href.newticket()}#">
                 <p>This is probably a local installation issue.
                   <py:if test="project.admin_href and project.admin_trac_url != '.'"><i18n:msg params="create">
                     You should ${create_ticket()} a ticket at the admin Trac to report
@@ -106,7 +106,7 @@ ${url and description_en or description}</textarea>
                   </i18n:msg></py:if>
                 </p>
               </form>
-              <h2>Found a bug in Trac?</h2>
+              <h2>Found a bug in EduTrac?</h2>
               <p>If you think this should work and you can reproduce the problem,
               you should consider creating a bug report.</p>
               <p py:if="faulty_plugins" py:choose="len(faulty_plugins)">
@@ -119,6 +119,7 @@ ${url and description_en or description}</textarea>
                 </py:otherwise>
                 <strong>Please report this issue to the plugin maintainer.</strong>
               </p>
+              <!--!
               <p i18n:msg="" py:with="q = quote_plus(message[:80])">Before you do that, though, please first try
                 <strong><a href="${tracker}/search?ticket=yes&amp;noquickjump=1&amp;q=$q">searching</a>
                 for similar issues</strong>, as it is quite likely that this problem
@@ -131,6 +132,7 @@ ${url and description_en or description}</textarea>
                 <p i18n:msg="create">Otherwise, please ${create_ticket(tracker)} a new bug report
                 describing the problem and explain how to reproduce it.</p>
               </form>
+              -->
               <py:if test="traceback">
                 <h2>Python Traceback</h2>
                 <div id="traceback">

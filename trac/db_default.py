@@ -55,6 +55,7 @@ schema = [
     Table('student_groups', key=('id',))[
         Column('id', auto_increment=True),
         Column('name', type='varchar (255)', null=False),
+        Column('description', type='text', default="''"),
     ],
     Table('metagroups', key=('id',))[
         Column('id', auto_increment=True),
@@ -70,16 +71,17 @@ schema = [
     ],
     Table('teamgroup_rel', key=('studgroup_id', 'team_id'))[
         Column('studgroup_id', type='int', null=False),
-        Column('team_id', type='int', null=False),
+        Column('team_id', type='int', null=False, unique=True),
         ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
         ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
     ],
     Table('groupmeta_rel', key=('metagroup_id', 'studgroup_id'))[
         Column('metagroup_id', type='int', null=False),
-        Column('studgroup_id', type='int', null=False),
+        Column('studgroup_id', type='int', null=False, unique=True),
         ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
         ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
     ],
+    # TODO: not used, to be deleted?
     Table('team_attributes', key=('gid', 'name'))[
         Column('gid', type='int'),
         Column('name', type='varchar (255)'),
@@ -99,6 +101,7 @@ schema = [
         ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
     ],
+    # TODO: not used, to be deleted?
     Table('project_managers', key=('user_id', 'project_id'))[
         Column('user_id', type='int', null=False),
         Column('project_id', type='int', null=False),
@@ -114,6 +117,7 @@ schema = [
     Table('syllabuses', key=('id',))[
         Column('id', auto_increment=True),
         Column('name', type='varchar (255)', null=False),
+        Column('description', type='text', default="''"),
     ],
     Table('metagroup_syllabus_rel', key=('metagroup_id',))[
         Column('metagroup_id', type='int', null=False),
@@ -134,7 +138,7 @@ schema = [
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
         ForeignKey('username', 'users', 'username', on_delete='CASCADE', on_update='CASCADE'),
     ],
-    Table('syllabus_permissions', key=('permgroup', 'syllabus_id', 'action'))[
+    Table('syllabus_permissions', key=('username', 'syllabus_id', 'action'))[
         Column('username', type='varchar (255)'), # user or permgroup name
         Column('syllabus_id', type='int', null=False),
         Column('action', type='varchar (255)'),
@@ -362,7 +366,7 @@ CREATE OR REPLACE VIEW project_info AS
 SELECT p.id project_id, p.name project_name, p.description as project_description,
        mg.active active, msr.syllabus_id syllabus_id,
        tpr.team_id team_id, tgr.studgroup_id studgroup_id, gmr.metagroup_id metagroup_id
-FROM real_projects p JOIN
+FROM projects p JOIN
 team_project_rel tpr ON p.id=tpr.project_id
 JOIN teamgroup_rel tgr ON tgr.team_id=tpr.team_id
 JOIN groupmeta_rel gmr ON gmr.studgroup_id=tgr.studgroup_id
@@ -696,9 +700,35 @@ col=changetime
 # (table, (column1, column2), ((row1col1, row1col2), (row2col1, row2col2)))
 def get_data(db):
     return (
+            # Default null project, syllabus, etc for global administration
             ('projects',
               ('id', 'name', 'description'),
-                ((0, 'Global', 'Dummy global project record'),)),
+                ((0, 'Global admin project', 'Global project record for administration'),)),
+            ('syllabuses',
+              ('id', 'name', 'description'),
+                ((0, 'Global admin syllabus', 'Global syllabus record for administration'),)),
+            ('metagroups',
+              ('id', 'name', 'year', 'active'),
+                ((0, 'Global admin meagroup', 3000, True),)),
+            ('metagroup_syllabus_rel',
+              ('metagroup_id', 'syllabus_id'),
+                ((0, 0),)),
+            ('student_groups',
+              ('id', 'name', 'description'),
+                ((0, 'Global admin group', 'Global group record for administration'),)),
+            ('groupmeta_rel',
+              ('metagroup_id', 'studgroup_id'),
+                ((0, 0),)),
+            ('teams',
+              ('id', 'name'),
+                ((0, 'Global admin team'),)),
+            ('teamgroup_rel',
+              ('studgroup_id', 'team_id'),
+                ((0, 0),)),
+            ('team_project_rel',
+              ('team_id', 'project_id'),
+                ((0, 0),)),
+
             ('users',
               ('id', 'username'),
                 ((0, 'trac'),)),

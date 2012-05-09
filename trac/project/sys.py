@@ -222,7 +222,7 @@ class PostloginModule(Component):
                     prev_project_id = s.get('project')
                     data['prev_project'] = int(prev_project_id) if prev_project_id is not None else None
                     cur_pid = req.data.get('project_id')
-                    if not cur_pid:
+                    if cur_pid is None:
                         return
                     data.update({
                         'current_project': cur_pid,

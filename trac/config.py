@@ -168,15 +168,18 @@ class Configuration(object):
         """
         self[section].set(key, value)
 
-    def defaults(self, compmgr=None):
+    def defaults(self, compmgr=None, only_switcher=False):
         """Returns a dictionary of the default configuration values
         (''since 0.10'').
         
         If `compmgr` is specified, return only options declared in components
         that are enabled in the given `ComponentManager`.
+        If `only_switcher` is True, return only options with switchers.
         """
         defaults = {}
         for (section, key), option in Option.get_registry(compmgr).items():
+            if only_switcher and not option.switcher:
+                continue
             defaults.setdefault(section, {})[key] = option.default
         return defaults
 
@@ -195,16 +198,18 @@ class Configuration(object):
         """Remove the specified option."""
         self[section].remove(key)
 
-    def sections(self, compmgr=None, defaults=True):
+    def sections(self, compmgr=None, defaults=True, inherit=True):
         """Return a list of section names.
         
         If `compmgr` is specified, only the section names corresponding to
         options declared in components that are enabled in the given
         `ComponentManager` are returned.
+        If `inherit` is True, include sections inherited from parents.
         """
         sections = set([to_unicode(s) for s in self.parser.sections()])
-        for parent in self.parents:
-            sections.update(parent.sections(compmgr, defaults=False))
+        if inherit:
+            for parent in self.parents:
+                sections.update(parent.sections(compmgr, defaults=False))
         if defaults:
             sections.update(self.defaults(compmgr))
         return sorted(sections)
@@ -311,13 +316,13 @@ class Configuration(object):
            and os.access(self.filename, os.W_OK):
             os.utime(self.filename, None)
 
-    def set_defaults(self, compmgr=None):
+    def set_defaults(self, compmgr=None, only_switcher=False):
         """Retrieve all default values and store them explicitly in the
         configuration, so that they can be saved to file.
         
         Values already set in the configuration are not overridden.
         """
-        for section, default_options in self.defaults(compmgr).items():
+        for section, default_options in self.defaults(compmgr, only_switcher).items():
             for name, value in default_options.items():
                 if not self.parser.has_option(_to_utf8(section),
                                               _to_utf8(name)):

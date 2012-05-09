@@ -116,7 +116,7 @@ class ProjectManagement(Component):
         elif role == UserRole.ADMIN:
             query = '''
                 SELECT id project_id, name project_name
-                FROM real_projects
+                FROM projects
             '''
         else:
             return ()
@@ -136,7 +136,7 @@ class ProjectManagement(Component):
         elif role == UserRole.MANAGER:
             table = 'manager_projects'
         else:
-            return ()
+            return []
         q = '''
             SELECT username
             FROM {table}
@@ -146,7 +146,7 @@ class ProjectManagement(Component):
         cursor.execute(q, (pid,))
         users = cursor.fetchall()
         if not users:
-            return ()
+            return []
         users = [u[0] for u in users]
         users.sort()
         return users

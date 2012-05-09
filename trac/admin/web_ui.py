@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #
+# Copyright (C) 2012 Aleksey A. Porfirov
 # Copyright (C) 2005-2009 Edgewall Software
 # Copyright (C) 2005 Jonas Borgström <jonas@edgewall.com>
 # All rights reserved.
@@ -252,7 +253,7 @@ class BasicsAdminPanel(Component):
             'url': self.env.project_url
         }
         Chrome(self.env).add_textarea_grips(req)
-        return 'admin_basics.html', {'project': data}
+        return 'admin_basics.html', {'environment': data}
 
 
 class LoggingAdminPanel(Component):

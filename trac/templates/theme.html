@@ -22,7 +22,7 @@
           height="${chrome.logo.height or None}" width="${chrome.logo.width or None}" /></a>
         <div py:otherwise="" class="header-title">
           <h1><a href="${href()}">${project.name}</a></h1>
-          <py:if test="project.id">
+          <py:if test="'id' in project">
             <a class="header-mini" href="${project.url}" title="Permanent project URL">(#${project.id})</a>
             <span class="header-mini"><a href="${project.switch_url}">Change project</a></span>
             <py:if test="project.id != project.id_session">

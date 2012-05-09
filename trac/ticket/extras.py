@@ -18,7 +18,9 @@ class ExtraTicketControl(Component):
                         which owner is really working on""", switcher=True)
 
     # Project options
-    max_busy = IntOption('ticket-workflow-config', 'max_busy', 100, switcher=True)
+    max_busy = IntOption('ticket-workflow-config', 'max_busy', 100,
+                        doc='''Max number of tickets that one user can has in
+                        busy statuses''', switcher=True)
 
     implements(ITicketManipulator)
 

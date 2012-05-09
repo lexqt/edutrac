@@ -42,7 +42,7 @@ class BoolInt(validators.Bool):
 validators.OneOf._messages['notIn'] = _('Value must be one of: %(items)s (not %(value)s)')
 
 
-def make_plain_errors_list(errs, labels={}):
+def make_plain_errors_list(errs, labels=None):
     if errs is None:
         return []
     if isinstance(errs, basestring):
@@ -56,7 +56,7 @@ def make_plain_errors_list(errs, labels={}):
         errs_list = []
         for k, v in errs.iteritems():
             if isinstance(v, basestring):
-                if k in labels:
+                if labels and k in labels:
                     k = labels[k]
                 errs_list.append(u'"{0}": {1}'.format(k, v))
             else:
@@ -66,3 +66,27 @@ def make_plain_errors_list(errs, labels={}):
         return process_list(errs)
     if isinstance(errs, dict):
         return process_dict(errs)
+
+
+def process_form(data, validator, label_map=None):
+    '''Process `data` dict with `validator` and
+    return tuple:
+     * cleaned data dict
+     * validation errors list or None
+
+    `label_map`: map field name -> field label
+
+    '''
+    errs = None
+    try:
+        cleaned_data = validator.to_python(data)
+    except formencode.Invalid, e:
+        cleaned_data = {}
+        errs = e.unpack_errors()
+        if label_map:
+            labels = {k: _(v) for k,v in label_map.iteritems()}
+        else:
+            labels = None
+        errs = make_plain_errors_list(errs, labels)
+
+    return cleaned_data, errs
