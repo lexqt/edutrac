@@ -799,7 +799,8 @@ class MilestoneModule(Component):
             default_due += timedelta(days=1)
 
         ticket_fields = TicketSystem(self.env).get_ticket_fields(milestone.pid)
-        allow_retarget_to_none = ticket_fields['milestone']['optional']
+        allow_retarget_to_none = ticket_fields['milestone']['optional'] \
+                                if 'milestone' in ticket_fields else True
         data = {
             'milestone': milestone,
             'datetime_hint': get_datetime_format_hint(),
