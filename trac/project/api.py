@@ -8,6 +8,10 @@ from trac.user.api import UserManagement, GroupLevel, UserRole
 from trac.config import ComponentDisabled
 from trac.util.translation import _, N_
 
+# init sqlalchemy models
+from trac.project.model import *
+from trac.user.model import Metagroup, Group
+
 
 
 class ProjectNotSet(TracError):
@@ -65,8 +69,8 @@ class ProjectManagement(Component):
         # check for developer
         query = '''
             SELECT 1
-            FROM membership
-            WHERE username=%s AND team_id IS NOT NULL
+            FROM developer_projects
+            WHERE username=%s
             LIMIT 1
         '''
         cursor.execute(query, (username,))
@@ -193,7 +197,6 @@ class ProjectManagement(Component):
         pid = int(pid)
         if pid == GLOBAL_PID:
             return True
-#        if allow_multi and 'MULTIPROJECT_ACTION' in req.perm:
         if allow_multi:
             check = pid in req.user_projects
         else:
@@ -215,8 +218,9 @@ class ProjectManagement(Component):
         return s
 
     def get_group_syllabus(self, gid, fail_on_none=True):
-        meta_gid = UserManagement(self.env).get_parent_group(
-                            gid, group_lvl=GroupLevel.STUDGROUP, parent_lvl=GroupLevel.METAGROUP)
+        session = self.env.get_sa_session()
+        meta_gid = session.query(Metagroup.id).outerjoin(Group, Metagroup.groups).\
+                           filter(Group.id==gid).scalar()
         if fail_on_none and meta_gid is None:
             raise TracError(_('Group #%(gid)s is not associated with any metagroup', gid=gid))
         return self.get_metagroup_syllabus(meta_gid, fail_on_none)
@@ -253,40 +257,36 @@ class ProjectManagement(Component):
             else:
                 return None
         from trac.db.api import get_column_names
-#        names  = [r[0] for r in cursor.description]
         names  = get_column_names(cursor)
         return dict(zip(names, values))
 
     def get_syllabus_projects(self, syllabus_id, with_names=False):
         '''Return all projects connected with specified syllabus'''
-        db = self.env.get_read_db()
-        cursor = db.cursor()
-        query = '''
-            SELECT project_id{0}
-            FROM project_info
-            WHERE syllabus_id=%s
-            ORDER BY project_id
-        '''
-        query = query.format(', project_name' if with_names else '')
-        cursor.execute(query, (syllabus_id,))
-        rows = cursor.fetchall()
-        if with_names:
-            return [(r[0], r[1]) for r in rows]
-        else:
-            return [r[0] for r in rows]
+        return self._get_projects('syllabus_id', syllabus_id, with_names)
+
+    def get_metagroup_projects(self, gid, with_names=False):
+        '''Return all projects connected with specified syllabus'''
+        return self._get_projects('metagroup_id', gid, with_names)
 
     def get_group_projects(self, gid, with_names=False):
         '''Return all projects connected with specified group'''
+        return self._get_projects('studgroup_id', gid, with_names)
+
+    def _get_projects(self, column, id, with_names=False):
+        '''Return all projects from `project_info` view
+        with constraint `column`=`id`.
+        '''
         db = self.env.get_read_db()
         cursor = db.cursor()
         query = '''
             SELECT project_id{0}
             FROM project_info
-            WHERE studgroup_id=%s
+            WHERE {1}=%s
             ORDER BY project_id
         '''
-        query = query.format(', project_name' if with_names else '')
-        cursor.execute(query, (gid,))
+        query = query.format(', project_name' if with_names else '',
+                             db.quote(column))
+        cursor.execute(query, (id,))
         rows = cursor.fetchall()
         if with_names:
             return [(r[0], r[1]) for r in rows]

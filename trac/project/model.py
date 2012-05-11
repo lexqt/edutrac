@@ -1,95 +1,179 @@
 from trac.core import TracError
-from trac.resource import ResourceNotFound
+from trac.config import Configuration
 from trac.util.translation import _
 
+import os
+import os.path
+from trac.util import create_file
 
-def simplify_whitespace(name):
-    """Strip spaces and remove duplicate spaces within names"""
-    if name:
-        return ' '.join(name.split())
-    return name
+from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy.orm import relationship, backref
+from trac.db_sqlalchemy import ModelBase, team_project_rel, metagroup_syllabus_rel
+
+from trac.user.model import Team, Metagroup
+
+
+__all__ = ['Project', 'Syllabus']
 
 
 
-class Project(object):
+class Project(ModelBase):
+    '''Project model class
 
-    def __init__(self, env, id=None, db=None):
-        self.env = env
-        if id:
-            if not db:
-                db = self.env.get_read_db()
-            cursor = db.cursor()
-            cursor.execute("""
-                SELECT name, description FROM projects WHERE id=%s
-                """, (id,))
-            row = cursor.fetchone()
-            if not row:
-                raise ResourceNotFound(_('Project #%(pid)s does not exist.',
-                                         pid=id))
-            self.id = id
-            self.name = row[0] or None
-            self.description = row[1] or ''
-        else:
-            self.id = None
-            self.name = None
-            self.description = None
+    Also provides methods to create/remove project
+    configuration.
 
-    exists = property(lambda self: self.id is not None)
+    '''
+
+    __tablename__ = 'projects'
+
+    # declare fields
+    id          = Column('id', Integer, primary_key=True, autoincrement=True)
+    name        = Column('name', String(255), nullable=False, unique=True)
+    description = Column('description', Text, server_default='')
+
+    # relations
+    team = relationship(Team, secondary=team_project_rel, uselist=False,
+                        backref=backref('project', uselist=False))
 
     @classmethod
     def check_exists(cls, env, pid):
+        '''Check if project `pid` exists. Raise error on false.'''
         pid = int(pid)
         db = env.get_read_db()
         cursor = db.cursor()
         cursor.execute('SELECT 1 FROM projects WHERE id=%s LIMIT 1', (pid,))
-        return bool(cursor.rowcount)
+        if not cursor.rowcount:
+            raise TracError(_("Project #%(id)s doesn't exist", id=pid))
 
-    def delete(self, db=None):
-        """Delete the project."""
-        assert self.exists(self.env, self.id), 'Cannot delete non-existent project'
+    @classmethod
+    def config_path(cls, env, id):
+        return os.path.join(env.path, 'conf', 'project', 'id%s.ini' % id)
 
-        @self.env.with_transaction(db)
-        def do_delete(db):
+    @classmethod
+    def add_config(cls, env, id):
+        '''Add empty project configuration
+        or do nothing if configuration exists'''
+        path = cls.config_path(env, id)
+        if os.path.exists(path):
+            return
+        create_file(path)
+        config = Configuration(path)
+        config.save()
+
+    @classmethod
+    def remove_config(cls, env, id):
+        '''Remove project configuration'''
+        path = cls.config_path(env, id)
+        if os.path.exists(path):
+            os.remove(path)
+
+    @classmethod
+    def revoke_permission(cls, env, id, username, action=None):
+        '''Revoke project permission (or perm group) `action`
+        (or all project permissions if `action` is not specified)
+        for specified project `id` and `username`.'''
+
+        q = '''
+            DELETE FROM project_permissions
+            WHERE project_id=%s AND username=%s {and_action}
+        '''
+        args = [id, username]
+        if action:
+            ext = 'AND action=%s'
+            args.append(action)
+        else:
+            ext = ''
+        @env.with_transaction()
+        def do_revoke(db):
             cursor = db.cursor()
-            self.env.log.info('Deleting project #%s' % self.id)
-            cursor.execute("DELETE FROM projects WHERE id=%s", (self.id,))
-            self.id = None
+            cursor.execute(q.format(and_action=ext), args)
 
-    def insert(self, db=None):
-        """Insert a new project."""
-        assert not self.exists(self.env, self.id), 'Cannot insert existing project'
-        self.name = simplify_whitespace(self.name)
-        if not self.name:
-            raise TracError(_('Invalid project name.'))
+    @classmethod
+    def grant_permission(cls, env, id, username, action):
+        '''Grant project permission (or perm group) `action`
+        for specified project `id` and `username`.
+        Do nothing if user already has specified permission.'''
 
-        @self.env.with_transaction(db)
-        def do_insert(db):
+        args = (id, username, action)
+        @env.with_transaction()
+        def do_revoke(db):
             cursor = db.cursor()
-            self.env.log.debug("Creating new project '%s'" % self.name)
-            cursor.execute("""
-                INSERT INTO projects (name, description)
-                VALUES (%s, %s)
-                RETURNING id
-                """, (self.name, self.description))
-            pid = cursor.fetchone()[0]
-            self.id = pid
+            cursor.execute('''
+                SELECT 1
+                FROM project_permissions
+                WHERE project_id=%s AND username=%s AND action=%s
+                ''', args)
+            if cursor.rowcount:
+                return
+            cursor.execute('''
+                INSERT INTO project_permissions
+                (project_id, username, action)
+                VALUES (%s, %s, %s)
+            ''', args)
 
-    def update(self, db=None):
-        """Update the project.
+    @classmethod
+    def set_permission(cls, env, id, username, action, grant=True):
+        '''Grant or revoke project permission based on `grant`
+        boolean argument.'''
+        if grant:
+            return cls.grant_permission(env, id, username, action)
+        else:
+            return cls.revoke_permission(env, id, username, action)
 
-        The `db` argument is deprecated in favor of `with_transaction()`.
-        """
-        assert self.exists(self.env, self.id), 'Cannot update non-existent project'
-        self.name = simplify_whitespace(self.name)
-        if not self.name:
-            raise TracError(_('Invalid project name.'))
 
-        @self.env.with_transaction(db)
-        def do_update(db):
-            cursor = db.cursor()
-            self.env.log.info('Updating project "%s"' % self.name)
-            cursor.execute("""
-                UPDATE projects SET name=%s, description=%s
-                WHERE id=%s
-                """, (self.name, self.description, self.id))
+
+class Syllabus(ModelBase):
+    '''Syllabus model class
+
+    Also provides methods to create/remove syllabus
+    configuration.
+
+    '''
+
+    __tablename__ = 'syllabuses'
+
+    # declare fields
+    id          = Column('id', Integer, primary_key=True, autoincrement=True)
+    name        = Column('name', String(255), nullable=False)
+    description = Column('description', Text, server_default='')
+
+    # relations
+    metagroups = relationship(Metagroup, secondary=metagroup_syllabus_rel,
+                              backref=backref('syllabus', uselist=False))
+
+    def __init__(self, name, description=''):
+        self.name = name
+        self.description = description
+
+    @classmethod
+    def config_path(cls, env, id):
+        return os.path.join(env.path, 'conf', 'syllabus', 'id%s.ini' % id)
+
+    @classmethod
+    def add_config(cls, env, id):
+        '''Add default syllabus configuration
+        (with global configuration inheritance section)
+        or do nothing if configuration exists.'''
+        path = cls.config_path(env, id)
+        if os.path.exists(path):
+            return
+        create_file(path)
+        config = Configuration(path)
+        cls.set_default_config(env, config)
+        config.save()
+
+    @classmethod
+    def set_default_config(cls, env, config):
+        config['inherit'].set('file', '../trac.ini')
+        config.set_defaults(env, only_switcher=True)
+        from trac.ticket.default_workflow import load_workflow_config_snippet
+        load_workflow_config_snippet(config, 'team-workflow.ini')
+
+    @classmethod
+    def remove_config(cls, env, id):
+        '''Remove syllabus configuration'''
+        path = cls.config_path(env, id)
+        if os.path.exists(path):
+            os.remove(path)
 

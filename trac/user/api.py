@@ -2,6 +2,9 @@ from trac.core import Component, TracError
 
 from trac.util.translation import _
 
+# init sqlalchemy models
+from trac.user.model import *
+
 
 class UnknownGroupLevel(ValueError):
     pass

@@ -222,8 +222,7 @@ class DbRepositoryProvider(Component):
         if not os.path.isabs(dir):
             raise TracError(_("The repository directory must be absolute"))
         project_id = int(project_id)
-        if not Project.check_exists(self.env, project_id):
-            raise TracError(_("Project #%(id)s doesn't exist", id=project_id))
+        Project.check_exists(self.env, project_id)
         if is_default(reponame):
             reponame = ''
         rm = RepositoryManager(self.env)

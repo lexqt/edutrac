@@ -383,6 +383,9 @@ class Environment(Component, ComponentManager):
     def get_sa_connection(self, **kwargs):
         return self.sa_engine.connect(**kwargs)
 
+    def get_sa_session(self, autocommit=True):
+        return self.sa_session_func(self, autocommit)
+
     def shutdown(self, tid=None):
         """Close the environment."""
         RepositoryManager(self).shutdown(tid)
@@ -483,10 +486,11 @@ class Environment(Component, ComponentManager):
 
     def setup_db(self):
         """Do some DB initialisation."""
-        from trac.db.sqlalchemy_integration import engine
+        from trac.db.sqlalchemy_integration import engine, session
         self.sa_engine = engine(self)
         from trac.db_sqlalchemy import metadata
         self.sa_metadata = metadata
+        self.sa_session_func = session
 
     def get_templates_dir(self):
         """Return absolute path to the templates directory."""

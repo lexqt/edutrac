@@ -36,6 +36,10 @@
 # Authors:
 #    Armin Ronacher <armin.ronacher@active-4.com>
 #    Pedro Algarvio <ufs@ufsoft.org>
+#    Aleksey A. Porfirov <lexqt@yandex.ru>
+
+# Some changes to integrate with EduTrac (based on Trac 0.12)
+# (C) 2012 Aleksey A. Porfirov
 
 __version__     = '0.1.2'
 __author__      = 'Armin Ronacher, Pedro Algarvio'
@@ -52,7 +56,7 @@ __description__ = __doc__
 from weakref import WeakKeyDictionary
 from threading import local
 from sqlalchemy import create_engine
-from sqlalchemy.orm import create_session, scoped_session
+from sqlalchemy.orm import create_session, scoped_session, Session
 from sqlalchemy.pool import NullPool
 from sqlalchemy.engine.url import URL
 from trac.db.api import DatabaseManager
@@ -80,7 +84,6 @@ def engine(env):
 
         engine = create_engine(URL(schema), poolclass=DummyPool,
                                creator=connect, echo=echo)
-#        env.sa_engine = engine
         metadata.bind = engine
         if echo:
             # make sqlalchemy log to trac's logger
@@ -89,26 +92,16 @@ def engine(env):
             else:
                 engine.logger = env.log
         _engines[env] = engine
-#    try:
-#        return engine.begin()
-#    except AttributeError:
-#        # Older SQLAlchemy
-#        return engine
     return engine
 
 
-def session(env):
-    try:
-        db_session = create_session(engine(env), autocommit=True)
-        db_session.begin()
-    except TypeError:
-        # Older SqlAlchemy
-        db_session = create_session(engine(env), transactional=True)
-        db_session.add = db_session.save
+def session(env, autocommit=True):
+    db_session = Session(bind=engine(env), autocommit=autocommit)
+#    db_session.begin()
     # Keep session opened for as long as possible by keeping it attached to
     # env; avoids it to be garbage collected since trac explicitly calls gc
     # to avoid memory leaks
-    env.db_session = db_session
+#    env.db_session = db_session  # concurent requests make it useless
     return db_session
 
 __all__ = ['engine', 'session']

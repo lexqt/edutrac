@@ -1,7 +1,8 @@
 import datetime
 
 from sqlalchemy import Table, Column, MetaData, TypeDecorator, ForeignKey, ForeignKeyConstraint,\
-    Integer, BigInteger, String, Text, Boolean, DateTime
+    Integer, BigInteger, SmallInteger, String, Text, Boolean, DateTime
+from sqlalchemy.ext.declarative import declarative_base
 
 from trac.util.datefmt import from_utimestamp, to_utimestamp, utc
 
@@ -48,18 +49,45 @@ class IntegerUTimestamp(TypeDecorator):
 
 
 metadata = MetaData()
+ModelBase = declarative_base(metadata=metadata)
 
-users = Table('users', metadata,
-    Column('id', Integer, primary_key=True, autoincrement=True),
-    Column('username', String(255), nullable=False, unique=True),
-    Column('password', String(255)),
+
+
+
+groupmeta_rel = Table('groupmeta_rel', metadata,
+    Column('metagroup_id', Integer, ForeignKey('metagroups.id', ondelete='CASCADE'), primary_key=True),
+    Column('studgroup_id', Integer, ForeignKey('student_groups.id', ondelete='CASCADE'), primary_key=True, unique=True),
+)
+teamgroup_rel = Table('teamgroup_rel', metadata,
+    Column('studgroup_id', Integer, ForeignKey('student_groups.id', ondelete='CASCADE'), primary_key=True),
+    Column('team_id',      Integer, ForeignKey('teams.id', ondelete='CASCADE'),          primary_key=True, unique=True),
+)
+team_members = Table('team_members', metadata,
+    Column('user_id', Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    Column('team_id', Integer, ForeignKey('teams.id', ondelete='CASCADE'), primary_key=True),
 )
 
-projects = Table('projects', metadata,
-    Column('id', Integer, primary_key=True, autoincrement=True),
-    Column('name', String(255), nullable=False, unique=True),
-    Column('description', Text, server_default=''),
+
+
+metagroup_syllabus_rel = Table('metagroup_syllabus_rel', metadata,
+    Column('metagroup_id', Integer, ForeignKey('metagroups.id', ondelete='CASCADE'), primary_key=True),
+    Column('syllabus_id',  Integer, ForeignKey('syllabuses.id', ondelete='CASCADE'), primary_key=True),
 )
+team_project_rel = Table('team_project_rel', metadata,
+    Column('team_id',    Integer, ForeignKey('teams.id', ondelete='CASCADE'),    primary_key=True),
+    Column('project_id', Integer, ForeignKey('projects.id', ondelete='CASCADE'), primary_key=True, unique=True),
+)
+
+
+
+project_permissions = Table('project_permissions', metadata,
+    Column('username',   String(255), ForeignKey('users.username', ondelete='CASCADE', onupdate='CASCADE'), primary_key=True),
+    Column('project_id', Integer,     ForeignKey('projects.id', ondelete='CASCADE'), primary_key=True),
+    Column('action',     String(255), primary_key=True),
+)
+
+
+
 
 ticket = Table('ticket', metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),
