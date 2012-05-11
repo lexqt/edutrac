@@ -1,0 +1,94 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:i18n="http://genshi.edgewall.org/i18n">
+  <xi:include href="admin.html"/>
+  <head>
+    <title>Projects</title>
+  </head>
+
+  <body>
+    <h2>Manage Projects</h2>
+
+    <py:choose test="view">
+      <form py:when="'detail'" class="mod" method="post" action="">
+        <fieldset>
+          <legend>Modify Project:</legend>
+          <div class="field">
+            <label>Name:<br/><input type="text" name="name" value="${name}" size="60" /></label>
+          </div>
+          <div class="field">
+            <fieldset class="iefix">
+              <label for="description" i18n:msg="">
+                Description (you may use <a tabindex="42" href="${href.wiki('TranslationRu','WikiFormatting')}">WikiFormatting</a> here):
+              </label>
+              <p>
+                <textarea id="description" name="description" class="wikitext trac-resizable"
+                          rows="6" cols="60" py:content="description"></textarea>
+              </p>
+            </fieldset>
+          </div>
+          <div class="buttons">
+            <input type="submit" name="cancel" value="${_('Cancel')}"/>
+            <input type="submit" name="save" value="${_('Save')}"/>
+          </div>
+        </fieldset>
+        <br/>
+        <fieldset>
+          <legend>Configuration:</legend>
+          <p>
+            You can remove project configuration file. Then default values will be used.
+            File will be created again first time project configuration changes.
+          </p>
+          <div class="buttons">
+            <input type="submit" name="remove_conf" value="${_('Remove configuration')}"/>
+          </div>
+        </fieldset>
+      </form>
+
+      <py:otherwise>
+        <form class="addnew" method="post" action="">
+          <fieldset>
+            <legend>Add Project:</legend>
+            <div class="field">
+              <label>Name:<br/><input type="text" name="name" value="${name}"/></label>
+            </div>
+            <div class="buttons">
+              <input type="submit" name="add" value="${_('Add')}"/>
+            </div>
+          </fieldset>
+        </form>
+
+        <form method="post" action="">
+          <table class="listing">
+            <thead>
+              <tr>
+                <th class="sel">&nbsp;</th>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr py:for="item in items">
+                <td class="sel"><input type="checkbox" name="sel" value="${item.id}"/></td>
+                <td class="id">${item.id}</td>
+                <td class="name">
+                  <a href="${panel_href(item.id)}">${item.name}</a>
+                </td>
+                <td class="description">${wiki_to_oneliner(context, item.description, shorten=True)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="buttons">
+            <input type="submit" name="remove" value="${_('Remove selected items')}"/>
+          </div>
+        </form>
+      </py:otherwise>
+    </py:choose>
+  </body>
+
+</html>

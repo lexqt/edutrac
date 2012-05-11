@@ -1,0 +1,121 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:i18n="http://genshi.edgewall.org/i18n">
+  <xi:include href="admin.html"/>
+  <head>
+    <title>Teams members</title>
+    <style>
+      
+    </style>
+  </head>
+
+  <body>
+
+    <py:choose test="view">
+      <form py:when="'detail'" class="mod" method="post" action="">
+        <h2 i18n:msg="name">Team "${team.name}" members Permission groups</h2>
+        <table class="listing">
+          <thead>
+            <tr>
+              <th>Team member</th>
+              <th>Developer</th>
+              <th>Team Leader</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr py:for="user, developer, teamleader in members">
+              <td>${user.username}</td>
+              <td><input type="checkbox" name="members.${user.id}.developer" value="1"
+                         checked="${developer or None}"/></td>
+              <td><input type="checkbox" name="members.${user.id}.teamleader" value="1"
+                         checked="${teamleader or None}"/></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="buttons">
+          <input type="submit" name="cancel" value="${_('Cancel')}"/>
+          <input type="submit" name="save" value="${_('Save')}"/>
+        </div>
+      </form>
+
+      <py:otherwise>
+        <h2>Manage Teams members</h2>
+
+        <form class="addnew" method="post" action="">
+          <fieldset>
+            <legend>Add User to Team:</legend>
+            <div class="field">
+              <label>User:<br/><input type="text" name="username" /></label>
+            </div>
+            <div class="field">
+              <label>Team:<br/>
+                <select name="team">
+                  <option py:for="id, name in teams" value="${id}">
+                    ${name}
+                  </option>
+                </select>
+              </label>
+            </div>
+            <fieldset>
+              <legend>With permission groups:</legend>
+              <p class="hint">
+                Team must be already connected with project in order to add
+                user to permission groups. You always can do it later by selecting
+                team from the list on the left.
+              </p>
+              <label>
+                <input type="checkbox" name="permgroups.developer" value="1"/> Developer
+              </label>
+              <br/>
+              <label>
+                <input type="checkbox" name="permgroups.teamleader" value="1"/> Team Leader
+              </label>
+            </fieldset>
+            <div class="buttons">
+              <input type="submit" name="add" value="${_('Add')}"/>
+            </div>
+          </fieldset>
+        </form>
+
+        <form method="post" action="">
+          <table class="listing">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Team</th>
+                <th>Team members</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr py:for="team, items in groupby(members, key=lambda r: r[0])">
+                <td class="id">${team.id}</td>
+                <td class="name">
+                  <a href="${panel_href(team.id)}">${team.name}</a>
+                </td>
+                <td class="members">
+                  <div py:for="team, user_id, username in items" class="member">
+                    <input type="checkbox"
+                           name="${'team.%s.members'%team.id}" value="${user_id}"/>
+                    ${user_fullname(username, with_username=True)}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="buttons">
+            <input type="submit" name="remove" value="${_('Remove selected users from teams')}"/>
+            <p class="hint">
+              Granted project permissions (if there is connection between team and project)
+              will be revoked as well.
+            </p>
+          </div>
+        </form>
+      </py:otherwise>
+    </py:choose>
+  </body>
+
+</html>

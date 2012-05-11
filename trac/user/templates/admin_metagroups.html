@@ -1,0 +1,83 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:i18n="http://genshi.edgewall.org/i18n">
+  <xi:include href="admin.html"/>
+  <head>
+    <title>Metagroups</title>
+  </head>
+
+  <body>
+    <h2>Manage Metagroups</h2>
+
+    <py:choose test="view">
+      <form py:when="'detail'" class="mod" method="post" action="">
+        <fieldset>
+          <legend>Modify Metagroup:</legend>
+          <div class="field">
+            <label>Name:<br/><input type="text" name="name" value="${name}" size="60" /></label>
+          </div>
+          <div class="field">
+            <label>Year:<br/><input type="text" name="year" value="${year}" size="4" /></label>
+          </div>
+          <div class="field">
+            <label><input type="checkbox" name="active" value="1" checked="${active or None}" />Active metagroup</label>
+          </div>
+          <div class="buttons">
+            <input type="submit" name="cancel" value="${_('Cancel')}"/>
+            <input type="submit" name="save" value="${_('Save')}"/>
+          </div>
+        </fieldset>
+      </form>
+
+      <py:otherwise>
+        <form class="addnew" method="post" action="">
+          <fieldset>
+            <legend>Add Metagroup:</legend>
+            <div class="field">
+              <label>Name:<br/><input type="text" name="name" value="${name}"/></label>
+            </div>
+            <div class="field">
+              <label>Year:<br/><input type="text" name="year" value="${year}" size="4" /></label>
+            </div>
+            <div class="buttons">
+              <input type="submit" name="add" value="${_('Add')}"/>
+            </div>
+          </fieldset>
+        </form>
+
+        <form method="post" action="">
+          <table class="listing">
+            <thead>
+              <tr>
+                <th class="sel">&nbsp;</th>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Year</th>
+                <th>Active metagroup</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr py:for="item in items">
+                <td class="sel"><input type="checkbox" name="sel" value="${item.id}"/></td>
+                <td class="id">${item.id}</td>
+                <td class="name">
+                  <a href="${panel_href(item.id)}">${item.name}</a>
+                </td>
+                <td class="year">${item.year}</td>
+                <td class="active"><input type="checkbox" disabled="disabled" checked="${item.active or None}" /></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="buttons">
+            <input type="submit" name="remove" value="${_('Remove selected items')}"/>
+          </div>
+        </form>
+      </py:otherwise>
+    </py:choose>
+  </body>
+
+</html>

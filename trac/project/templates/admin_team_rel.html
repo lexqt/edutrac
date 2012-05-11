@@ -1,0 +1,79 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:i18n="http://genshi.edgewall.org/i18n">
+  <xi:include href="admin.html"/>
+  <head>
+    <title>Team–Project connections</title>
+  </head>
+
+  <body>
+    <h2>Manage Team–Project connections</h2>
+
+    <py:choose test="view">
+      <form py:when="'detail'" class="mod" method="post" action="">
+        <fieldset>
+          <legend>Connect Team with Project:</legend>
+          <div class="field">
+            <p><strong>Team:</strong> ${team.name}</p>
+          </div>
+          <div class="field">
+            <label>Project:
+              <select name="linked_project">
+                <option value="">(No project)</option>
+                <option py:for="p in projects" selected="${p.id==project_id or None}" value="${p.id}">
+                  ${p.name}
+                </option>
+              </select>
+            </label>
+          </div>
+          <div class="buttons">
+            <input type="submit" name="cancel" value="${_('Cancel')}"/>
+            <input type="submit" name="save" value="${_('Save')}"/>
+          </div>
+        </fieldset>
+      </form>
+
+      <py:otherwise>
+
+        <table class="listing">
+          <thead>
+            <tr>
+              <th colspan="2">Team</th>
+              <th colspan="2">Project</th>
+            </tr>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>ID</th>
+              <th>Name</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr py:for="team, project in items">
+              <td class="id">${team.id}</td>
+              <td class="name">
+                <a href="${panel_href(team.id)}">${team.name}</a>
+              </td>
+              <py:choose test="project is not None">
+                <py:when test="True">
+                  <td class="id">${project.id}</td>
+                  <td class="name">
+                    <a href="${href.admin('projects', 'projects', project.id)}"
+                      title="${_('Edit project')}">${project.name}</a>
+                  </td>
+                </py:when>
+                <td py:otherwise="" colspan="2">(No project)</td>
+              </py:choose>
+            </tr>
+          </tbody>
+        </table>
+
+      </py:otherwise>
+    </py:choose>
+  </body>
+
+</html>

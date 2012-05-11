@@ -1,0 +1,88 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:i18n="http://genshi.edgewall.org/i18n">
+  <xi:include href="admin.html"/>
+  <head>
+    <title>Teams</title>
+  </head>
+
+  <body>
+    <h2>Manage Teams</h2>
+
+    <py:choose test="view">
+      <form py:when="'detail'" class="mod" method="post" action="">
+        <fieldset>
+          <legend>Modify Team:</legend>
+          <div class="field">
+            <label>Name:<br/><input type="text" name="name" value="${name}" size="60" /></label>
+          </div>
+          <div class="field">
+            <label>Group:<br/>
+              <select name="group">
+                <option value="">(No group)</option>
+                <option py:for="id, name in groups" selected="${id==group_id or None}" value="${id}">
+                  ${name}
+                </option>
+              </select>
+            </label>
+          </div>
+          <div class="buttons">
+            <input type="submit" name="cancel" value="${_('Cancel')}"/>
+            <input type="submit" name="save" value="${_('Save')}"/>
+          </div>
+        </fieldset>
+      </form>
+
+      <py:otherwise>
+        <form class="addnew" method="post" action="">
+          <fieldset>
+            <legend>Add Team:</legend>
+            <div class="field">
+              <label>Name:<br/><input type="text" name="name" value="${name}"/></label>
+            </div>
+            <div class="buttons">
+              <input type="submit" name="add" value="${_('Add')}"/>
+            </div>
+          </fieldset>
+        </form>
+
+        <form method="post" action="">
+          <table class="listing">
+            <thead>
+              <tr>
+                <th class="sel">&nbsp;</th>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Group</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr py:for="team, group_id, group_name in items">
+                <td class="sel"><input type="checkbox" name="sel" value="${team.id}"/></td>
+                <td class="id">${team.id}</td>
+                <td class="name">
+                  <a href="${panel_href(team.id)}">${team.name}</a>
+                </td>
+                <py:choose test="group_id is not None">
+                  <td py:when="True" class="name">
+                    <a href="${href.admin('groups', 'groups', group_id)}"
+                       title="${_('Edit group')}">${group_name}</a>
+                  </td>
+                  <td py:otherwise="">(No group)</td>
+                </py:choose>
+              </tr>
+            </tbody>
+          </table>
+          <div class="buttons">
+            <input type="submit" name="remove" value="${_('Remove selected items')}"/>
+          </div>
+        </form>
+      </py:otherwise>
+    </py:choose>
+  </body>
+
+</html>

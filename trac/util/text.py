@@ -507,6 +507,12 @@ def normalize_whitespace(text, to_space=u'\u00a0', remove=u'\u200b'):
         text = text.replace(each, '')
     return text
 
+def simplify_whitespace(name):
+    """Strip spaces and remove duplicate spaces within string"""
+    if name:
+        return ' '.join(name.split())
+    return name
+
 # -- Conversion
 
 def pretty_size(size, format='%.1f'):
