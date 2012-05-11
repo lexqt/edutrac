@@ -4,6 +4,7 @@
 # Copyright (C) 2006 Alec Thomas
 # Copyright (C) 2007 Eli Carter
 # Copyright (C) 2007 Christian Boos <cboos@neuf.fr>
+# Copyright (C) 2012 Aleksey A. Porfirov <lexqt@yandex.ru>
 # All rights reserved.
 #
 # This software is licensed as described in the file COPYING, which
@@ -88,14 +89,25 @@ def get_workflow_config(config):
     return actions
 
 def load_workflow_config_snippet(config, filename):
-    """Loads the ticket-workflow section from the given file (expected to be in
-    the 'workflows' tree) into the provided config.
+    """Loads the ticket workflow sections from the given file
+    ('ticket-workflow-config', 'ticket-workflow', 'milestone-groups')
+    into the provided config, removing existing 'ticket-workflow' and
+    'milestone-groups' sections from `config` if they are presented
+    in the given file.
     """
     filename = pkg_resources.resource_filename('trac.ticket',
                     'workflows/%s' % filename)
     new_config = Configuration(filename)
-    for name, value in new_config.options('ticket-workflow'):
-        config.set('ticket-workflow', name, value)
+    sections = ('ticket-workflow-config', 'ticket-workflow', 'milestone-groups')
+    to_del   = ('ticket-workflow', 'milestone-groups')
+    for section_del in to_del:
+        if section_del in new_config:
+            s = config[section_del]
+            for opt in s.iterate(defaults=False, inherit=False):
+                s.remove(opt)
+    for section in sections:
+        for name, value in new_config.options(section):
+            config.set(section, name, value)
 
 
 class IValidUserProvider(Interface):
