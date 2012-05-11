@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #
+# Copyright (C) 2012 Aleksey A. Porfirov
 # Copyright (C)2005-2009 Edgewall Software
 # Copyright (C) 2005 Christopher Lenz <cmlenz@gmx.de>
 # All rights reserved.
@@ -18,7 +19,7 @@ import os.path
 import time
 
 from trac.admin import AdminCommandError, IAdminCommandProvider, get_dir_list
-from trac.config import ListOption, Option
+from trac.config import ListOption, Option, OrderedExtensionsOption
 from trac.core import *
 from trac.resource import IResourceManager, Resource, ResourceNotFound
 from trac.util.concurrency import threading
@@ -309,7 +310,9 @@ class RepositoryManager(Component):
     implements(IRequestFilter, IResourceManager)
 
     connectors = ExtensionPoint(IRepositoryConnector)
-    providers = ExtensionPoint(IRepositoryProvider)
+    providers = OrderedExtensionsOption('trac', 'repository_provider', IRepositoryProvider,
+        'DbRepositoryProvider', include_missing=False,
+        doc='IRepositoryProvider extension list')
     change_listeners = ExtensionPoint(IRepositoryChangeListener)
 
     repository_type = Option('trac', 'repository_type', 'svn',
@@ -499,7 +502,7 @@ class RepositoryManager(Component):
 
     # not used
     def get_repositories(self):
-        """Retrieve repositories specified in TracIni.
+        """NOT USED. Retrieve repositories specified in TracIni.
         
         The `[repositories]` section can be used to specify a list
         of repositories.

@@ -228,7 +228,14 @@ In [[changeset:%s]]:
         
     def _update_tickets(self, tickets, changeset, comment, date):
         """Update the tickets with the given comment."""
-        pids = self.pm.get_user_projects(changeset.author, pid_only=True)
+        roles = self.pm.get_user_roles(changeset.author)
+        if not roles:
+            self.log.info("Updating tickets canceled because changeset author "
+                          "has no user roles in the system")
+            return
+        pids = set()
+        for role in roles:
+            pids |= set(self.pm.get_user_projects(changeset.author, role))
         rpid = changeset.repos.pid
         perm = PermissionCache(self.env, changeset.author)
         for tkt_id, cmds in tickets.iteritems():
@@ -245,13 +252,13 @@ In [[changeset:%s]]:
                                        (tkt_id, rpid, pid))
                         ticket[0] = None
                         return
-                    syllabus_id = self.pm.get_project_syllabus(pid)
                     if pid not in pids:
                         self.log.warn("Updating ticket #%d canceled: user %s is not a developer in project #%d" %
                                        (tkt_id, changeset.author, pid))
                         ticket[0] = None
                         return
                     refs_done = False
+                    syllabus_id = self.pm.get_project_syllabus(pid)
                     allow_commands = self.allow_commands.syllabus(syllabus_id)
                     all_refs = self.all_refs.syllabus(syllabus_id)
                     for cmd in cmds:

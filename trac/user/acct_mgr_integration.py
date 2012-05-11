@@ -363,7 +363,7 @@ class HTTPAuthFilter(Component):
             # TODO: what about user role?
             req.data['role'] = None
             for role in (UserRole.DEVELOPER, UserRole.MANAGER):
-                pids = self.pm.get_user_projects(req.authname, role=role, pid_only=True)
+                pids = self.pm.get_user_projects(req.authname, role)
                 if pid in pids:
                     req.data['role'] = role
                     self.ps.set_request_data(req, pid)

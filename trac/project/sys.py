@@ -208,16 +208,17 @@ class PostloginModule(Component):
 
         def step_preprocess(step):
             if step == STEP_SET_ROLE:
-                data['roles']    = self.pm.get_user_roles(req.authname)
-                if not data['roles']:
+                roles = self.pm.get_user_roles(req.authname)
+                if not roles:
                     raise TracError(tag(tag_(
                         'User has no roles. Can not continue login.'
                         ' You may %(logout)s to continue work as anonymous user.',
                         logout=tag.a(_('logout'), href=req.href.logout())
                     )))
+                data['roles'] = [(r, UserRole.label(r)) for r in roles]
             elif step == STEP_SET_PROJECT:
                 role = int(s['role'])
-                data['projects'] = self.pm.get_user_projects(req.authname, role)
+                data['projects'] = self.pm.get_user_projects(req.authname, role, with_names=True)
                 if 'project' not in req.args:
                     prev_project_id = s.get('project')
                     data['prev_project'] = int(prev_project_id) if prev_project_id is not None else None

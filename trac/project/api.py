@@ -99,12 +99,13 @@ class ProjectManagement(Component):
         if cursor.rowcount:
             roles.append(UserRole.ADMIN)
 
-        return [(r, UserRole.label(r)) for r in roles]
+        return roles
 
-    def get_user_projects(self, username, role=UserRole.DEVELOPER, pid_only=False):
+    def get_user_projects(self, username, role=UserRole.DEVELOPER, with_names=False):
         db = self.env.get_read_db()
         cursor = db.cursor()
 
+        # TODO: do not query name if not with_names
         if role == UserRole.DEVELOPER:
             query = '''
                 SELECT project_id, project_name
@@ -127,7 +128,7 @@ class ProjectManagement(Component):
 
         cursor.execute(query, (username,))
         projects = cursor.fetchall()
-        if not pid_only:
+        if with_names:
             return projects
         return [r[0] for r in projects]
 
@@ -309,12 +310,12 @@ class ProjectManagement(Component):
             return role in self.get_user_roles(username)
         if role == UserRole.DEVELOPER:
             # TODO: make it more efficient...
-            return obj_id in self.get_user_projects(username, role, pid_only=True)
+            return obj_id in self.get_user_projects(username, role)
         elif role == UserRole.GROUP_MANAGER:
             return self.has_group_manager(username, obj_id)
         elif role == UserRole.PROJECT_MANAGER:
             # TODO: make it more efficient...
-            return obj_id in self.get_user_projects(username, UserRole.MANAGER, pid_only=True)
+            return obj_id in self.get_user_projects(username, UserRole.MANAGER)
 
         return False
 

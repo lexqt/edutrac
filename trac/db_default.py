@@ -612,7 +612,7 @@ def get_data(db):
                 ((0, 'Global admin syllabus', 'Global syllabus record for administration'),)),
             ('metagroups',
               ('id', 'name', 'year', 'active'),
-                ((0, 'Global admin meagroup', 3000, True),)),
+                ((0, 'Global admin metagroup', 3000, True),)),
             ('metagroup_syllabus_rel',
               ('metagroup_id', 'syllabus_id'),
                 ((0, 0),)),

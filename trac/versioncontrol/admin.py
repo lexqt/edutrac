@@ -207,7 +207,7 @@ class RepositoryAdminPanel(Component):
                 all_repos.update(rm.get_all_repositories(project_id=project_id))
 
         if not projects:
-            projects = pm.get_user_projects(req.authname, role)
+            projects = pm.get_user_projects(req.authname, role, with_names=True)
 
         db_provider = self.env[DbRepositoryProvider]
 
