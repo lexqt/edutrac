@@ -336,21 +336,22 @@ class TicketFieldsStore(object):
                        'optional': True})
 
         # Default select and radio fields
+        # (<field name>, <field label>, <model class>, <is project field>)
         selects = [
-                   ('status', N_('Status'), model.Status),
-                   ('resolution', N_('Resolution'), model.Resolution),
-                   ('type', N_('Type'), model.Type),
-                   ('priority', N_('Priority'), model.Priority),
-                   ('severity', N_('Severity'), model.Severity),
+                   ('status', N_('Status'), model.Status, False),
+                   ('resolution', N_('Resolution'), model.Resolution, False),
+                   ('type', N_('Type'), model.Type, False),
+                   ('priority', N_('Priority'), model.Priority, False),
+                   ('severity', N_('Severity'), model.Severity, False),
                    ]
         id_kwargs = {
             'syllabus_id': self.syllabus_id
         }
         if self.pid is not None:
             selects.extend([
-                   ('milestone', N_('Milestone'), model.Milestone),
-                   ('component', N_('Component'), model.Component),
-                   ('version', N_('Version'), model.Version),
+                   ('milestone', N_('Milestone'), model.Milestone, True),
+                   ('component', N_('Component'), model.Component, True),
+                   ('version', N_('Version'), model.Version, True),
                 ])
             id_kwargs['pid'] = self.pid
 
@@ -445,14 +446,24 @@ class TicketFieldsStore(object):
 
     def _prepare_selects_fields(self, selects, id_kwargs):
         fields = []
-        for name, label, cls in selects:
+        sconf = None
+        pconf = None
+        for name, label, cls, is_project in selects:
             options = [val.name for val in cls.select(self.env, **id_kwargs)]
             if not options:
                 # Fields without possible values are treated as if they didn't
                 # exist
                 continue
+            if is_project:
+                if not pconf:
+                    pconf = self.ts.configs.project(id_kwargs['pid'])['ticket-fields']
+                conf = pconf
+            else:
+                if not sconf:
+                    sconf = self.ts.configs.syllabus(id_kwargs['syllabus_id'])['ticket-fields']
+                conf = sconf
             field = {'name': name, 'type': 'select', 'label': label,
-                     'value': getattr(self.ts, 'default_' + name, None),
+                     'value': self._get_type_value(conf, 'select', name),
                      'options': options, 'model_class': cls,
                      'optional': False}
             if name in ('status', 'resolution'):
@@ -505,6 +516,12 @@ class TicketSystem(Component):
     skip_owner_on_new = BoolOption('ticket-workflow-config', 'skip_owner_on_new', 'true',
         """Do not allow to set owner on new ticket creation.
         Manipulations with owner will be controlled by workflow.""", switcher=True)
+
+    # default_* options are deprecated
+    # use instead:
+    #
+    # [ticket-fields]
+    # <field>.value = <default_value>
 
     default_version = Option('ticket', 'default_version', None,
         """Default version for newly created tickets.""")
@@ -590,6 +607,11 @@ class TicketSystem(Component):
         """Invalidate ticket field cache."""
         stor = TicketFieldsStore(self.env, pid=pid, syllabus_id=syllabus_id, ts=self, pm=self.pm)
         del stor.fields
+        if syllabus_id is not None:
+            pids = self.pm.get_syllabus_projects(syllabus_id)
+            for p in pids:
+                stor = TicketFieldsStore(self.env, pid=p, ts=self, pm=self.pm)
+                del stor.fields
 
     reserved_field_names = ['report', 'order', 'desc', 'group', 'groupdesc',
                             'col', 'row', 'format', 'max', 'page', 'verbose',
