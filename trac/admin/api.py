@@ -56,6 +56,7 @@ class AdminArea(object):
     GLOBAL    = 0
     PROJECT   = 10
     GROUP     = 20
+    METAGROUP = 25
     SYLLABUS  = 30
 
     @classmethod
@@ -64,6 +65,8 @@ class AdminArea(object):
             return cls.GLOBAL
         elif s == 'g':
             return cls.GROUP
+        elif s == 'm':
+            return cls.METAGROUP
         elif s == 's':
             return cls.SYLLABUS
         elif s == 'p':
@@ -76,6 +79,8 @@ class AdminArea(object):
             return None
         elif area == cls.GROUP:
             return HrefPart('g', area_id)
+        elif area == cls.METAGROUP:
+            return HrefPart('m', area_id)
         elif area == cls.SYLLABUS:
             return HrefPart('s', area_id)
         elif area == cls.PROJECT:
@@ -88,6 +93,8 @@ class AdminArea(object):
             return _('Global admin area')
         elif area == cls.GROUP:
             return _('Group #%(id)s admin area', id=area_id)
+        elif area == cls.METAGROUP:
+            return _('Metagroup #%(id)s admin area', id=area_id)
         elif area == cls.SYLLABUS:
             return _('Syllabus #%(id)s admin area', id=area_id)
         elif area == cls.PROJECT:

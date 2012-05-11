@@ -66,7 +66,7 @@ class AdminModule(Component):
     # IRequestHandler methods
 
     def match_request(self, req):
-        match = re.match('/admin(?:/(s|g|p)/(\d+))?(?:/([^/]+)(?:/([^/]+)(?:/(.+))?)?)?$',
+        match = re.match('/admin(?:/(s|m|g|p)/(\d+))?(?:/([^/]+)(?:/([^/]+)(?:/(.+))?)?)?$',
                          req.path_info)
         if match:
             req.args['admin_area'] = AdminArea.from_string(match.group(1))
@@ -135,6 +135,8 @@ class AdminModule(Component):
         template, data = provider.render_admin_panel(*args)
 
         data.update({
+            'area': area,
+            'area_id': area_id,
             'area_label': AdminArea.label(area, area_id),
             'active_cat': cat_id, 'active_panel': panel_id,
             'admin_area_href': partial(req.href, 'admin', AdminArea.href_part(area, area_id)),
@@ -149,7 +151,7 @@ class AdminModule(Component):
         return template, data, None
 
     def _check_access(self, req, area, area_id):
-        role = UserRole.ADMIN
+        role = UserRole.ADMIN  # default required role
         if req.data['role'] == role:
             # Administrator can access everything
             return True
