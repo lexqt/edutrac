@@ -191,12 +191,20 @@ class UserManagement(Component):
 
         return [row[0] for row in cursor.fetchall()]
 
-    def get_user_fullname(self, username, req=None):
+    def get_user_fullname(self, username, req=None, with_username=False):
+        if not username:
+            return username
         if req is not None:
             if username not in req.data['user_fullname_cache']:
                 req.data['user_fullname_cache'][username] = self._get_user_fullname(username)
-            return req.data['user_fullname_cache'][username]
-        return self._get_user_fullname(username)
+            fullname = req.data['user_fullname_cache'][username]
+        else:
+            fullname = self._get_user_fullname(username)
+        if not with_username:
+            return fullname
+        if fullname == username:
+            return fullname
+        return u'{0} ({1})'.format(fullname, username)
 
     def _get_user_fullname(self, username):
         q = '''
