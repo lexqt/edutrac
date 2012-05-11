@@ -184,7 +184,7 @@ class RepositoryAdminPanel(Component):
         if 'VERSIONCONTROL_ADMIN' in req.perm:
             yield ('versioncontrol', _('Version Control'), 'repository',
                    _('Repositories'),
-                   set([AdminArea.GLOBAL, AdminArea.GROUP, AdminArea.SYLLABUS])
+                   set([AdminArea.GLOBAL, AdminArea.GROUP, AdminArea.METAGROUP])
                    )
     
     def render_admin_panel(self, req, category, page, path_info, area, area_id):
@@ -198,11 +198,11 @@ class RepositoryAdminPanel(Component):
         projects  = None
         if area == AdminArea.GLOBAL:
             all_repos = rm.get_all_repositories()
-        elif area == AdminArea.SYLLABUS:
-            projects = pm.get_syllabus_projects(area_id, with_names=True)
-            all_repos = rm.get_all_repositories(syllabus_id=area_id)
-        elif area == AdminArea.GROUP:
-            projects = pm.get_group_projects(area_id, with_names=True)
+        elif area in (AdminArea.METAGROUP, AdminArea.GROUP):
+            if area == AdminArea.METAGROUP:
+                projects = pm.get_metagroup_projects(area_id, with_names=True)
+            else:
+                projects = pm.get_group_projects(area_id, with_names=True)
             for project_id, _name in projects:
                 all_repos.update(rm.get_all_repositories(project_id=project_id))
 
