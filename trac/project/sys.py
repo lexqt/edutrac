@@ -193,8 +193,8 @@ class PostloginModule(Component):
 
         step_arg  = req.args.getint('step')
         force = 'force' in req.args
-        change_param = step_arg is not None and \
-                       step_arg not in (STEP_SET_ROLE,) and \
+        change_param = not force and \
+                       step_arg is not None and \
                        self._postlogin_passed(req)
         if force:
             step = s['postlogin_step'] = STEP_INIT
@@ -217,7 +217,7 @@ class PostloginModule(Component):
                     )))
                 data['roles'] = [(r, UserRole.label(r)) for r in roles]
             elif step == STEP_SET_PROJECT:
-                role = int(s['role'])
+                role = UserRole(s['role'])
                 data['projects'] = self.pm.get_user_projects(req.authname, role, with_names=True)
                 if 'project' not in req.args:
                     prev_project_id = s.get('project')
@@ -255,8 +255,7 @@ class PostloginModule(Component):
                 for listener in self.project_switch_listeners:
                     listener.project_switched(req, project_id, old_project_id)
 
-            if s.get('postlogin_change_param'):
-                s.pop('postlogin_change_param', None)
+            if req.args.has_key('postlogin_change_param'):
                 data['finalize'] = True
 
         if data['finalize']:
@@ -266,8 +265,8 @@ class PostloginModule(Component):
             req.redirect(req.href())
 
         # next POST request will be the last
-        if change_param:
-            s['postlogin_change_param'] = True
+        if change_param and step_arg not in (STEP_SET_ROLE,):
+            data['postlogin_change_param'] = True
 
         data['step']        = step
         data['set_role']    = STEP_SET_ROLE

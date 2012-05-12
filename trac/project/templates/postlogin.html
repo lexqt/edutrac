@@ -1,53 +1,61 @@
 <!DOCTYPE html
-	PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
-	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+  PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml"
-	xmlns:py="http://genshi.edgewall.org/"
-	xmlns:i18n="http://genshi.edgewall.org/i18n"
-	xmlns:xi="http://www.w3.org/2001/XInclude">
+  xmlns:py="http://genshi.edgewall.org/"
+  xmlns:i18n="http://genshi.edgewall.org/i18n"
+  xmlns:xi="http://www.w3.org/2001/XInclude">
 
-	<xi:include href="layout.html" />
+  <xi:include href="layout.html" />
 
-	<head>
-		<title>Session parameters</title>
-	</head>
-	<body>
-		<div id="content">
-			<h1>Setting up session parameters</h1>
-			<form py:choose="step" action="${href.postlogin()}" method="post">
-				<fieldset py:when="set_role">
-					<legend>User role</legend>
-					<select name="role">
-						<option py:for="role_id, role_name in roles" value="${role_id}">${role_name}</option>
-					</select>
-				</fieldset>
-				<fieldset py:when="set_project">
-					<legend>Project</legend>
-					<p py:if="current_project_name" i18n:msg="project_name">
-					  Current session project: <strong>${current_project_name}</strong>.
-					  You can switch session project by selecting project in the list below.
-					</p>
-					<select name="project">
-						<option py:for="project_id, project_name in projects" value="${project_id}"
-						    selected="${project_id == prev_project or None}">${project_name}</option>
-					</select>
-					<py:if test="current_project_name">
-					 <p i18n:msg="">
-					   Also you can switch to another project by appending <strong>project/&lt;id&gt;/</strong>
-					   to the base site URL. Follow one of the links for available projects:
-					 </p>
-					 <ul>
-					   <li py:for="project_id, project_name in projects">
-					     <a href="${req.href.copy_for_project(project_id)()}">${project_name}</a>
-					   </li>
-					 </ul>
-					</py:if>
-				</fieldset>
-				<input id="postlogin-submit" type="submit" value="${_('Continue')}" />
-				<script type="text/javascript">
+  <py:def function="change_param_flag()">
+    <input py:if="postlogin_change_param" type="hidden" name="postlogin_change_param" value="1" />
+  </py:def>
+
+  <head>
+    <title>Session parameters</title>
+  </head>
+  <body>
+    <div id="content">
+      <h1>Setting up session parameters</h1>
+      <form py:choose="step" action="${href.postlogin()}" method="post">
+
+        <fieldset py:when="set_role">
+          <legend>User role</legend>
+          <select name="role">
+            <option py:for="role_id, role_name in roles" value="${role_id}">${role_name}</option>
+          </select>
+        </fieldset>
+
+        <fieldset py:when="set_project">
+          <legend>Project</legend>
+          ${change_param_flag()}
+          <p py:if="current_project_name" i18n:msg="project_name">
+            Current session project: <strong>${current_project_name}</strong>.
+            You can switch session project by selecting project in the list below.
+          </p>
+          <select name="project">
+            <option py:for="project_id, project_name in projects" value="${project_id}"
+                selected="${project_id == prev_project or None}">${project_name}</option>
+          </select>
+          <py:if test="current_project_name">
+           <p i18n:msg="">
+             Also you can switch to another project by appending <strong>project/&lt;id&gt;/</strong>
+             to the base site URL. Follow one of the links for available projects:
+           </p>
+           <ul>
+             <li py:for="project_id, project_name in projects">
+               <a href="${req.href.copy_for_project(project_id)()}">${project_name}</a>
+             </li>
+           </ul>
+          </py:if>
+        </fieldset>
+
+        <input id="postlogin-submit" type="submit" value="${_('Continue')}" />
+        <script type="text/javascript">
           document.getElementById('postlogin-submit').focus();
         </script>
-			</form>
-		</div>
-	</body>
+      </form>
+    </div>
+  </body>
 </html>
