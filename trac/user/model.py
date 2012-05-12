@@ -45,7 +45,7 @@ class Team(ModelBase):
 class Group(ModelBase):
     '''Group model class'''
 
-    __tablename__ = 'student_groups'
+    __tablename__ = 'groups'
 
     # declare fields
     id          = Column('id', Integer, primary_key=True, autoincrement=True)

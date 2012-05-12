@@ -644,7 +644,7 @@ class TicketSystem(Component):
                     realms.append('manager')
                 possible_owners = um.get_project_users(pid, realms)
             else:
-                possible_owners = um.get_group_users(gid, group_lvl=GroupLevel.STUDGROUP)
+                possible_owners = um.get_group_users(gid, group_lvl=GroupLevel.GROUP)
             if possible_owners:
                 possible_owners.sort()
                 field['type'] = 'select'

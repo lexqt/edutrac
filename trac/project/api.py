@@ -246,7 +246,7 @@ class ProjectManagement(Component):
         cursor = db.cursor()
         query = '''
             SELECT project_id, active AS project_active, project_name, project_description,
-                   team_id, studgroup_id AS group_id, metagroup_id, syllabus_id
+                   team_id, group_id AS group_id, metagroup_id, syllabus_id
             FROM project_info
             WHERE project_id=%s
         '''
@@ -271,7 +271,7 @@ class ProjectManagement(Component):
 
     def get_group_projects(self, gid, with_names=False):
         '''Return all projects connected with specified group'''
-        return self._get_projects('studgroup_id', gid, with_names)
+        return self._get_projects('group_id', gid, with_names)
 
     def _get_projects(self, column, id, with_names=False):
         '''Return all projects from `project_info` view
@@ -325,9 +325,9 @@ class ProjectManagement(Component):
         cursor = db.cursor()
         q = '''
             SELECT 1
-            FROM studgroup_managers m
+            FROM group_managers m
             JOIN users u ON u.id=m.user_id AND u.username=%s
-            WHERE m.studgroup_id=%s
+            WHERE m.group_id=%s
             LIMIT 1
         '''
         cursor.execute(q, (username, gid))

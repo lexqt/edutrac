@@ -53,7 +53,7 @@ schema = [
         Column('id', auto_increment=True),
         Column('name', type='varchar (255)', null=False),
     ],
-    Table('student_groups', key=('id',))[
+    Table('groups', key=('id',))[
         Column('id', auto_increment=True),
         Column('name', type='varchar (255)', null=False),
         Column('description', type='text', default="''"),
@@ -70,17 +70,17 @@ schema = [
         ForeignKey('user_id', 'users', 'id', on_delete='CASCADE'),
         ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
     ],
-    Table('teamgroup_rel', key=('studgroup_id', 'team_id'))[
-        Column('studgroup_id', type='int'),
+    Table('teamgroup_rel', key=('group_id', 'team_id'))[
+        Column('group_id', type='int'),
         Column('team_id', type='int', unique=True),
-        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
+        ForeignKey('group_id', 'groups', 'id', on_delete='CASCADE'),
         ForeignKey('team_id', 'teams', 'id', on_delete='CASCADE'),
     ],
-    Table('groupmeta_rel', key=('metagroup_id', 'studgroup_id'))[
+    Table('groupmeta_rel', key=('metagroup_id', 'group_id'))[
         Column('metagroup_id', type='int'),
-        Column('studgroup_id', type='int', unique=True),
+        Column('group_id', type='int', unique=True),
         ForeignKey('metagroup_id', 'metagroups', 'id', on_delete='CASCADE'),
-        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
+        ForeignKey('group_id', 'groups', 'id', on_delete='CASCADE'),
     ],
     # TODO: not used, to be deleted?
     Table('team_attributes', key=('gid', 'name'))[
@@ -109,11 +109,11 @@ schema = [
         ForeignKey('user_id', 'users', 'id', on_delete='CASCADE'),
         ForeignKey('project_id', 'projects', 'id', on_delete='CASCADE'),
     ],
-    Table('studgroup_managers', key=('user_id', 'studgroup_id'))[
+    Table('group_managers', key=('user_id', 'group_id'))[
         Column('user_id', type='int'),
-        Column('studgroup_id', type='int'),
+        Column('group_id', type='int'),
         ForeignKey('user_id', 'users', 'id', on_delete='CASCADE'),
-        ForeignKey('studgroup_id', 'student_groups', 'id', on_delete='CASCADE'),
+        ForeignKey('group_id', 'groups', 'id', on_delete='CASCADE'),
     ],
     Table('syllabuses', key=('id',))[
         Column('id', auto_increment=True),
@@ -366,11 +366,11 @@ WHERE id != 0
 CREATE OR REPLACE VIEW project_info AS
 SELECT p.id project_id, p.name project_name, p.description as project_description,
        mg.active active, msr.syllabus_id syllabus_id,
-       tpr.team_id team_id, tgr.studgroup_id studgroup_id, gmr.metagroup_id metagroup_id
+       tpr.team_id team_id, tgr.group_id group_id, gmr.metagroup_id metagroup_id
 FROM projects p JOIN
 team_project_rel tpr ON p.id=tpr.project_id
 JOIN teamgroup_rel tgr ON tgr.team_id=tpr.team_id
-JOIN groupmeta_rel gmr ON gmr.studgroup_id=tgr.studgroup_id
+JOIN groupmeta_rel gmr ON gmr.group_id=tgr.group_id
 JOIN metagroups mg ON mg.id=gmr.metagroup_id
 JOIN metagroup_syllabus_rel msr ON msr.metagroup_id=gmr.metagroup_id
 ''',
@@ -392,9 +392,9 @@ CREATE OR REPLACE VIEW manager_projects AS
 SELECT u.id user_id, u.username username,
     t.id team_id, t.name team_name,
     p.id project_id, p.name project_name
-FROM studgroup_managers sgm
-JOIN users u ON u.id=sgm.user_id
-JOIN teamgroup_rel tgr ON tgr.studgroup_id=sgm.studgroup_id
+FROM group_managers gm
+JOIN users u ON u.id=gm.user_id
+JOIN teamgroup_rel tgr ON tgr.group_id=gm.group_id
 JOIN team_project_rel tpr ON tpr.team_id=tgr.team_id
 JOIN teams t ON t.id=tpr.team_id
 JOIN real_projects p ON p.id=tpr.project_id
@@ -426,27 +426,24 @@ WHERE project_id IS NULL AND syllabus_id IS NULL
 # User / group system
 
 '''
-CREATE TYPE group_level AS ENUM ('team', 'stud', 'meta')
-''',
-'''
 CREATE OR REPLACE VIEW membership AS
-SELECT u.id user_id, u.username, t.id team_id, sg.id studgroup_id, mg.id metagroup_id,  mg.active meta_active
+SELECT u.id user_id, u.username, t.id team_id, g.id group_id, mg.id metagroup_id, mg.active meta_active
 FROM users u JOIN (
     team_members tm
     JOIN teams t ON t.id=tm.team_id
     JOIN teamgroup_rel tr ON tr.team_id=t.id
-    JOIN student_groups sg ON sg.id=tr.studgroup_id
-    JOIN groupmeta_rel gr ON gr.studgroup_id=sg.id
+    JOIN groups g ON g.id=tr.group_id
+    JOIN groupmeta_rel gr ON gr.group_id=g.id
     JOIN metagroups mg ON mg.id=gr.metagroup_id
     ) ON u.id=tm.user_id
 ''',
 '''
 CREATE OR REPLACE VIEW group_hierarchy AS
-SELECT mg.id metagroup_id, sg.id studgroup_id, t.id team_id
+SELECT mg.id metagroup_id, g.id group_id, t.id team_id
 FROM metagroups mg LEFT JOIN (
     groupmeta_rel gr
-    JOIN student_groups sg ON gr.studgroup_id=sg.id
-    JOIN teamgroup_rel tr ON sg.id=tr.studgroup_id
+    JOIN groups g ON gr.group_id=g.id
+    JOIN teamgroup_rel tr ON g.id=tr.group_id
     JOIN teams t ON tr.team_id=t.id
     ) ON mg.id=gr.metagroup_id
 ''',
@@ -616,17 +613,17 @@ def get_data(db):
             ('metagroup_syllabus_rel',
               ('metagroup_id', 'syllabus_id'),
                 ((0, 0),)),
-            ('student_groups',
+            ('groups',
               ('id', 'name', 'description'),
                 ((0, 'Global admin group', 'Global group record for administration'),)),
             ('groupmeta_rel',
-              ('metagroup_id', 'studgroup_id'),
+              ('metagroup_id', 'group_id'),
                 ((0, 0),)),
             ('teams',
               ('id', 'name'),
                 ((0, 'Global admin team'),)),
             ('teamgroup_rel',
-              ('studgroup_id', 'team_id'),
+              ('group_id', 'team_id'),
                 ((0, 0),)),
             ('team_project_rel',
               ('team_id', 'project_id'),

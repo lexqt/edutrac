@@ -16,15 +16,15 @@ class UnknownProjectUserRealm(TracError):
 
 class GroupLevel(object):
     TEAM = 1
-    STUDGROUP = 2
+    GROUP = 2
     METAGROUP = 3
 
     @classmethod
     def get_column(cls, level):
         if level == cls.TEAM:
             column = 'team_id'
-        elif level == cls.STUDGROUP:
-            column = 'studgroup_id'
+        elif level == cls.GROUP:
+            column = 'group_id'
         elif level == cls.METAGROUP:
             column = 'metagroup_id'
         else:

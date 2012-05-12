@@ -56,10 +56,10 @@ ModelBase = declarative_base(metadata=metadata)
 
 groupmeta_rel = Table('groupmeta_rel', metadata,
     Column('metagroup_id', Integer, ForeignKey('metagroups.id', ondelete='CASCADE'), primary_key=True),
-    Column('studgroup_id', Integer, ForeignKey('student_groups.id', ondelete='CASCADE'), primary_key=True, unique=True),
+    Column('group_id', Integer, ForeignKey('groups.id', ondelete='CASCADE'), primary_key=True, unique=True),
 )
 teamgroup_rel = Table('teamgroup_rel', metadata,
-    Column('studgroup_id', Integer, ForeignKey('student_groups.id', ondelete='CASCADE'), primary_key=True),
+    Column('group_id', Integer, ForeignKey('groups.id', ondelete='CASCADE'), primary_key=True),
     Column('team_id',      Integer, ForeignKey('teams.id', ondelete='CASCADE'),          primary_key=True, unique=True),
 )
 team_members = Table('team_members', metadata,
@@ -186,7 +186,7 @@ project_info = Table('project_info', metadata,
     Column('project_id', Integer, ForeignKey('projects.id'), primary_key=True),
     Column('active', Boolean),
     Column('team_id', Integer, ForeignKey('teams.id'), nullable=False),
-    Column('studgroup_id', Integer, ForeignKey('student_groups.id'), nullable=False),
+    Column('group_id', Integer, ForeignKey('groups.id'), nullable=False),
     Column('metagroup_id', Integer, ForeignKey('metagroups.id'), nullable=False),
     Column('syllabus_id', Integer, ForeignKey('syllabuses.id'), nullable=False),
 )

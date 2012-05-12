@@ -457,7 +457,7 @@ class Query(ModelSource):
         elif area == SubjectArea.SYLLABUS:
             q = q.where(project_info.c.syllabus_id==s['syllabus_id'])
         elif area == SubjectArea.GROUP:
-            q = q.where(project_info.c.studgroup_id==s['group_id'])
+            q = q.where(project_info.c.group_id==s['group_id'])
 
         if cols:
             q = q.with_only_columns(cols)
