@@ -38,7 +38,7 @@
             </td>
             <td py:choose="">
               <py:when test="view">
-                ${crit.value}
+                ${format_scale(crit.scale, crit.value)}
               </py:when>
               <py:otherwise py:choose="crit.type">
                 <input py:when="'checkbox'" type="checkbox" name="${crit.alias}" value="1" checked="${crit.value or None}" />

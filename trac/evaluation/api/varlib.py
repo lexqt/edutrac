@@ -2,6 +2,8 @@ from trac.evaluation.api.model import ModelVariable, \
     SubjectArea, ClusterArea, \
     RatioScale
 from trac.evaluation.sources import tktsrc
+from trac.user.api import UserRole
+
 
 
 class CountTickets(ModelVariable):
@@ -117,7 +119,7 @@ class TeamMilestoneVariable(ModelVariable):
         `results`: <user_data> for user area
                    { 'user1': <user_data>, ... } for project area
         `msum`: sum that should be distributed among team members
-        `team_size`: project team size
+        `team_size`: project team size (developers count)
         For contents of <user_data> - see `with_authors`.
         '''
         raise NotImplementedError
@@ -132,7 +134,7 @@ class TeamMilestoneVariable(ModelVariable):
                                all_completed=self.all_completed,
                                only_approved=self.only_approved)
         msum = minfo.get_team_eval_sum(syllabus_id=self.model.syllabus_id)
-        team_size = uinfo.project(s['project_id']).team_size()
+        team_size = uinfo.project(s['project_id']).role(UserRole.DEVELOPER).count()
         value = self.process_results(vals, msum, team_size)
         return value
 

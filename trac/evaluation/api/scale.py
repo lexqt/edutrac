@@ -1,4 +1,4 @@
-
+from trac.util.translation import _
 
 __all__ = ['Scale', 'NominalScale', 'BooleanScale',
            'OrdinalScale', 'IntervalScale', 'RatioScale',
@@ -110,14 +110,19 @@ def prepare_rendered_value(scale, value):
     def is_scale(cls):
         return isinstance(scale, cls)
 
+    # transform scale
     if is_scale(UnityScale):
         # convert to percents
         scale = PercentScale(integer=False)
         value = scale.get(value * 100)
 
+    # convert to string
     if is_scale(PercentScale):
         if scale.type is float:
             value = ('%.2f'%value).rstrip('0').rstrip('.')
         return u'{0}%'.format(value)
+    elif is_scale(BooleanScale):
+        value = _('Yes') if value else _('No')
+        return value
 
     return unicode(value)

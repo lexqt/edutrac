@@ -1,24 +1,29 @@
 from operator import (
-    and_, or_, inv, add, mul, div, sub, mod, truediv, lt, le, ne, gt, ge, eq, neg, contains
+    and_, or_, inv, add, mul, div, sub, mod, truediv, lt, le, ne, gt, ge, eq, neg
     )
 
 #from inspect import currentframe
 from lazy import lazy
 
 from sqlalchemy import Integer, Numeric
-from sqlalchemy.sql import func, cast, bindparam
+from sqlalchemy.sql import func, cast
+
+from trac.util.translation import _
 
 from trac.ticket.api import TicketSystem
 from trac.project.api import ProjectManagement
-from trac.user.api import UserManagement
 
 from trac.evaluation.api.model import ModelSource
 from trac.evaluation.api.area import SubjectArea
+from trac.evaluation.api.error import EvalSourceError
 
-__all__ = ['Query', 'Info',
-           'Field', 'Resolution', 'Status',
-           'ExtraAttr', 'TicketValue',
-           'Count', 'Sum'
+__all__ = ['Query', 'Info',                                         # sources
+           'Field', 'Resolution', 'Status', 'Owner', 'Reporter',    # fields
+           'Milestone', 'Type', 'Priority', 'Severity', 'Version',
+           'Component', 'Keywords', 'CreateTime', 'ChangeTime'
+           'TicketValue',                                           # extra attributes
+           'InProjectUsers',                                        # special expressions
+           'Count', 'Sum', 'Avg',                                   # function expressions
            ]
 
 
@@ -223,17 +228,20 @@ class ExtraAttr(TicketAttribute):
         return col
 
 
+## Ticket extra attributes ##
+
 class TicketValue(ExtraAttr):
 
     def __init__(self):
         super(TicketValue, self).__init__('ticket_value')
 
 
+## Basic ticket fields ##
+
 class Status(Field):
 
     def __init__(self):
         super(Status, self).__init__('status')
-
 
 class Resolution(Field):
 
@@ -254,6 +262,48 @@ class Milestone(Field):
 
     def __init__(self):
         super(Milestone, self).__init__('milestone')
+
+class Type(Field):
+
+    def __init__(self):
+        super(Type, self).__init__('type')
+
+class Priority(Field):
+
+    def __init__(self):
+        super(Priority, self).__init__('priority')
+
+class Severity(Field):
+
+    def __init__(self):
+        super(Severity, self).__init__('severity')
+
+class Version(Field):
+
+    def __init__(self):
+        super(Version, self).__init__('version')
+
+class Component(Field):
+
+    def __init__(self):
+        super(Component, self).__init__('component')
+
+class Keywords(Field):
+
+    def __init__(self):
+        super(Keywords, self).__init__('keywords')
+
+class CreateTime(Field):
+
+    def __init__(self):
+        super(CreateTime, self).__init__('time')
+
+class ChangeTime(Field):
+
+    def __init__(self):
+        super(ChangeTime, self).__init__('changetime')
+
+
 
 
 class FuncExpression(OpExpression):
@@ -286,6 +336,11 @@ class Sum(FuncExpression):
     def __init__(self, *args):
         super(Sum, self).__init__('sum', *args)
 
+class Avg(FuncExpression):
+
+    def __init__(self, *args):
+        super(Avg, self).__init__('avg', *args)
+
 
 
 class Query(ModelSource):
@@ -296,9 +351,9 @@ class Query(ModelSource):
         self.projman = ProjectManagement(self.env)
         self.sa_metadata = self.env.get_sa_metadata()
         self.sa_conn     = self.env.get_sa_connection()
-        self.reset_state()
+        self.reset()
 
-    def reset_state(self):
+    def reset(self):
         self._state = {
             'area': None, # query subject area
             'user_area_field': Owner(), # field expr used for user area filtering
@@ -318,23 +373,27 @@ class Query(ModelSource):
             'select_cols': set(), # columns to select (names)
         }
         lazy.invalidate(self, '_ticket_fields')
+        return self
 
     @lazy # init in execute()
     def _ticket_fields(self):
         id_kwargs = {}
         s = self._state
         a = s['area']
+        q = self.info.reset()
         if a == SubjectArea.USER or a == SubjectArea.PROJECT:
-            id_kwargs['project_id'] = s['project_id']
+            q.project(s['project_id'])
         elif a == SubjectArea.GROUP or a == SubjectArea.SYLLABUS:
-            id_kwargs['syllabus_id'] = s['syllabus_id']
-        return self.info.get_ticket_fields(**id_kwargs)
+            q.project(s['syllabus_id'])
+        return q.ticket_fields()
 
     # Area setup methods
 
     def user(self, username, field_expr=None):
         if field_expr is None:
             field_expr = self._state['user_area_field']
+        else:
+            field_expr = self._instantiate_expr(field_expr)
         self._state.update({
             'area': SubjectArea.USER,
             'username': username,
@@ -343,7 +402,9 @@ class Query(ModelSource):
         return self
 
     def user_field(self, field_expr):
+        field_expr = self._instantiate_expr(field_expr)
         self._state['user_area_field'] = field_expr
+        return self
 
     def group(self, gid):
         self._state.update({
@@ -363,13 +424,19 @@ class Query(ModelSource):
     # Other methods
 
     def where(self, op_expr):
+        '''Append query filter expression'''
+        op_expr = self._instantiate_expr(op_expr)
         self._state['where_exprs'].append(op_expr)
+        return self
 
     def limit_to_project_users(self, op_expr, role=None, allow_empty=False):
+        op_expr = self._instantiate_expr(op_expr)
         self.where(InProjectUsers(op_expr, role=role, allow_empty=allow_empty))
+        return self
 
     def milestone(self, name):
         self.where(Milestone() == name)
+        return self
 
     def period(self, begin=None, end=None):
         self._state['period'] = {
@@ -390,7 +457,8 @@ class Query(ModelSource):
 
     def only(self, *cols):
         '''Retrieve only specified columns.
-        Columns m'''
+        Columns must be valid OpExpression objects.'''
+        cols = map(self._instantiate_expr, cols)
         self._state.update({
             'columns': list(cols)
         })
@@ -399,7 +467,7 @@ class Query(ModelSource):
     # Terminal methods
 
     def count(self):
-        '''Return tickets count'''
+        '''Count matched query items'''
         self._state.update({
             'aggregate': True,
         })
@@ -410,7 +478,8 @@ class Query(ModelSource):
         return self.execute()
 
     def sum(self, expr):
-        '''Return sum of `expr`'''
+        '''Return sum of specified expression'''
+        expr = self._instantiate_expr(expr)
         self._state.update({
             'aggregate': True,
         })
@@ -418,6 +487,10 @@ class Query(ModelSource):
         if not self._state['group_by']:
             self._state['scalar'] = True
             self._state['none_value'] = 0
+        return self.execute()
+
+    def get(self):
+        '''Alias for `execute`'''
         return self.execute()
 
     def execute(self):
@@ -473,30 +546,50 @@ class Query(ModelSource):
                 return s['none_value']
             return val
         rows = res.fetchall()
-#        r = reduce(lambda s,a: s+a[0], ids, 0)
+        if len(cols) == 1:
+            return [r[0] for r in rows]
         return rows
 
+    def _instantiate_expr(self, expr):
+        if not isinstance(expr, type):
+            return expr
+        return expr()
 
 
-# TODO: refactor in area methods style
 class Info(ModelSource):
 
     def __init__(self, model):
         super(Info, self).__init__(model)
         self.ts = TicketSystem(self.env)
 
-    def get_ticket_fields(self, project_id=None, syllabus_id=None):
-        return self.ts.get_ticket_fields(pid=project_id, syllabus_id=syllabus_id)
+    def ticket_fields(self):
+        self._check_ts_ready()
+        kwargs = self._form_kwargs()
+        return self.ts.get_ticket_fields(**kwargs)
 
-    def get_min_max(self, field, project_id=None, syllabus_id=None):
+    def min_max(self, field, project_id=None, syllabus_id=None):
+        self._check_ts_ready()
         if isinstance(field, basestring):
-            fields = self.get_ticket_fields(project_id, syllabus_id)
+            fields = self.ticket_fields()
             field = fields[field]
         if 'model_class' not in field:
             return None, None
         cls = field['model_class']
         if not hasattr(cls, 'get_min_max'):
             return None, None
-        return cls.get_min_max(self.env, pid=project_id, syllabus_id=syllabus_id)
+        kwargs = self._form_kwargs()
+        return cls.get_min_max(self.env, **kwargs)
 
+    def _form_kwargs(self):
+        kwargs = {}
+        s = self._state
+        if s['area'] == SubjectArea.PROJECT:
+            kwargs['pid'] = s['project_id']
+        elif s['area'] == SubjectArea.SYLLABUS:
+            kwargs['syllabus_id'] = s['syllabus_id']
+        return kwargs
+
+    def _check_ts_ready(self):
+        if self._state['area'] not in (SubjectArea.PROJECT, SubjectArea.SYLLABUS):
+            raise EvalSourceError(_('Unsupported subject query areas'))
 

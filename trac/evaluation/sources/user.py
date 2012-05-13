@@ -21,18 +21,17 @@ class Info(ModelSource):
 
     def role(self, role):
         self._state['role'] = role
+        return self
 
-    def team_size(self):
-        self._check_project()
+    # Terminal methods
+
+    def count(self):
+        self.check_state_and_raise('project_id', 'role')
         s = self._state
-        return self.projman.get_project_user_count(s['project_id'], role=UserRole.DEVELOPER)
+        return self.projman.get_project_user_count(s['project_id'], role=s['role'])
 
     def users(self):
-        self._check_project()
+        self.check_state_and_raise('project_id')
         s = self._state
         return self.projman.get_project_users(s['project_id'], s['role'])
-
-    def _check_project(self):
-        if 'project_id' not in self._state:
-            raise EvalSourceError(_('Project must be defined to get team size'))
 

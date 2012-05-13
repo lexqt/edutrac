@@ -184,6 +184,7 @@ class EvaluationModel(object):
 
 
 
+DEBUG = False
 
 class ModelVariable(object):
 
@@ -232,6 +233,8 @@ class ModelVariable(object):
         except EvalModelError:
             raise
         except Exception, e:
+            if DEBUG:
+                raise
             msg = exception_to_unicode(e)
             raise EvalModelError(_('Error occurred while getting variable value: %(msg)s', msg=msg))
         return value
@@ -427,11 +430,16 @@ class ModelSource(object):
     # Base implementation for query area setup methods
     # may be overriden
 
-    def project(self, pid):
+    def reset(self):
+        self._state = {
+            'area': None,
+        }
+        return self
+
+    def project(self, project_id):
         s = self._state
-#        if s['area'] != SubjectArea.USER:
         s['area'] = SubjectArea.PROJECT
-        s['project_id'] = pid
+        s['project_id'] = project_id
         return self
 
     def user(self, username):
@@ -441,28 +449,34 @@ class ModelSource(object):
         })
         return self
 
-    def group(self, gid):
+    def group(self, group_id):
         self._state.update({
             'area': SubjectArea.GROUP,
-            'group_id': gid
+            'group_id': group_id
         })
         return self
 
-    def syllabus(self, sid):
+    def syllabus(self, syllabus_id):
         self._state.update({
             'area': SubjectArea.SYLLABUS,
-            'syllabus_id': sid
+            'syllabus_id': syllabus_id
         })
         return self
 
-    def milestone(self, milestone):
-        self._state['milestone'] = milestone
+    def milestone(self, milestone_name):
+        self._state['milestone'] = milestone_name
         return self
 
     # Util methods
 
     def check_state(self, *args):
-        '''Check if all specified args defined in the state'''
+        '''Check if all specified args defined (not None) in the state'''
         s = self._state
         return all(map(lambda x: x is not None, [s.get(k) for k in args]))
+
+    def check_state_and_raise(self, *args):
+        '''Call `check_state` and raise exception on false'''
+        check = self.check_state(*args)
+        if not check:
+            raise MissedQueryArgumentsError(_('Some mandatory arguments for model source query are missed.'))
 

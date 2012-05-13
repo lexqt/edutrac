@@ -165,7 +165,7 @@ class ProjectManagement(Component):
         elif role == UserRole.MANAGER:
             table = 'manager_projects'
         else:
-            return ()
+            return 0
         q = '''
             SELECT COUNT(*)
             FROM {table}

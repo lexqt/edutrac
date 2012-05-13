@@ -110,6 +110,7 @@ class ProjectEvaluation(Component):
                 'alias': name,
                 'label': crit['label'],
                 'description': crit['description'],
+                'scale': crit['scale'],
                 'value': datavalues[name],
                 'order': crit['order'],
             }
