@@ -17,7 +17,8 @@
 
     <py:choose test="view">
       <form py:when="'detail'" class="mod" method="post" action="">
-        <h2 i18n:msg="name">Team "${team.name}" members Permission groups</h2>
+        <h2 i18n:msg="team_name, project_name">Team: ${team.name}. Project: ${team_project.name}</h2>
+        <h3>Members permission groups</h3>
         <table class="listing">
           <thead>
             <tr>
@@ -28,7 +29,7 @@
           </thead>
           <tbody>
             <tr py:for="user, developer, teamleader in members">
-              <td>${user.username}</td>
+              <td>${user_fullname(user.username, with_username=True)}</td>
               <td><input type="checkbox" name="members.${user.id}.developer" value="1"
                          checked="${developer or None}"/></td>
               <td><input type="checkbox" name="members.${user.id}.teamleader" value="1"
@@ -81,6 +82,12 @@
           </fieldset>
         </form>
 
+        <p class="help">
+          Use the form on the right to add new users to the team.
+          Select users from the list below to remove them from team.
+          Or click on the team to edit users' project permission groups.
+        </p>
+
         <form method="post" action="">
           <table class="listing">
             <thead>
@@ -91,13 +98,16 @@
               </tr>
             </thead>
             <tbody>
-              <tr py:for="team, items in groupby(members, key=lambda r: r[0])">
+              <tr py:for="(team, project), items in groupby(members, key=lambda r: (r[0], r[1]))">
                 <td class="id">${team.id}</td>
                 <td class="name">
                   <a href="${panel_href(team.id)}">${team.name}</a>
+                  <py:if test="project">
+                    <br/>(${project.name})
+                  </py:if>
                 </td>
                 <td class="members">
-                  <div py:for="team, user_id, username in items" class="member">
+                  <div py:for="team, project, user_id, username in items" class="member">
                     <input type="checkbox"
                            name="${'team.%s.members'%team.id}" value="${user_id}"/>
                     ${user_fullname(username, with_username=True)}

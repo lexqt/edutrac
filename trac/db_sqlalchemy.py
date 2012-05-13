@@ -56,11 +56,11 @@ ModelBase = declarative_base(metadata=metadata)
 
 groupmeta_rel = Table('groupmeta_rel', metadata,
     Column('metagroup_id', Integer, ForeignKey('metagroups.id', ondelete='CASCADE'), primary_key=True),
-    Column('group_id', Integer, ForeignKey('groups.id', ondelete='CASCADE'), primary_key=True, unique=True),
+    Column('group_id',     Integer, ForeignKey('groups.id', ondelete='CASCADE'),     primary_key=True, unique=True),
 )
 teamgroup_rel = Table('teamgroup_rel', metadata,
     Column('group_id', Integer, ForeignKey('groups.id', ondelete='CASCADE'), primary_key=True),
-    Column('team_id',      Integer, ForeignKey('teams.id', ondelete='CASCADE'),          primary_key=True, unique=True),
+    Column('team_id',  Integer, ForeignKey('teams.id', ondelete='CASCADE'),  primary_key=True, unique=True),
 )
 team_members = Table('team_members', metadata,
     Column('user_id', Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),

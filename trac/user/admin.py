@@ -78,14 +78,17 @@ class AddTeamMemberForm(formencode.Schema):
 
     allow_extra_fields = True
     filter_extra_fields = True
-    if_key_missing = None
 
     pre_validators = [variabledecode.NestedVariables()]
 
     username = validators.String(not_empty=True, min=1, max=255)
-    team = validators.Int(min=0, if_empty=None)
+    team = validators.Int(not_empty=True, min=0)
     permgroups = PermGroupsFields()
 
+    def _to_python(self, value_dict, state):
+        self.assert_dict(value_dict, state)
+        value_dict.setdefault('permgroups', [])
+        return super(AddTeamMemberForm, self)._to_python(value_dict, state)
 
 
 class UserManagementAdmin(Component):
@@ -388,13 +391,13 @@ class UserManagementAdmin(Component):
                 req.redirect(req.panel_href())
 
             try:
-                team, project_id = session.query(Team, Project.id).\
+                team, project = session.query(Team, Project).\
                                            outerjoin(Project, Team.project).\
                                            filter(Team.id==tid).one()
             except NoResultFound:
                 add_warning(req, _("Team #%(id)s doesn't exist", id=tid))
                 req.redirect(req.panel_href())
-            if project_id is None:
+            if project is None:
                 add_warning(req, _('Selected team is not connected with any project. '
                                    'You were redirected to "team-project connection" page.'))
                 req.redirect(req.href.admin('projects', 'team-project', tid))
@@ -433,7 +436,7 @@ class UserManagementAdmin(Component):
                         for key, val in new_perms.iteritems():
                             if val == old_perms[key]:
                                 continue
-                            Project.set_permission(self.env, project_id, member.username,
+                            Project.set_permission(self.env, project.id, member.username,
                                                    _perms_map[key], grant=val)
                     add_notice(req, _('Your changes have been saved.'))
                     req.redirect(req.panel_href())
@@ -441,7 +444,7 @@ class UserManagementAdmin(Component):
             data = {
                 'view': 'detail',
                 'team': team,
-                'project_id': project_id,
+                'team_project': project,
                 'members': members,
             }
             return 'admin_members.html', data
@@ -485,15 +488,15 @@ class UserManagementAdmin(Component):
             elif req.args.has_key('add'):
                 validator = AddTeamMemberForm()
                 form, errs = process_form(req.args, validator)
-                username   = form['username']
-                team_id    = form['team']
-                permgroups = form['permgroups']
                 if not errs:
+                    username   = form['username']
+                    team_id    = form['team']
+                    permgroups = form['permgroups']
                     session.begin()
                     try:
                         team, project_id = session.query(Team, Project.id).\
                                                    outerjoin(Project, Team.project).\
-                                                   filter(Team.id==team_id).first()
+                                                   filter(Team.id==team_id).one()
                     except NoResultFound:
                         errs = [_("Team #%(id)s doesn't exist", id=team_id)]
                 if not errs:
@@ -514,7 +517,7 @@ class UserManagementAdmin(Component):
                                 if permgroups[k]:
                                     Project.grant_permission(self.env, project_id, username, perm)
                             add_notice(req, _("User %(username)s has been added to selected "
-                                              "permission groups", username=username))
+                                              "permission groups.", username=username))
                         else:
                             add_warning(req, _("Can not add user to specified permission groups "
                                                "as selected team is not connected with any project."))
@@ -525,8 +528,9 @@ class UserManagementAdmin(Component):
                     add_warning(req, err)
 
         teams = session.query(Team.id, Team.name).all()
-        members = session.query(Team, User.id, User.username).\
+        members = session.query(Team, Project, User.id, User.username).\
                           join(User, Team.members).\
+                          outerjoin(Project, Team.project).\
                           order_by(Team.id, User.username).all()
         data = {
             'teams': teams,
