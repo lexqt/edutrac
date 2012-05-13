@@ -68,6 +68,11 @@ team_members = Table('team_members', metadata,
 )
 
 
+group_managers = Table('group_managers', metadata,
+    Column('user_id',  Integer, ForeignKey('users.id', ondelete='CASCADE'),  primary_key=True),
+    Column('group_id', Integer, ForeignKey('groups.id', ondelete='CASCADE'), primary_key=True),
+)
+
 
 metagroup_syllabus_rel = Table('metagroup_syllabus_rel', metadata,
     Column('metagroup_id', Integer, ForeignKey('metagroups.id', ondelete='CASCADE'), primary_key=True),

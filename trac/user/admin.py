@@ -1,5 +1,8 @@
 # Copyright (C) 2012 Aleksey A. Porfirov
 
+import re
+from itertools import groupby
+
 from trac.core import Component, implements, TracError
 from trac.admin.api import IAdminPanelProvider, AdminArea
 
@@ -63,6 +66,10 @@ class SelectedTeamMembers(formencode.Schema):
 
     members = formencode.ForEach(validators.Int(), convert_to_list=True)
 
+class SelectedGroupManagers(formencode.Schema):
+
+    managers = formencode.ForEach(validators.Int(), convert_to_list=True)
+
 
 class PermGroupsFields(formencode.Schema):
 
@@ -91,6 +98,17 @@ class AddTeamMemberForm(formencode.Schema):
         return super(AddTeamMemberForm, self)._to_python(value_dict, state)
 
 
+class AddGroupManagerForm(formencode.Schema):
+
+    allow_extra_fields = True
+    filter_extra_fields = True
+
+    username = validators.String(not_empty=True, min=1, max=255)
+    group = validators.Int(not_empty=True, min=0)
+    perm_manager = validators.Bool()
+
+
+
 class UserManagementAdmin(Component):
     """
     Provides admin interface for user groups management.
@@ -113,6 +131,8 @@ class UserManagementAdmin(Component):
                    set([AdminArea.GLOBAL]))
             yield ('groups', _('Groups'), 'team-members', _('Team members'),
                    set([AdminArea.GLOBAL]))
+            yield ('groups', _('Groups'), 'group_managers', _('Group managers'),
+                   set([AdminArea.GLOBAL]))
 
     def render_admin_panel(self, req, cat, page, path_info, area, area_id):
         req.perm.require('TRAC_ADMIN')
@@ -128,6 +148,17 @@ class UserManagementAdmin(Component):
         elif page == 'team-members':
             tid = int(path_info) if path_info else None
             return self._members_panel(req, tid)
+        elif page == 'group_managers':
+            gid     = None
+            user_id = None
+            m = re.match(r'(\d+)/(\d+)', path_info) if path_info else None
+            if m:
+                try:
+                    gid     = int(m.group(1))
+                    user_id = int(m.group(2))
+                except ValueError:
+                    pass
+            return self._group_managers_panel(req, gid, user_id)
 
     def _metagroups_panel(self, req, gid):
         session = self.env.get_sa_session()
@@ -537,6 +568,147 @@ class UserManagementAdmin(Component):
             'members': members,
         }
         return 'admin_members.html', data
+
+    def _group_managers_panel(self, req, gid=None, user_id=None):
+        session = self.env.get_sa_session()
+        if gid is not None and user_id is not None:
+            # detail view
+            if req.args.has_key('cancel'):
+                req.redirect(req.panel_href())
+
+            user  = session.query(User).get(user_id)
+            group = session.query(Group).get(gid)
+            if not user:
+                add_warning(req, _("User #%(id)s doesn't exist", id=user_id))
+                req.redirect(req.panel_href())
+            if not group:
+                add_warning(req, _("Group #%(id)s doesn't exist", id=gid))
+                req.redirect(req.panel_href())
+            if not user in group.managers:
+                add_warning(req, _("User #%(id)s is not a group manager of selected group.", id=user_id))
+                req.redirect(req.panel_href())
+            man_perm = project_permissions.alias('man_perm')
+            perms = session.query(Project,
+                                  (func.count(man_perm.c.action)==1)).\
+                           join(User, Group.managers).\
+                           join(Team, Group.teams).\
+                           join(Project, Team.project).\
+                           outerjoin(man_perm, (man_perm.c.project_id==Project.id) &
+                                               (man_perm.c.username==User.username) &
+                                               (man_perm.c.action=='Manager')).\
+                           group_by(Project.id).\
+                           order_by(Project.id).\
+                           filter((User.id==user.id) & (Group.id==group.id)).all()
+            if not perms:
+                add_warning(req, _('Selected group has no associated projects.'))
+                req.redirect(req.panel_href())
+            if req.method == 'POST':
+                errs = []
+                if req.args.has_key('save'):
+                    validator = ForEach(validators.Int(min=0), as_list=True)
+                    new_perms, errs = process_form(req.args.getlist('manager'), validator)
+                    if not errs:
+                        for project, has_old in perms:
+                            has_new = project.id in new_perms
+                            if has_new != has_old:
+                                Project.set_permission(self.env, project.id, user.username,
+                                                       'Manager', grant=has_new)
+                        add_notice(req, _('Your changes have been saved.'))
+                        req.redirect(req.panel_href())
+
+                for err in errs:
+                    add_warning(req, err)
+
+            data = {
+                'view': 'detail',
+                'user': user,
+                'group': group,
+                'perms': perms,
+            }
+            return 'admin_group_managers.html', data
+
+        # list view
+        if req.method == 'POST':
+            if req.args.has_key('remove'):
+                managers = variabledecode.variable_decode(req.args)
+                managers = managers.get('group', {})
+                to_remove = {}
+                errs = []
+                if managers:
+                    validator = SelectedGroupManagers()
+                    for gid, arr in managers.iteritems():
+                        ids, errs = process_form(arr, validator)
+                        if errs:
+                            break
+                        to_remove[gid] = ids['managers']
+                    else:
+                        for gid, ids in to_remove.iteritems():
+                            session.begin()
+                            group = session.query(Group).get(gid)
+                            if not group:
+                                session.rollback()
+                                errs = [_("Group #%(id)s doesn't exist", id=gid)]
+                            for user_id in ids:
+                                user = session.query(User).get(user_id)
+                                if user and user in group.managers:
+                                    group.managers.remove(user)
+                                    for team in group.teams:
+                                        if team.project:
+                                            Project.revoke_permission(
+                                                self.env, team.project.id, user.username)
+                            session.commit()
+                        else:
+                            add_notice(req, _('The selected items have been removed.'))
+                            req.redirect(req.panel_href())
+
+                for err in errs:
+                    add_warning(req, err)
+
+            elif req.args.has_key('add'):
+                validator = AddGroupManagerForm()
+                form, errs = process_form(req.args, validator)
+                if not errs:
+                    username     = form['username']
+                    group_id     = form['group']
+                    perm_manager = form['perm_manager']
+                    session.begin()
+                    group = session.query(Group).get(group_id)
+                    if not group:
+                        errs = [_("Group #%(id)s doesn't exist", id=group_id)]
+                if not errs:
+                    user = session.query(User).filter(User.username==username).first()
+                    if not user:
+                        errs = [_("User %(username)s doesn't exist", username=username)]
+                if not errs:
+                    if group in user.managed_groups:
+                        errs = [_("User %(username)s is already a group manager of selected group.",
+                                  username=username)]
+                if not errs:
+                    user.managed_groups.append(group)
+                    add_notice(req, _("User %(username)s has been assigned to group manager of selected group.",
+                                      username=username))
+                    if perm_manager:
+                        for team in group.teams:
+                            if team.project:
+                                Project.grant_permission(self.env, team.project.id, username, 'Manager')
+                        add_notice(req, _("User %(username)s has been added to selected "
+                                          "permission groups.", username=username))
+                    session.commit()
+                    req.redirect(req.panel_href())
+
+                for err in errs:
+                    add_warning(req, err)
+
+        groups   = session.query(Group).all()
+        managers = session.query(Group, User).\
+                           join(User, Group.managers).\
+                           order_by(Group.id, User.username).all()
+
+        data = {
+            'groups': groups,
+            'managers': managers,
+        }
+        return 'admin_group_managers.html', data
 
     # ITemplateProvider
 

@@ -1,0 +1,120 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:i18n="http://genshi.edgewall.org/i18n">
+  <xi:include href="admin.html"/>
+  <head>
+    <title>Group managers</title>
+  </head>
+
+  <body>
+
+    <py:choose test="view">
+      <form py:when="'detail'" class="mod" method="post" action="">
+        <h2 i18n:msg="group_name, manager_name">Group: ${group.name}. Manager: ${user_fullname(user.username)}</h2>
+        <h3>Project permission groups</h3>
+        <table class="listing">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Project</th>
+              <th>Manager</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr py:for="project, perm_man in perms">
+              <td>${project.id}</td>
+              <td>${project.name}</td>
+              <td><input type="checkbox" name="manager" value="${project.id}"
+                         checked="${perm_man or None}"/></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="buttons">
+          <input type="submit" name="cancel" value="${_('Cancel')}"/>
+          <input type="submit" name="save" value="${_('Save')}"/>
+        </div>
+      </form>
+
+      <py:otherwise>
+        <h2>Manage group managers</h2>
+
+        <form class="addnew" method="post" action="">
+          <fieldset>
+            <legend>Add group manager:</legend>
+            <div class="field">
+              <label>User:<br/><input type="text" name="username" /></label>
+            </div>
+            <div class="field">
+              <label>Group:<br/>
+                <select name="group">
+                  <option py:for="group in groups" value="${group.id}">
+                    ${group.name}
+                  </option>
+                </select>
+              </label>
+            </div>
+            <fieldset>
+              <legend>With permission groups:</legend>
+              <p class="hint">
+                Add user to selected permission groups for all projects of selected group.
+                You always can do it later by selecting user from the list on the left.
+              </p>
+              <label>
+                <input type="checkbox" name="perm_manager" value="1" checked="checked"/> Project Manager
+              </label>
+            </fieldset>
+            <div class="buttons">
+              <input type="submit" name="add" value="${_('Add')}"/>
+            </div>
+          </fieldset>
+        </form>
+
+        <p class="help">
+          Use the form on the right to assign new group manager.
+          Select users from the list below to remove group managers.
+          Or click on the user to edit his permission groups for group projects.
+        </p>
+
+        <form method="post" action="">
+          <table class="listing">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Group</th>
+                <th>Group managers</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr py:for="group, items in groupby(managers, key=lambda r: r[0])">
+                <td class="id">${group.id}</td>
+                <td class="name">
+                  ${group.name}
+                </td>
+                <td class="managers">
+                  <div py:for="group, user in items" class="manager">
+                    <input type="checkbox"
+                           name="group.${group.id}.managers" value="${user.id}"/>
+                    <a href="${panel_href(group.id, user.id)}" title="${_('Edit permission groups')}">
+                      ${user_fullname(user.username, with_username=True)}
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="buttons">
+            <input type="submit" name="remove" value="${_('Remove selected group managers')}"/>
+            <p class="hint">
+              Granted project permissions will be revoked as well.
+            </p>
+          </div>
+        </form>
+      </py:otherwise>
+    </py:choose>
+  </body>
+
+</html>

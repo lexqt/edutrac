@@ -2,7 +2,7 @@ from trac.util.translation import _
 
 from sqlalchemy import Column, Integer, String, Text, SmallInteger, Boolean
 from sqlalchemy.orm import relationship, backref
-from trac.db_sqlalchemy import ModelBase, groupmeta_rel, teamgroup_rel, team_members
+from trac.db_sqlalchemy import ModelBase, groupmeta_rel, teamgroup_rel, team_members, group_managers
 
 
 __all__ = ['User', 'Team', 'Group', 'Metagroup']
@@ -19,6 +19,9 @@ class User(ModelBase):
     id       = Column('id', Integer, primary_key=True, autoincrement=True)
     username = Column('username', String(255), nullable=False, unique=True)
     password = Column('password', String(255))
+
+    # backrefs
+    managed_groups = None  # see `Group.managers`
 
 
 
@@ -53,7 +56,8 @@ class Group(ModelBase):
     description = Column('description', Text, server_default='')
 
     # relations
-    teams = relationship(Team, secondary=teamgroup_rel, backref=backref('group', uselist=False))
+    teams    = relationship(Team, secondary=teamgroup_rel, backref=backref('group', uselist=False))
+    managers = relationship(User, secondary=group_managers, backref='managed_groups')
 
     # backrefs
     metagroup = None  # see `Metagroup.groups`
