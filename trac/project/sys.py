@@ -219,6 +219,7 @@ class PostloginModule(Component):
             elif step == STEP_SET_PROJECT:
                 role = UserRole(s['role'])
                 data['projects'] = self.pm.get_user_projects(req.authname, role, with_names=True)
+                s['projects'] = ' '.join([str(p[0]) for p in data['projects']])
                 if 'project' not in req.args:
                     prev_project_id = s.get('project')
                     data['prev_project'] = int(prev_project_id) if prev_project_id is not None else None
@@ -250,7 +251,6 @@ class PostloginModule(Component):
                 old_project_id = s.get('project') if not s.get('postlogin_change_param') else None
                 old_project_id = int(old_project_id) if old_project_id is not None else None
                 s['project']  = project_id
-                s['projects'] = ' '.join([str(p[0]) for p in data['projects']])
                 data['finalize'] = True
                 for listener in self.project_switch_listeners:
                     listener.project_switched(req, project_id, old_project_id)
