@@ -1,5 +1,10 @@
 from trac.util.translation import _
 
+import formencode
+from formencode import validators
+from trac.util.formencode_addons import BoolInt
+
+
 __all__ = ['Scale', 'NominalScale', 'BooleanScale',
            'OrdinalScale', 'IntervalScale', 'RatioScale',
            'UnityScale', 'PercentScale']
@@ -102,6 +107,8 @@ class PercentScale(RatioScale):
 # Util functions
 
 def prepare_rendered_value(scale, value):
+    '''Prepare `value` with associated `scale` to be rendered.
+    Return unicode string'''
     if not scale:
         return unicode(value)
     if isinstance(value, basestring):
@@ -126,3 +133,88 @@ def prepare_rendered_value(scale, value):
         return value
 
     return unicode(value)
+
+def prepare_editable_var(scale):
+    '''Prepare special info dict that may be used to render
+    form element to edit variable with specified `scale`'''
+    type_ = scale.type
+    input_type = 'text'
+    help_text  = ''
+    info = {}
+    def is_scale(cls):
+        return isinstance(scale, cls)
+    if type_ is bool:
+        help_text = _('Yes / No')
+        input_type = 'checkbox'
+    elif is_scale(IntervalScale) and (
+            scale.min is not None or scale.max is not None):
+        min_ = scale.min if scale.min is not None else ''
+        max_ = scale.max if scale.max is not None else ''
+        help_text = u'{0}..{1}'.format(min_, max_)
+    elif is_scale(NominalScale) and scale.terms:
+        input_type = 'select'
+        options = list(scale.terms)
+        if is_scale(OrdinalScale):
+            options.sort(key=lambda o: scale.order[o])
+        info['input_options'] = options
+    elif type_ is int:
+        help_text = _('Integer number')
+    elif type_ is float:
+        help_text = _('Float number')
+    info.update({
+        'input_type': input_type,
+        'help_text': help_text,
+    })
+    return info
+
+def create_scale_validator(scale, params):
+    '''Create FormEncode validator for single scaled variable.
+
+    `scale`: variable scale
+    `params`: default kw arguments for validator
+    '''
+    def is_scale(cls):
+        return isinstance(scale, cls)
+    kwargs = params.copy()
+    type_ = scale.type
+
+    if type_ is bool:
+        v = BoolInt
+    elif is_scale(NominalScale) and scale.terms:
+        v = validators.OneOf
+        kwargs['list'] = scale.terms
+    elif type_ is int:
+        v = validators.Int
+    elif type_ is float:
+        v = validators.Number
+    else:
+        v = validators.String
+
+    if is_scale(IntervalScale):
+        kwargs.update({
+            'min': scale.min,
+            'max': scale.max,
+        })
+    v = v(**kwargs)
+    return v
+
+
+class _ScaledVarGroupForm(formencode.Schema):
+
+    allow_extra_fields = True
+    filter_extra_fields = True
+
+def create_group_validator(variables, each_params=None):
+    '''Create FormEncode validator for group of scaled variables.
+
+    `variables`: dict { <alias>: { 'scale': <Scale>, ... }, ... }
+    `each_params`: default kw arguments for each variable validator
+    '''
+    fields = {}
+    params = each_params or {}
+    for name, var in variables.iteritems():
+        fields[name] = create_scale_validator(var['scale'], params)
+
+    validator = _ScaledVarGroupForm(**fields)
+    return validator
+

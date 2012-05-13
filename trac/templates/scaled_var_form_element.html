@@ -1,0 +1,27 @@
+<!--!
+Display a form element for specified scaled variable.
+Designed to be used with trac.evaluation.api.scale.prepare_editable_var.
+
+Arguments:
+ `alias`: variable name used as `name` argument of form element
+ `value`: variable value
+ `input_type`: type string ('checkbox', 'select', 'text', ...)
+ `help_text`: text to show next to element
+ `input_options`: list of selectable values
+-->
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:i18n="http://genshi.edgewall.org/i18n"
+      py:strip="">
+
+  <span py:choose="input_type" class="scaled-input">
+    <input py:when="'checkbox'" type="checkbox" name="${alias}" value="1" checked="${value or None}" />
+    <select py:when="'select'" name="${alias}">
+      <option py:for="opt in input_options" value="${opt}" selected="${value==opt or None}">${opt}</option>
+    </select>
+    <input py:otherwise="" type="text" name="${alias}" value="${value}" size="6" />
+    <span py:if="help_text" class="help">[${help_text}]</span>
+  </span>
+
+</html>

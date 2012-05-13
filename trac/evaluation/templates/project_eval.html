@@ -40,13 +40,13 @@
               <py:when test="view">
                 ${format_scale(crit.scale, crit.value)}
               </py:when>
-              <py:otherwise py:choose="crit.type">
-                <input py:when="'checkbox'" type="checkbox" name="${crit.alias}" value="1" checked="${crit.value or None}" />
-                <select py:when="'select'" name="${crit.alias}">
-                  <option py:for="opt in crit.options" value="${opt}" selected="${crit.value==opt or None}">${opt}</option>
-                </select>
-                <input py:otherwise="" type="text" name="${crit.alias}" value="${crit.value}" size="6" />
-                <py:if test="crit.help">[${crit.help}]</py:if>
+              <py:otherwise>
+                <xi:include href="scaled_var_form_element.html" py:with="
+                  alias = crit.alias;
+                  value = crit.value;
+                  input_options = crit.input_options;
+                  input_type = crit.input_type;
+                  help_text = crit.help_text;" />
               </py:otherwise>
             </td>
           </tr>

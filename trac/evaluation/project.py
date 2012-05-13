@@ -2,8 +2,6 @@ from collections import OrderedDict
 from sqlalchemy import bindparam
 
 import formencode
-from formencode import validators
-from trac.util.formencode_addons import BoolInt
 from trac.util.translation import _
 from trac.web.chrome import add_package
 
@@ -11,7 +9,7 @@ from trac.core import Component, implements
 from trac.perm import IPermissionRequestor
 
 from trac.evaluation.api.components import EvaluationManagement
-from trac.evaluation.api.scale import IntervalScale, NominalScale, OrdinalScale
+from trac.evaluation.api.scale import prepare_editable_var, create_scale_validator, create_group_validator
 from trac.evaluation.api.error import EvalModelError
 
 
@@ -119,33 +117,8 @@ class ProjectEvaluation(Component):
                 continue
             # set input type, value help_text, row extra args
             scale = crit['scale']
-            type_ = scale.type
-            input_type = 'text'
-            help_text  = ''
-            def is_scale(cls):
-                return isinstance(scale, cls)
-            if type_ is bool:
-                help_text = _('Yes / No')
-                input_type = 'checkbox'
-            elif is_scale(IntervalScale) and (
-                    scale.min is not None or scale.max is not None):
-                min_ = scale.min if scale.min is not None else ''
-                max_ = scale.max if scale.max is not None else ''
-                help_text = u'{0}..{1}'.format(min_, max_)
-            elif is_scale(NominalScale) and scale.terms:
-                input_type = 'select'
-                options = list(scale.terms)
-                if is_scale(OrdinalScale):
-                    options.sort(key=lambda o: scale.order[o])
-                row['options'] = options
-            elif type_ is int:
-                help_text = _('Integer number')
-            elif type_ is float:
-                help_text = _('Float number')
-            row.update({
-                'type': input_type,
-                'help': help_text,
-            })
+            info = prepare_editable_var(scale)
+            row.update(info)
         values.sort(key=lambda r: r['order'])
 
         project_id  = req.data['project_id']
@@ -179,14 +152,7 @@ class ProjectEvaluation(Component):
         `criteria`: dict { <alias>: { 'scale': <Scale>, ... }, ... }
         `each_params`: default kw arguments for each criterion validator
         '''
-        fields = {}
-        params = each_params or {}
-        for name, crit in criteria.iteritems():
-            v = self.create_criterion_validator(crit['scale'], params)
-            fields[name] = v
-
-        validator = ProjectEvalForm(**fields)
-        return validator
+        return create_group_validator(criteria, each_params)
 
     def create_criterion_validator(self, scale, params):
         '''Create FormEncode validator for single criterion
@@ -194,30 +160,7 @@ class ProjectEvaluation(Component):
         `scale`: criterion scale
         `params`: default kw arguments for validator
         '''
-        def is_scale(cls):
-            return isinstance(scale, cls)
-        kwargs = params.copy()
-        type_ = scale.type
-
-        if type_ is bool:
-            v = BoolInt
-        elif is_scale(NominalScale) and scale.terms:
-            v = validators.OneOf
-            kwargs['list'] = scale.terms
-        elif type_ is int:
-            v = validators.Int
-        elif type_ is float:
-            v = validators.Number
-        else:
-            v = validators.String
-
-        if is_scale(IntervalScale):
-            kwargs.update({
-                'min': scale.min,
-                'max': scale.max,
-            })
-        v = v(**kwargs)
-        return v
+        return create_scale_validator(scale, params)
 
     def fetch_db_data(self, project_id, criterion=None):
         '''Fetch project evaluation data from DB.
