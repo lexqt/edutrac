@@ -15,6 +15,9 @@
     <div id="content" class="admin">
       <h1>Administration: ${area_label}</h1>
       <div id="tabs">
+        <div id="area-select">
+          <a href="${href.admin('select')}">Select area</a>
+        </div>
         <ul py:for="category, panels in groupby(panels, lambda p: p.category)"
             py:with="cat_is_active = category.id == active_cat">
           <li class="${cat_is_active and 'active' or None}">

@@ -112,7 +112,7 @@ class ProjectManagement(Component):
                 FROM developer_projects
                 WHERE username=%s
             '''
-        elif role == UserRole.MANAGER:
+        elif UserRole.PROJECT_MANAGER in role:
             query = '''
                 SELECT project_id, project_name
                 FROM manager_projects

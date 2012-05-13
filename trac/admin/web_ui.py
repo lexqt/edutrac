@@ -40,6 +40,10 @@ from trac.wiki.formatter import format_to_html
 from trac.user.api import UserRole
 from trac.project.api import ProjectManagement
 
+from trac.user.model import Metagroup, Group, User
+from trac.project.model import Syllabus, Project
+
+
 
 class AdminModule(Component):
     """Web administration interface provider and panel manager."""
@@ -66,6 +70,9 @@ class AdminModule(Component):
     # IRequestHandler methods
 
     def match_request(self, req):
+        if req.path_info.startswith('/admin/select'):
+            return True
+
         match = re.match('/admin(?:/(s|m|g|p)/(\d+))?(?:/([^/]+)(?:/([^/]+)(?:/(.+))?)?)?$',
                          req.path_info)
         if match:
@@ -77,20 +84,24 @@ class AdminModule(Component):
             return True
 
     def process_request(self, req):
-        area    = req.args.get('admin_area')
-        area_id = req.args.get('admin_area_id')
         pid  = req.project # is project data ready
         role = req.data['role']
 
+        if req.path_info.startswith('/admin/select'):
+            return self._do_area_select(req, role)
+
+        area    = req.args.get('admin_area')
+        area_id = req.args.get('admin_area_id')
+
         redirect = False
         if area == AdminArea.GLOBAL and role != UserRole.ADMIN:
-            if UserRole.GROUP_MANAGER in role:
-                area    = AdminArea.GROUP
-                area_id = req.data['group_id']
-                redirect = True
-            elif UserRole.PROJECT_MANAGER in role:
+            if UserRole.PROJECT_MANAGER in role:
                 area    = AdminArea.PROJECT
                 area_id = req.data['project_id']
+                redirect = True
+            elif UserRole.GROUP_MANAGER in role:
+                area    = AdminArea.GROUP
+                area_id = req.data['group_id']
                 redirect = True
             if redirect:
                 req.redirect(req.href('admin', AdminArea.href_part(area, area_id)))
@@ -149,6 +160,62 @@ class AdminModule(Component):
 
         add_stylesheet(req, 'common/css/admin.css')
         return template, data, None
+
+    def _do_area_select(self, req, role):
+        areas = []
+        if UserRole.PROJECT_MANAGER in role:
+            areas.append(AdminArea.PROJECT)
+        if UserRole.GROUP_MANAGER in role:
+            areas.append(AdminArea.GROUP)
+        if UserRole.ADMIN in role:
+            areas.append(AdminArea.METAGROUP)
+            areas.append(AdminArea.SYLLABUS)
+            areas.append(AdminArea.GLOBAL)
+        areas.reverse()
+
+        links = []
+        def add_link(header, area, area_id, name):
+            links.append((header,
+                          req.href.admin(AdminArea.href_part(area, area_id)),
+                          name))
+
+        session = self.env.get_sa_session()
+
+        for area in areas:
+            if area == AdminArea.GLOBAL:
+                add_link(_('System'), area, None, _('Global admin area'))
+            elif area == AdminArea.SYLLABUS:
+                header = _('Syllabus')
+                items = session.query(Syllabus.id, Syllabus.name).order_by(Syllabus.id).all()
+                for id, name in items:
+                    add_link(header, area, id, name)
+            elif area == AdminArea.METAGROUP:
+                header = _('Metagroup')
+                items = session.query(Metagroup.id, Metagroup.name).order_by(Metagroup.id).all()
+                for id, name in items:
+                    add_link(header, area, id, name)
+            elif area == AdminArea.GROUP:
+                header = _('Group')
+                if role == UserRole.ADMIN:
+                    items = session.query(Group.id, Group.name).order_by(Group.id).all()
+                elif UserRole.GROUP_MANAGER in role:
+                    user = session.query(User).filter(User.username==req.authname).one()
+                    items = [(g.id, g.name) for g in user.managed_groups]
+                for id, name in items:
+                    add_link(header, area, id, name)
+            elif area == AdminArea.PROJECT:
+                header = _('Project')
+                if role == UserRole.ADMIN:
+                    items = session.query(Project.id, Project.name).order_by(Project.id).all()
+                elif UserRole.PROJECT_MANAGER in role:
+                    items = self.pm.get_user_projects(req.authname, role, with_names=True)
+                for id, name in items:
+                    add_link(header, area, id, name)
+
+        data = {
+            'links': links,
+        }
+        return 'admin_select.html', data, None
 
     def _check_access(self, req, area, area_id):
         role = UserRole.ADMIN  # default required role

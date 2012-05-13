@@ -1,0 +1,26 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/">
+  <xi:include href="layout.html" />
+  <head>
+    <title>Administration area</title>
+  </head>
+
+  <body>
+    <div id="content">
+      <h1>Administration area selection</h1>
+  
+      <py:for each="header, items in groupby(links, key=lambda r: r[0])">
+        <h2>${header}</h2>
+        <ul>
+          <li py:for="header, url, label in items">
+            <a href="${url}">${label}</a>
+          </li>
+        </ul>
+      </py:for>
+    </div>
+  </body>
+</html>

@@ -27,6 +27,18 @@
   color: #000;
 }
 
+#area-select {
+  border-bottom: 1px solid #CCCCCC;
+  margin-bottom: 0.5em;
+  padding-bottom: 0.5em;
+  text-align: center;
+}
+#area-select :link {
+}
+#area-select :link:hover {
+  background-color: #ddc;
+}
+
 #tabcontent { padding: 0 0 0.4em 2em; margin: 1em 0 0 12em; min-height: 300px; }
 #tabcontent h2 { color: #333; }
 #tabcontent form { overflow: auto; padding: 0 1px; }
@@ -79,7 +91,7 @@ form#addplug { width: 35% }
 table.trac-pluglist td { padding-left: 1em; }
 
 /* Perm Panel */
-#permlist div { float: left; min-width: 13em; max-width: 33%;
+#permlist div { /*float: left;*/ min-width: 13em; max-width: 33%;
   padding: 0 2em 0 0; white-space: nowrap;
 }
 fieldset tr.field th { text-align: right; }
