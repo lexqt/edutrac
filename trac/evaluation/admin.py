@@ -104,10 +104,14 @@ class EvaluationAdmin(Component):
         elif area == AdminArea.SYLLABUS:
             return self._packages_syllabus_panel(req, area_id)
 
+    def _get_packages(self):
+        pkgs_path = os.path.join(self.env.path, 'evaluation')
+        packages = os.listdir(pkgs_path)
+        return [p for p in packages if os.path.isdir(os.path.join(pkgs_path, p))]
 
     def _packages_global_panel(self, req):
         pkgs_path = os.path.join(self.env.path, 'evaluation')
-        packages = os.listdir(pkgs_path)
+        packages = self._get_packages()
 
         if req.method == 'POST':
             if req.args.has_key('remove'):
@@ -140,8 +144,7 @@ class EvaluationAdmin(Component):
         return 'admin_evaluation_packages.html', data
 
     def _packages_syllabus_panel(self, req, syllabus_id):
-        pkgs_path = os.path.join(self.env.path, 'evaluation')
-        packages = os.listdir(pkgs_path)
+        packages = self._get_packages()
         sconfig = self.configs.syllabus(syllabus_id)
         current_pkg = sconfig.get('evaluation', 'package')
 
@@ -178,8 +181,10 @@ class EvaluationAdmin(Component):
         pkg_filename = os.path.basename(pkg_filename)
         if not pkg_filename:
             raise TracError(_('No file uploaded'))
-        if pkg_filename.endswith('.tar.gz'):
+        if pkg_filename.endswith('.tar.gz') or pkg_filename.endswith('.tar.bz'):
             pkg_name = pkg_filename[:-7]
+        elif pkg_filename.endswith('.tar'):
+            pkg_name = pkg_filename[:-4]
         else:
             raise TracError(_('Uploaded file is not a supported archive file'))
 
@@ -205,6 +210,9 @@ class EvaluationAdmin(Component):
             shutil.copytree(from_path, target_path)
             add_notice(req, _('Package %(pkg)s uploaded successfully',
                               pkg=pkg_name))
+        except tarfile.TarError, e:
+            raise TracError(_('Error occurred while unpacking package tarball: %(err)s',
+                              err=exception_to_unicode(e)))
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
