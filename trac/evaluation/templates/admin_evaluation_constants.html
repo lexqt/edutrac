@@ -1,0 +1,54 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:i18n="http://genshi.edgewall.org/i18n">
+  <xi:include href="admin.html"/>
+  <head>
+    <title>Evaluation model constants</title>
+  </head>
+
+  <body>
+    <h2>Evaluation model constants</h2>
+
+    <form method="post" action="">
+      <table class="listing">
+        <thead>
+          <tr>
+            <th class="sel">&nbsp;</th>
+            <th>Constant</th>
+            <th>Default value</th>
+            <th>Current value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr py:for="item in constants">
+            <td class="sel"><input type="checkbox" name="sel" value="${item.alias}"/></td>
+            <td>
+              <dl class="evalvar">
+                <dt>${item.label}</dt>
+                <dd>${item.description}</dd>
+              </dl>
+            </td>
+            <td>${format_scale(item.scale, item.default_value)}</td>
+            <td>
+              <xi:include href="scaled_var_form_element.html" py:with="
+                alias = item.alias;
+                value = item.value;
+                input_options = item.input_options;
+                input_type = item.input_type;
+                help_text = item.help_text;" />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="buttons">
+        <input type="submit" name="save"  value="${_('Save')}"/>
+        <input type="submit" name="reset" value="${_('Reset selected to default values')}"/>
+      </div>
+    </form>
+
+  </body>
+</html>

@@ -32,6 +32,9 @@ class ModelConstantAccessor(object):
     def __contains__(self, alias):
         return ModelConstantMetaclass.has_constant(self.model, alias)
 
+    def all(self):
+        return ModelConstantMetaclass.get_all_constants(self.model)
+
 
 
 ########################################
@@ -109,6 +112,16 @@ class ModelConstantMetaclass(ModelItemMetaclass):
 
     # per-model "constant_alias: variable_class" registry
     _registry = {}
+
+    def __new__(mcs, name, bases, d):
+        if 'default_value' in d:
+            scale = d.get('scale')
+            if not scale:
+                for base in bases:
+                    if hasattr(base, 'scale'):
+                        scale = base.scale
+            d['default_value'] = scale.get(d['default_value'])
+        return ModelItemMetaclass.__new__(mcs, name, bases, d)
 
     @classmethod
     def get_all_constants(cls, model):

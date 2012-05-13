@@ -9,10 +9,19 @@ __all__ = ['Scale', 'NominalScale', 'BooleanScale',
            'OrdinalScale', 'IntervalScale', 'RatioScale',
            'UnityScale', 'PercentScale']
 
+
+
+class _NoType(object):
+
+    def __new__(cls, val=None):
+        return val
+
 class Scale(object):
 
-    def __init__(self, type):
-        self.type_ = type
+    def __init__(self, type_=None):
+        if type_ is None:
+            type_ = _NoType
+        self.type_ = type_
 
     def get(self, value):
         if value is None:
@@ -208,12 +217,18 @@ def create_group_validator(variables, each_params=None):
     '''Create FormEncode validator for group of scaled variables.
 
     `variables`: dict { <alias>: { 'scale': <Scale>, ... }, ... }
+                 or
+                 dict { <alias>: <ModelVariable | ModelConstant | object with scale attr >, ... }
     `each_params`: default kw arguments for each variable validator
     '''
     fields = {}
     params = each_params or {}
     for name, var in variables.iteritems():
-        fields[name] = create_scale_validator(var['scale'], params)
+        if hasattr(var, 'scale'):
+            scale = var.scale
+        else:
+            scale = var['scale']
+        fields[name] = create_scale_validator(scale, params)
 
     validator = _ScaledVarGroupForm(**fields)
     return validator

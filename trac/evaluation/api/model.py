@@ -42,10 +42,10 @@ class EvaluationModel(object):
 
     # Model instance variables
 
-    vars      = None
-    constants = None
-    sources   = None
-    sconfig   = None
+    vars      = None  # see `ModelVariableAccessor`
+    constants = None  # see `ModelConstantAccessor`
+    sources   = None  # see `SourceAccessor`
+    sconfig   = None  # syllabus configuration
 
     def __init__(self, syllabus_id):
         self.vars = ModelVariableAccessor(self)
@@ -201,7 +201,7 @@ class ModelVariable(object):
     time_groupby_support = set()
     subj_groupby_support = set()
 
-    scale = Scale(lambda a: a)
+    scale = Scale()
 
     alias = None
     label = None
@@ -395,7 +395,7 @@ class ModelConstant(object):
     label = None
     description = None
 
-    scale = Scale(lambda a: a)
+    scale = Scale()
 
     default_value = None
 
@@ -403,14 +403,34 @@ class ModelConstant(object):
         self.model = model
         self._current_value = None
 
+    def reload(self):
+        self._current_value = None
+
+    def reset(self):
+        self.set(self.default_value)
+
     def get(self):
         if self._current_value is None:
-            c = self.model.sconfig
-            val = c.get('evaluation-constants', self.alias.lower(), self.default_value)
-            val = self.scale.get(val)
+            val = self._get_from_conf()
             self._current_value = val
         return self._current_value
 
+    def _get_from_conf(self):
+        c = self.model.sconfig
+        type_ = self.scale.type
+        if type_ is bool:
+            func = c.getbool
+        else:
+            func = c.get
+        val = func('evaluation-constants', self.alias.lower(), self.default_value)
+        try:
+            return self.scale.get(val)
+        except:
+            return self.default_value
+
+    def set(self, value):
+        value = self.scale.get(value)
+        self.model.sconfig.set('evaluation-constants', self.alias.lower(), value)
 
 
 
