@@ -54,3 +54,12 @@ class EvaluationManagement(Component):
         syllabus_id = self.pm.get_project_syllabus(project_id)
         return self.get_model(syllabus_id)
 
+    def clear_model_cache(self, syllabus_id=None):
+        '''Clear evaluation model cache.
+        If `syllabus_id` specified - clear for specified syllabus.
+        Else clear entirely.'''
+        with self._model_cache_lock:
+            if syllabus_id is not None:
+                self._models.pop(syllabus_id, None)
+            else:
+                self._models = {}

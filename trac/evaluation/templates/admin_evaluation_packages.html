@@ -1,0 +1,55 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:i18n="http://genshi.edgewall.org/i18n">
+  <xi:include href="admin.html" />
+  <head>
+    <title>Evaluation model packages</title>
+  </head>
+
+  <body>
+    <h2>Manage Evaluation model packages</h2>
+
+    <form class="addnew" method="post" enctype="multipart/form-data" action="">
+      <fieldset>
+        <legend>Upload package:</legend>
+        <div class="field">
+          <label i18n:msg="">
+            File: <input type="file" name="pkg_file" />
+          </label>
+        </div>
+        <p class="help">
+            Upload an evaluation model package from tarball.
+        </p>
+        <div class="buttons">
+          <input type="submit" name="upload" value="${_('Upload')}" />
+        </div>
+      </fieldset>
+    </form>
+
+    <form method="post" action="">
+      <table class="listing">
+        <thead>
+          <tr>
+            <th class="sel">&nbsp;</th>
+            <th>Name</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr py:for="item in packages">
+            <td class="sel"><input type="checkbox" name="sel" value="${item}"/></td>
+            <td class="name">${item}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="buttons">
+        <input type="submit" name="remove" value="${_('Remove selected packages')}"/>
+        <input type="submit" name="clearcache" value="${_('Clear model cache')}"/>
+      </div>
+    </form>
+
+  </body>
+</html>
