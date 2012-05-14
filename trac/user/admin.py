@@ -73,6 +73,9 @@ class SelectedGroupManagers(formencode.Schema):
 
 class PermGroupsFields(formencode.Schema):
 
+    allow_extra_fields = True
+    filter_extra_fields = True
+
     developer  = validators.Bool()
     teamleader = validators.Bool()
 
