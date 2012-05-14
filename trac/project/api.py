@@ -106,7 +106,12 @@ class ProjectManagement(Component):
         cursor = db.cursor()
 
         # TODO: do not query name if not with_names
-        if role == UserRole.DEVELOPER:
+        if role == UserRole.ADMIN:
+            query = '''
+                SELECT id project_id, name project_name
+                FROM projects
+            '''
+        elif role == UserRole.DEVELOPER:
             query = '''
                 SELECT project_id, project_name
                 FROM developer_projects
@@ -117,11 +122,6 @@ class ProjectManagement(Component):
                 SELECT project_id, project_name
                 FROM manager_projects
                 WHERE username=%s
-            '''
-        elif role == UserRole.ADMIN:
-            query = '''
-                SELECT id project_id, name project_name
-                FROM projects
             '''
         else:
             return ()
