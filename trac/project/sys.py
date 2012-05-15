@@ -165,7 +165,8 @@ class PostloginModule(Component):
                 self.pm.check_session_project(req, failed_pid, fail_on_false=True)
 
             return handler
-        if req.path_info in ('/login', '/postlogin'):
+        if req.path_info in ('/login', '/postlogin') or \
+           req.path_info.startswith('/prefs'):
             return handler
         if req.path_info == '/logout':
             for key in ('postlogin', 'postlogin_step'):
