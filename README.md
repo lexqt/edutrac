@@ -9,17 +9,16 @@ Main features (WIP)
 -------------------
 
  * Multi-project.
- * User groups (3 levels: team, student group, metagroup).
- * Syllabuses (something like specific configuration for project set).
+ * User groups (3 levels: team, group, metagroup).
+ * Syllabuses (something like specific configuration for project set in one metagroup).
  * More flexible ticket workflow (new operations and parameters).
  * New ticket field types and parameters (+ conversion, validation, etc).
  * Enhanced ticket queries.
  * Evaluation modules.
- * Initial SQLAlchemy integration.
+ * SQLAlchemy integration.
 
-Many things are not ready yet at all:
+Some things are not ready yet:
 
- * Admin modules adaptation.
  * Unit tests.
  * Search subsystem.
 
@@ -28,9 +27,11 @@ Dependencies
 
 ### Trac Account Manager Plugin integration
 
-1.  [Download](http://trac-hacks.org/wiki/AccountManagerPlugin) and install right after EduTrac. Tested with version 0.3.2.
+1.  [Download](https://github.com/lexqt/EduTracAccountManager/downloads) and install right after EduTrac.
 
-    You can do it with a command: `easy_install --user https://trac-hacks.org/svn/accountmanagerplugin/0.11`
+    You can do it with a command (executed from root):
+
+        easy_install https://github.com/lexqt/EduTracAccountManager/tarball/master
 
 2.  Enable plugin.
 
@@ -39,7 +40,10 @@ Dependencies
         [components]
         acct_mgr.admin.accountmanageradminpages = enabled
         acct_mgr.api.accountmanager = enabled
+        acct_mgr.db.sessionstore = enabled
         acct_mgr.guard.accountguard = enabled
+        acct_mgr.notification.accountchangelistener = enabled
+        acct_mgr.notification.accountchangenotificationadminpage = enabled
         acct_mgr.pwhash.htdigesthashmethod = enabled
         acct_mgr.web_ui.* = enabled
         trac.web.auth.loginmodule = disabled
@@ -51,6 +55,10 @@ Dependencies
         [account-manager]
         password_store = AccountManagerIntegration
 
+Deployment and installation
+---------------------------
+
+https://github.com/lexqt/edutrac/blob/edutrac/DEPLOY_RU.md (On Russian)
 
 About Trac
 ==========
