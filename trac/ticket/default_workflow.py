@@ -602,7 +602,8 @@ class UserGroupProvider(Component):
     implements(IValidUserProvider)
 
     default_owner_realms = ListOption('ticket-workflow-config', 'default_owner_realm', 'team', sep='|',
-        doc="""Default owner realms for set_owner ticket actions.""", switcher=True)
+        doc="""Default owner realms for set_owner ticket actions.
+               Available realms: `team` (developers), `manager`.""", switcher=True)
 
     def get_users(self, req, ticket, next_action, realm_key=None, perm_group_key=None):
         if realm_key is None:

@@ -703,7 +703,14 @@ class TracIniMacro(WikiMacroBase):
         return tag.div(class_='tracini')(
             (tag.h3(tag.code('[%s]' % section), id='%s-section' % section),
              tag.table(class_='wiki')(
-                 tag.tbody(tag.tr(tag.td(tag.tt(option.name)),
+                 tag.thead(tag.tr(tag.th(_('Name')),
+                                  tag.th(_('Switcher')),
+                                  tag.th(_('Default')),
+                                  tag.th(_('Description'))
+                                  )),
+                 tag.tbody(tag.tr(tag.td(tag.pre(option.name)),
+                                  tag.td(option.switcher and 'Syllabus' or 'Environment'),
+                                  tag.td(option.default),
                                   tag.td(format_to_oneliner(
                                       self.env, formatter.context,
                                       to_unicode(option.__doc__))))

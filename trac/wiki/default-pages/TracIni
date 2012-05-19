@@ -3,11 +3,17 @@
 [[TracGuideToc]]
 [[PageOutline]]
 
-Trac configuration is done by editing the '''`trac.ini`''' config file, located in `<projectenv>/conf/trac.ini`.  Changes to the configuration are usually reflected immediately, though changes to the `[components]` or `[logging]` sections will require restarting the web server. You may also need to restart the web server after creating a global configuration file when none was previously present.
+Configuration in !EduTrac is done in three ways:
+
+ * Environment configuration — by editing the '''`trac.ini`''' config file, located in `<projectenv>/conf/trac.ini`.  Changes to the configuration are usually reflected immediately, though changes to the `[components]` or `[logging]` sections will require restarting the web server. You may also need to restart the web server after creating a global configuration file when none was previously present.
+ * Syllabus configuration — by editing the '''`id<id_number>.ini`''' config file, located in `<projectenv>/conf/syllabus` directory.
+ * Project configuration — by editing the '''`id<id_number>.ini`''' config file, located in `<projectenv>/conf/project` directory.
 
 The `trac.ini` configuration file and its parent directory should be writable by the web server, as Trac currently relies on the possibility to trigger a complete environment reload to flush its caches.
 
-== Global Configuration ==
+== Environment Configuration ==
+
+=== Global Configuration ===
 
 In versions prior to 0.11, the global configuration was by default located in `$prefix/share/trac/conf/trac.ini` or /etc/trac/trac.ini, depending on the distribution. If you're upgrading, you may want to specify that file to inherit from.  Literally, when you're upgrading to 0.11, you have to add an `[inherit]` section to your project's `trac.ini` file. Additionally, you have to move your customized templates and common images from `$prefix/share/trac/...` to the new location.
 
@@ -24,14 +30,33 @@ There are two more entries in the [[#inherit-section| [inherit] ]] section, `tem
 
 Note that the templates found in the `templates/` directory of the TracEnvironment have precedence over those found in `[inherit] templates_dir`. In turn, the latter have precedence over the installed templates, so be careful about what you put there, notably if you override a default template be sure to refresh your modifications when you upgrade to a new version of Trac (the preferred way to perform TracInterfaceCustomization being still to write a custom plugin doing an appropriate `ITemplateStreamFilter` transformation).
 
-== Reference for settings
+=== Environment trac.ini ===
 
-This is a brief reference of available configuration options, and their default settings.
+Options' values from `trac.ini` are used for a lot of environment configuration options. If option has syllabus switcher, its value from `trac.ini` will overwrite its default value used in syllabuses.
+
+== Syllabus Configuration ==
+
+Some options have syllabus switcher. It means that their values depends on current syllabus and read from syllabus configuration file. There are also some [#Referenceforspecialsections special sections] that must be defined on syllabus level.
+
+Values defined in syllabus configuration for options without syllabus switcher will be ignored.
+
+Syllabus configuration always '''must''' inherit configuration from main environment `trac.ini` file:
+{{{
+[inherit]
+file = ../trac.ini
+}}}
+
+== Project Configuration ==
+
+Project configuration files are optional. Only `[ticket-fields]` section is used for default values of project ticket fields (such as milestone, component, version).
+
+== Reference for settings ==
+
+This is a brief reference of available configuration options, their switchers and default values.
 
 [[TracIni]]
 
-== Reference for special sections
-[[PageOutline(3,,inline)]]
+== Reference for special sections ==
 
 === [components] === #components-section
 This section is used to enable or disable components provided by plugins, as well as by Trac itself. The component to enable/disable is specified via the name of the option. Whether its enabled is determined by the option value; setting the value to `enabled` or `on` will enable the component, any other value (typically `disabled` or `off`) will disable the component.
@@ -47,17 +72,27 @@ webadmin.* = enabled
 
 The first option tells Trac to disable the [wiki:TracReports report module]. The second option instructs Trac to enable all components in the `webadmin` package. Note that the trailing wildcard is required for module/package matching.
 
-See the ''Plugins'' page on ''About Trac'' to get the list of active components (requires `CONFIG_VIEW` [wiki:TracPermissions permissions].)
+Enabled / disabled components should be defined in `trac.ini`. Then settings for some components may be redefined in syllabus configuration. This is available in two cases:
+ * This is directly supported by component (used in some plugins).
+ * Component is used by others through `SyllabusExtensionPoint`. !EduTrac components use it for following interfaces: `ITicketManipulator`, `ITicketChangeListener`, `ITimelineEventProvider`, `INavigationContributor`.
+
+See the ''Plugins'' page on ''About Trac'' to get the list of active environment components (requires `CONFIG_VIEW` [wiki:TracPermissions permissions].)
 
 See also: TracPlugins
 
 === [extra-permissions] === #extra-permissions-section
 ''(since 0.12)''
 
-Custom additional permissions can be defined in this section when [wiki:ExtraPermissionsProvider] is enabled.
+Custom additional permissions can be defined in this section when [wiki:ExtraPermissionsProvider] is enabled:
+{{{
+[extra-permissions]
+meta_action_name = ACTION1, ACTION2, ACTION3
+}}}
 
 === [milestone-groups] === #milestone-groups-section
 ''(since 0.11)''
+
+'''Syllabus configuration only.'''
 
 As the workflow for tickets is now configurable, there can be many ticket states,
 and simply displaying closed tickets vs. all the others is maybe not appropriate 
@@ -98,13 +133,7 @@ selector:  `table.progress td.<class>`
 
 === [repositories] === #repositories-section
 
-(''since 0.12'' multirepos)
-
-One of the alternatives for registering new repositories is to populate the `[repositories]` section of the trac.ini.
-
-This is especially suited for setting up convenience aliases, short-lived repositories, or during the initial phases of an installation.
-
-See [TracRepositoryAdmin#Intrac.ini TracRepositoryAdmin] for details about the format adopted for this section and the rest of that page for the other alternatives.
+(''Disabled since !EduTrac 0.1'')
 
 === [svn:externals] === #svn:externals-section
 ''(since 0.11)''
@@ -132,15 +161,61 @@ Finally, the relative URLs introduced in [http://subversion.tigris.org/svn_1.5_r
 
 === [ticket-custom] === #ticket-custom-section
 
+'''Syllabus configuration only.'''
+
 In this section, you can define additional fields for tickets. See TracTicketsCustomFields for more details.
+
+=== [ticket-fields] === #ticket-fields-section
+
+'''Syllabus and project configuration only.'''
+
+This section is used to redefine ticket fields configuration:
+ * default values;
+ * optionality (only syllabus).
+
+Example:
+{{{
+[ticket-fields]
+milestone.optional = false
+priority.value = normal
+}}}
+
+=== [ticket-fields-filters] === #ticket-fields-filters-section
+
+'''Syllabus configuration only.'''
+
+`fields`: a list of all the fields to apply filters to.
+
+`field.permission`: PERMISSION:consequence
+
+where consequence is one of: hide, remove, disable
+ * `hide` - replaces with hidden input.
+ * `remove` - removes element.
+ * `disable` - removes input in favor of text.
+
+If consequence must occur always, it should be defined as:
+`field.<consequence> = true`
+
+Example:
+{{{
+[ticket-fields-filters]
+fields = totalhours, hours, estimatedhours
+totalhours.disable = true
+estimatedhours.permission = TIME_RECORD:disable
+hours.permission = TIME_VIEW:remove, TIME_RECORD:disable
+}}}
 
 === [ticket-workflow] === #ticket-workflow-section
 ''(since 0.11)''
+
+'''Syllabus configuration only.'''
 
 The workflow for tickets is controlled by plugins. 
 By default, there's only a `ConfigurableTicketWorkflow` component in charge. 
 That component allows the workflow to be configured via this section in the trac.ini file.
 See TracWorkflow for more details.
+
+
 
 ----
 See also: TracGuide, TracAdmin, TracEnvironment

@@ -137,18 +137,18 @@ class Environment(Component, ComponentManager):
         only sent to the server on HTTPS connections. Use this if your Trac
         instance is only accessible through HTTPS. (''since 0.11.2'')""")
 
-    project_name = Option('project', 'name', 'My Project',
-        """Name of the project.""")
+    project_name = Option('project', 'name', 'My EduTrac Environment',
+        """Name of the environment.""")
 
-    project_description = Option('project', 'descr', 'My example project',
-        """Short description of the project.""")
+    project_description = Option('project', 'descr', 'My example environment',
+        """Short description of the environment.""")
 
     project_url = Option('project', 'url', '',
-        """URL of the main project web site, usually the website in which
+        """URL of the main environment web site, usually the website in which
         the `base_url` resides. This is used in notification e-mails.""")
 
     project_admin = Option('project', 'admin', '',
-        """E-Mail address of the project's administrator.""")
+        """E-Mail address of the environment's administrator.""")
 
     project_admin_trac_url = Option('project', 'admin_trac_url', '.',
         """Base URL of a Trac instance where errors in this Trac should be
@@ -165,7 +165,7 @@ class Environment(Component, ComponentManager):
         """Page footer text (right-aligned).""")
 
     project_icon = Option('project', 'icon', 'common/trac.ico',
-        """URL of the icon of the project.""")
+        """URL of the icon of the environment.""")
 
     log_type = Option('logging', 'log_type', 'none',
         """Logging facility to use.

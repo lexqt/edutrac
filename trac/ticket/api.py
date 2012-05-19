@@ -525,40 +525,40 @@ class TicketSystem(Component):
     # <field>.value = <default_value>
 
     default_version = Option('ticket', 'default_version', None,
-        """Default version for newly created tickets.""")
+        """NOT USED. Default version for newly created tickets.""")
 
     default_type = Option('ticket', 'default_type', 'task',
-        """Default type for newly created tickets (''since 0.9'').""")
+        """NOT USED. Default type for newly created tickets (''since 0.9'').""")
 
     default_priority = Option('ticket', 'default_priority', 'normal',
-        """Default priority for newly created tickets.""")
+        """NOT USED. Default priority for newly created tickets.""")
 
     default_milestone = Option('ticket', 'default_milestone', None,
-        """Default milestone for newly created tickets.""")
+        """NOT USED. Default milestone for newly created tickets.""")
 
     default_component = Option('ticket', 'default_component', None,
-        """Default component for newly created tickets.""")
+        """NOT USED. Default component for newly created tickets.""")
 
     default_severity = Option('ticket', 'default_severity', 'normal',
-        """Default severity for newly created tickets.""")
+        """NOT USED. Default severity for newly created tickets.""")
 
     default_summary = Option('ticket', 'default_summary', None,
-        """Default summary (title) for newly created tickets.""")
+        """NOT USED. Default summary (title) for newly created tickets.""")
 
     default_description = Option('ticket', 'default_description', None,
-        """Default description for newly created tickets.""")
+        """NOT USED. Default description for newly created tickets.""")
 
     default_keywords = Option('ticket', 'default_keywords', None,
-        """Default keywords for newly created tickets.""")
+        """NOT USED. Default keywords for newly created tickets.""")
 
     default_owner = Option('ticket', 'default_owner', None,
-        """Default owner for newly created tickets.""")
+        """NOT USED. Default owner for newly created tickets.""")
 
     default_cc = Option('ticket', 'default_cc', None,
-        """Default cc: list for newly created tickets.""")
+        """NOT USED. Default cc: list for newly created tickets.""")
 
     default_resolution = Option('ticket', 'default_resolution', 'fixed',
-        """Default resolution for resolving (closing) tickets
+        """NOT USED. Default resolution for resolving (closing) tickets
         (''since 0.11'').""")
 
     def __init__(self):
